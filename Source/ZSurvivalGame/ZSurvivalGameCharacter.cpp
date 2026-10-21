@@ -19,13 +19,15 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter()
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 		
-	// Don't rotate when the controller rotates. Let that just affect the camera.
+	// Don't snap to the controller rotation; the movement component smoothly turns us instead.
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
 	// Configure character movement
+	// Free movement by default (face movement direction); UpdateRotationMode() switches to facing the camera while aiming
 	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 
 	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
@@ -53,9 +55,21 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter()
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 }
 
+void AZSurvivalGameCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Respect whatever boom length the Blueprint uses as the non-aiming distance
+	DefaultArmLength = CameraBoom->TargetArmLength;
+}
+
 void AZSurvivalGameCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// Smoothly zoom the camera in/out for aiming
+	const float TargetArmLength = bIsAiming ? AimArmLength : DefaultArmLength;
+	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaTime, AimZoomSpeed);
 
 	// Handle Sprinting Stamina Drain & Speed Control
 	if (bIsSprinting && GetVelocity().SizeSquared() > 0.f)
@@ -101,6 +115,13 @@ void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		if (DodgeAction)
 		{
 			EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &AZSurvivalGameCharacter::DoDodge);
+		}
+
+		// Aiming
+		if (AimAction)
+		{
+			EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Started, this, &AZSurvivalGameCharacter::DoAimStart);
+			EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Completed, this, &AZSurvivalGameCharacter::DoAimEnd);
 		}
 	}
 	else
@@ -171,6 +192,11 @@ void AZSurvivalGameCharacter::DoJumpEnd()
 
 void AZSurvivalGameCharacter::DoSprintStart()
 {
+	if (bIsAiming)
+	{
+		return; // Can't sprint while aiming
+	}
+
 	if (CurrentStamina > 10.f) // Minimum stamina needed to initiate sprint
 	{
 		bIsSprinting = true;
@@ -181,7 +207,32 @@ void AZSurvivalGameCharacter::DoSprintStart()
 void AZSurvivalGameCharacter::DoSprintEnd()
 {
 	bIsSprinting = false;
+	GetCharacterMovement()->MaxWalkSpeed = bIsAiming ? AimWalkSpeed : JogSpeed;
+}
+
+void AZSurvivalGameCharacter::DoAimStart()
+{
+	DoSprintEnd(); // Aiming cancels sprint
+
+	bIsAiming = true;
+	GetCharacterMovement()->MaxWalkSpeed = AimWalkSpeed;
+	UpdateRotationMode();
+}
+
+void AZSurvivalGameCharacter::DoAimEnd()
+{
+	bIsAiming = false;
 	GetCharacterMovement()->MaxWalkSpeed = JogSpeed;
+	UpdateRotationMode();
+}
+
+void AZSurvivalGameCharacter::UpdateRotationMode()
+{
+	// Face the camera while aiming (TODO: also while attacking, once attacks exist), otherwise turn toward movement
+	const bool bFaceCamera = bIsAiming;
+
+	GetCharacterMovement()->bOrientRotationToMovement = !bFaceCamera;
+	GetCharacterMovement()->bUseControllerDesiredRotation = bFaceCamera;
 }
 
 void AZSurvivalGameCharacter::DoDodge()

@@ -57,6 +57,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* DodgeAction;
 
+	/** Aim Input Action (hold) */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* AimAction;
+
 	/** --- SURVIVAL STATS & MOVEMENT --- */
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
@@ -80,17 +84,41 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
 	float SprintSpeed = 700.f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
+	float AimWalkSpeed = 300.f;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival|State")
 	bool bIsSprinting = false;
+
+	/** --- AIMING --- */
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival|State")
+	bool bIsAiming = false;
+
+	/** Camera boom length while aiming (closer over-the-shoulder view) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Aiming")
+	float AimArmLength = 150.f;
+
+	/** How fast the camera zooms in/out when aiming starts/stops */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Aiming")
+	float AimZoomSpeed = 10.f;
+
+	/** Boom length when not aiming, cached from the CameraBoom on BeginPlay */
+	float DefaultArmLength = 250.f;
 
 public:
 
 	/** Constructor */
-	AZSurvivalGameCharacter();	
+	AZSurvivalGameCharacter();
 
 protected:
 
+	virtual void BeginPlay() override;
+
 	virtual void Tick(float DeltaTime) override;
+
+	/** Switches between free movement rotation and facing the camera, based on current state */
+	void UpdateRotationMode();
 
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -128,6 +156,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoDodge();
+
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoAimStart();
+
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoAimEnd();
 
 public:
 
