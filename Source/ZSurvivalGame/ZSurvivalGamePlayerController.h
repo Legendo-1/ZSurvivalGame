@@ -8,6 +8,7 @@
 
 class UInputMappingContext;
 class UUserWidget;
+class UZSurvivalHUDWidget;
 
 /**
  *  Basic PlayerController class for a third person game
@@ -35,6 +36,14 @@ protected:
 	/** Pointer to the mobile controls widget */
 	UPROPERTY()
 	TObjectPtr<UUserWidget> MobileControlsWidget;
+
+	/** HUD widget (health/stamina bars) to spawn */
+	UPROPERTY(EditAnywhere, Category="UI")
+	TSubclassOf<UZSurvivalHUDWidget> HUDWidgetClass;
+
+	/** Pointer to the HUD widget */
+	UPROPERTY()
+	TObjectPtr<UZSurvivalHUDWidget> HUDWidget;
 
 	/** If true, the player will use UMG touch controls even if not playing on mobile platforms */
 	UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")

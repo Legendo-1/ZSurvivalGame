@@ -64,6 +64,12 @@ protected:
 	/** --- SURVIVAL STATS & MOVEMENT --- */
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
+	float MaxHealth = 100.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
+	float CurrentHealth = 100.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
 	float MaxStamina = 100.f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
@@ -92,6 +98,10 @@ protected:
 
 	/** --- AIMING --- */
 
+	/** If true, the character always turns to face the camera direction; if false, only while aiming */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Aiming")
+	bool bAlwaysFaceCamera = true;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival|State")
 	bool bIsAiming = false;
 
@@ -116,6 +126,9 @@ protected:
 	virtual void BeginPlay() override;
 
 	virtual void Tick(float DeltaTime) override;
+
+	/** Reduces health when damaged (e.g. via UGameplayStatics::ApplyDamage) */
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 	/** Switches between free movement rotation and facing the camera, based on current state */
 	void UpdateRotationMode();
@@ -162,6 +175,14 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoAimEnd();
+
+	/** Health as 0..1, for UI bars */
+	UFUNCTION(BlueprintPure, Category = "Survival|Stats")
+	float GetHealthPercent() const { return MaxHealth > 0.f ? CurrentHealth / MaxHealth : 0.f; }
+
+	/** Stamina as 0..1, for UI bars */
+	UFUNCTION(BlueprintPure, Category = "Survival|Stats")
+	float GetStaminaPercent() const { return MaxStamina > 0.f ? CurrentStamina / MaxStamina : 0.f; }
 
 public:
 

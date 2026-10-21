@@ -6,6 +6,7 @@
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/ZSurvivalHUDWidget.h"
 #include "ZSurvivalGame.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
@@ -30,6 +31,22 @@ void AZSurvivalGamePlayerController::BeginPlay()
 
 		}
 
+	}
+
+	// only spawn the HUD on local player controllers
+	if (IsLocalPlayerController() && HUDWidgetClass)
+	{
+		// spawn the HUD widget and add it to the player screen
+		HUDWidget = CreateWidget<UZSurvivalHUDWidget>(this, HUDWidgetClass);
+
+		if (HUDWidget)
+		{
+			HUDWidget->AddToPlayerScreen(0);
+		}
+		else
+		{
+			UE_LOG(LogZSurvivalGame, Error, TEXT("Could not spawn HUD widget."));
+		}
 	}
 }
 

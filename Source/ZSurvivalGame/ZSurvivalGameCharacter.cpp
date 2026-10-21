@@ -25,9 +25,9 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter()
 	bUseControllerRotationRoll = false;
 
 	// Configure character movement
-	// Free movement by default (face movement direction); UpdateRotationMode() switches to facing the camera while aiming
-	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->bUseControllerDesiredRotation = false;
+	// Face the camera direction by default (Remnant-style); see UpdateRotationMode()
+	GetCharacterMovement()->bOrientRotationToMovement = false;
+	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 
 	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
@@ -61,6 +61,9 @@ void AZSurvivalGameCharacter::BeginPlay()
 
 	// Respect whatever boom length the Blueprint uses as the non-aiming distance
 	DefaultArmLength = CameraBoom->TargetArmLength;
+
+	// Apply the rotation mode in case bAlwaysFaceCamera was changed in the Blueprint
+	UpdateRotationMode();
 }
 
 void AZSurvivalGameCharacter::Tick(float DeltaTime)
@@ -88,6 +91,17 @@ void AZSurvivalGameCharacter::Tick(float DeltaTime)
 			CurrentStamina = FMath::Min(MaxStamina, CurrentStamina + (StaminaRegenRate * DeltaTime));
 		}
 	}
+}
+
+float AZSurvivalGameCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+{
+	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+	CurrentHealth = FMath::Clamp(CurrentHealth - ActualDamage, 0.f, MaxHealth);
+
+	// TODO: handle death when CurrentHealth reaches 0
+
+	return ActualDamage;
 }
 
 void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -228,8 +242,8 @@ void AZSurvivalGameCharacter::DoAimEnd()
 
 void AZSurvivalGameCharacter::UpdateRotationMode()
 {
-	// Face the camera while aiming (TODO: also while attacking, once attacks exist), otherwise turn toward movement
-	const bool bFaceCamera = bIsAiming;
+	// Face the camera when always-face-camera is on or while aiming (TODO: also while attacking, once attacks exist), otherwise turn toward movement
+	const bool bFaceCamera = bAlwaysFaceCamera || bIsAiming;
 
 	GetCharacterMovement()->bOrientRotationToMovement = !bFaceCamera;
 	GetCharacterMovement()->bUseControllerDesiredRotation = bFaceCamera;
