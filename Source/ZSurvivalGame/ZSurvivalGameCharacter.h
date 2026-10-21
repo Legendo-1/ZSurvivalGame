@@ -49,6 +49,40 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* MouseLookAction;
 
+	/** Sprint Input Action */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* SprintAction;
+
+	/** Dodge Input Action */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* DodgeAction;
+
+	/** --- SURVIVAL STATS & MOVEMENT --- */
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
+	float MaxStamina = 100.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
+	float CurrentStamina = 100.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
+	float StaminaDrainRate = 15.f; // Stamina per second while sprinting
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
+	float StaminaRegenRate = 10.f; // Stamina per second while idle/walking
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
+	float DodgeStaminaCost = 25.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
+	float JogSpeed = 500.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
+	float SprintSpeed = 700.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival|State")
+	bool bIsSprinting = false;
+
 public:
 
 	/** Constructor */
@@ -56,10 +90,10 @@ public:
 
 protected:
 
+	virtual void Tick(float DeltaTime) override;
+
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-
-protected:
 
 	/** Called for movement input */
 	void Move(const FInputActionValue& Value);
@@ -84,6 +118,16 @@ public:
 	/** Handles jump pressed inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
+
+	/** Survival Action Input Handlers */
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoSprintStart();
+
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoSprintEnd();
+
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoDodge();
 
 public:
 

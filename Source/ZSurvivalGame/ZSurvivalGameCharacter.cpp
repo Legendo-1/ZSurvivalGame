@@ -14,6 +14,8 @@
 
 AZSurvivalGameCharacter::AZSurvivalGameCharacter()
 {
+	PrimaryActorTick.bCanEverTick = true; // Enable ticking for stamina management
+
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 		
@@ -38,7 +40,8 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter()
 	// Create a camera boom (pulls in towards the player if there is a collision)
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 400.0f;
+	CameraBoom->TargetArmLength = 250.0f; // Pulled closer than default 400
+	CameraBoom->SocketOffset = FVector(0.f, 50.f, 15.f); // Shifted right over shoulder
 	CameraBoom->bUsePawnControlRotation = true;
 
 	// Create a follow camera
@@ -50,6 +53,29 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter()
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 }
 
+void AZSurvivalGameCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// Handle Sprinting Stamina Drain & Speed Control
+	if (bIsSprinting && GetVelocity().SizeSquared() > 0.f)
+	{
+		CurrentStamina = FMath::Max(0.f, CurrentStamina - (StaminaDrainRate * DeltaTime));
+		if (CurrentStamina <= 0.f)
+		{
+			DoSprintEnd(); // Stop sprinting when out of stamina
+		}
+	}
+	else
+	{
+		// Regenerate stamina when not sprinting
+		if (CurrentStamina < MaxStamina)
+		{
+			CurrentStamina = FMath::Min(MaxStamina, CurrentStamina + (StaminaRegenRate * DeltaTime));
+		}
+	}
+}
+
 void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	// Set up action bindings
@@ -59,12 +85,23 @@ void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 
-		// Moving
+		// Moving & Looking
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AZSurvivalGameCharacter::Move);
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AZSurvivalGameCharacter::Look);
-
-		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AZSurvivalGameCharacter::Look);
+
+		// Sprinting
+		if (SprintAction)
+		{
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &AZSurvivalGameCharacter::DoSprintStart);
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &AZSurvivalGameCharacter::DoSprintEnd);
+		}
+
+		// Dodging
+		if (DodgeAction)
+		{
+			EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &AZSurvivalGameCharacter::DoDodge);
+		}
 	}
 	else
 	{
@@ -130,4 +167,39 @@ void AZSurvivalGameCharacter::DoJumpEnd()
 {
 	// signal the character to stop jumping
 	StopJumping();
+}
+
+void AZSurvivalGameCharacter::DoSprintStart()
+{
+	if (CurrentStamina > 10.f) // Minimum stamina needed to initiate sprint
+	{
+		bIsSprinting = true;
+		GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+	}
+}
+
+void AZSurvivalGameCharacter::DoSprintEnd()
+{
+	bIsSprinting = false;
+	GetCharacterMovement()->MaxWalkSpeed = JogSpeed;
+}
+
+void AZSurvivalGameCharacter::DoDodge()
+{
+	if (CurrentStamina >= DodgeStaminaCost)
+	{
+		CurrentStamina -= DodgeStaminaCost;
+
+		// Directional Impulse Dodge Roll
+		FVector LaunchDirection = GetLastMovementInputVector();
+		if (LaunchDirection.IsNearlyZero())
+		{
+			LaunchDirection = GetActorForwardVector(); // Fallback to forward dodge if stationary
+		}
+
+		LaunchDirection.Normalize();
+		LaunchCharacter(LaunchDirection * 1200.f + FVector(0.f, 0.f, 150.f), true, true);
+
+		// TODO Phase 1 Step 2: Play Dodge Roll Animation Montage here when ready
+	}
 }
