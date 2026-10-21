@@ -1,0 +1,18 @@
+# Unreal Engine Ignored Folders
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+
+# Visual Studio Files
+.vs/
+*.sln
+*.suo
+*.user
+*.VC.db
+*.opensdf
+*.sdf
+
+# Mac / Linux
+.DS_Store
