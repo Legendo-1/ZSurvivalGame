@@ -14,6 +14,15 @@ struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
+/** Which weapon animation set the character uses */
+UENUM(BlueprintType)
+enum class EZWeaponType : uint8
+{
+	Unarmed,
+	Pistol,
+	Rifle
+};
+
 /**
  *  A simple player-controllable third person character
  *  Implements a controllable orbiting camera
@@ -116,6 +125,12 @@ protected:
 	/** Boom length when not aiming, cached from the CameraBoom on BeginPlay */
 	float DefaultArmLength = 250.f;
 
+	/** --- WEAPON --- */
+
+	/** Current weapon animation set (set by hand for now; the weapon system will drive this in Phase 2) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Weapon")
+	EZWeaponType CurrentWeaponType = EZWeaponType::Unarmed;
+
 public:
 
 	/** Constructor */
@@ -183,6 +198,17 @@ public:
 	/** Stamina as 0..1, for UI bars */
 	UFUNCTION(BlueprintPure, Category = "Survival|Stats")
 	float GetStaminaPercent() const { return MaxStamina > 0.f ? CurrentStamina / MaxStamina : 0.f; }
+
+	/** Animation getters */
+	UFUNCTION(BlueprintPure, Category = "Survival|Animation")
+	bool IsAiming() const { return bIsAiming; }
+
+	UFUNCTION(BlueprintPure, Category = "Survival|Animation")
+	EZWeaponType GetWeaponType() const { return CurrentWeaponType; }
+
+	/** Aim direction relative to the character's facing, for Aim Offsets (Pitch = up/down, Yaw = left/right) */
+	UFUNCTION(BlueprintPure, Category = "Survival|Animation")
+	FRotator GetAimOffset() const;
 
 public:
 

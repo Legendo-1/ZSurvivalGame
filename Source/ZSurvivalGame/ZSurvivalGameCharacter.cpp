@@ -249,6 +249,12 @@ void AZSurvivalGameCharacter::UpdateRotationMode()
 	GetCharacterMovement()->bUseControllerDesiredRotation = bFaceCamera;
 }
 
+FRotator AZSurvivalGameCharacter::GetAimOffset() const
+{
+	// difference between where the camera aims and where the body faces, kept in -180..180
+	return (GetBaseAimRotation() - GetActorRotation()).GetNormalized();
+}
+
 void AZSurvivalGameCharacter::DoDodge()
 {
 	if (CurrentStamina >= DodgeStaminaCost)
