@@ -23,6 +23,15 @@ enum class EZWeaponType : uint8
 	Rifle
 };
 
+/** Temporary cap on movement speed, e.g. during a weapon swap or reload */
+UENUM(BlueprintType)
+enum class EZSpeedLimit : uint8
+{
+	None,	// no cap
+	Jog,	// can't sprint, jogging allowed
+	Walk	// capped at WalkSpeed
+};
+
 /**
  *  A simple player-controllable third person character
  *  Implements a controllable orbiting camera
@@ -94,16 +103,28 @@ protected:
 	float DodgeStaminaCost = 25.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
-	float JogSpeed = 500.f;
+	float JogSpeed = 350.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
-	float SprintSpeed = 700.f;
+	float SprintSpeed = 550.f;
+
+	/** Max angle (degrees) between facing and movement direction that still allows sprint speed; 90 allows sideways, blocks backwards */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement", meta = (ClampMin = "0", ClampMax = "180"))
+	float MaxSprintAngle = 100.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
-	float AimWalkSpeed = 300.f;
+	float AimWalkSpeed = 150.f;
+
+	/** Speed cap while the Walk speed limit is active */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
+	float WalkSpeed = 150.f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival|State")
 	bool bIsSprinting = false;
+
+	/** Active temporary speed cap (see SetSpeedLimit) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival|State")
+	EZSpeedLimit SpeedLimit = EZSpeedLimit::None;
 
 	/** --- AIMING --- */
 
@@ -148,6 +169,12 @@ protected:
 	/** Switches between free movement rotation and facing the camera, based on current state */
 	void UpdateRotationMode();
 
+	/** Sets MaxWalkSpeed from the current state (aiming, sprinting or jog), capped by SpeedLimit */
+	void UpdateMovementSpeed();
+
+	/** True if the current movement direction is within MaxSprintAngle of where the character faces */
+	bool CanSprintInMoveDirection() const;
+
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
@@ -190,6 +217,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoAimEnd();
+
+	/** Caps movement speed, e.g. Jog or Walk for the duration of a weapon swap or reload; None removes the cap */
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	void SetSpeedLimit(EZSpeedLimit NewLimit);
 
 	/** Health as 0..1, for UI bars */
 	UFUNCTION(BlueprintPure, Category = "Survival|Stats")

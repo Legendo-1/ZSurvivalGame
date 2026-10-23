@@ -34,7 +34,7 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter()
 	// instead of recompiling to adjust them
 	GetCharacterMovement()->JumpZVelocity = 500.f;
 	GetCharacterMovement()->AirControl = 0.35f;
-	GetCharacterMovement()->MaxWalkSpeed = 500.f;
+	GetCharacterMovement()->MaxWalkSpeed = JogSpeed;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
@@ -64,6 +64,9 @@ void AZSurvivalGameCharacter::BeginPlay()
 
 	// Apply the rotation mode in case bAlwaysFaceCamera was changed in the Blueprint
 	UpdateRotationMode();
+
+	// Apply the starting speed in case JogSpeed was changed in the Blueprint
+	UpdateMovementSpeed();
 }
 
 void AZSurvivalGameCharacter::Tick(float DeltaTime)
@@ -74,8 +77,14 @@ void AZSurvivalGameCharacter::Tick(float DeltaTime)
 	const float TargetArmLength = bIsAiming ? AimArmLength : DefaultArmLength;
 	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaTime, AimZoomSpeed);
 
-	// Handle Sprinting Stamina Drain & Speed Control
-	if (bIsSprinting && GetVelocity().SizeSquared() > 0.f)
+	// Movement direction changes every frame, so re-check whether sprint speed is allowed
+	if (bIsSprinting)
+	{
+		UpdateMovementSpeed();
+	}
+
+	// Handle Sprinting Stamina Drain & Speed Control (no drain while sprint is held but blocked by direction)
+	if (bIsSprinting && GetVelocity().SizeSquared() > 0.f && CanSprintInMoveDirection())
 	{
 		CurrentStamina = FMath::Max(0.f, CurrentStamina - (StaminaDrainRate * DeltaTime));
 		if (CurrentStamina <= 0.f)
@@ -206,22 +215,22 @@ void AZSurvivalGameCharacter::DoJumpEnd()
 
 void AZSurvivalGameCharacter::DoSprintStart()
 {
-	if (bIsAiming)
+	if (bIsAiming || SpeedLimit != EZSpeedLimit::None)
 	{
-		return; // Can't sprint while aiming
+		return; // Can't sprint while aiming or while a speed limit is active
 	}
 
 	if (CurrentStamina > 10.f) // Minimum stamina needed to initiate sprint
 	{
 		bIsSprinting = true;
-		GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+		UpdateMovementSpeed();
 	}
 }
 
 void AZSurvivalGameCharacter::DoSprintEnd()
 {
 	bIsSprinting = false;
-	GetCharacterMovement()->MaxWalkSpeed = bIsAiming ? AimWalkSpeed : JogSpeed;
+	UpdateMovementSpeed();
 }
 
 void AZSurvivalGameCharacter::DoAimStart()
@@ -229,15 +238,66 @@ void AZSurvivalGameCharacter::DoAimStart()
 	DoSprintEnd(); // Aiming cancels sprint
 
 	bIsAiming = true;
-	GetCharacterMovement()->MaxWalkSpeed = AimWalkSpeed;
+	UpdateMovementSpeed();
 	UpdateRotationMode();
 }
 
 void AZSurvivalGameCharacter::DoAimEnd()
 {
 	bIsAiming = false;
-	GetCharacterMovement()->MaxWalkSpeed = JogSpeed;
+	UpdateMovementSpeed();
 	UpdateRotationMode();
+}
+
+void AZSurvivalGameCharacter::SetSpeedLimit(EZSpeedLimit NewLimit)
+{
+	if (NewLimit != EZSpeedLimit::None)
+	{
+		DoSprintEnd(); // Any speed limit cancels sprint
+	}
+
+	SpeedLimit = NewLimit;
+	UpdateMovementSpeed();
+}
+
+void AZSurvivalGameCharacter::UpdateMovementSpeed()
+{
+	// Base speed from state: aiming > sprinting (forward/sideways only) > jog
+	float NewSpeed = JogSpeed;
+
+	if (bIsAiming)
+	{
+		NewSpeed = AimWalkSpeed;
+	}
+	else if (bIsSprinting && CanSprintInMoveDirection())
+	{
+		NewSpeed = SprintSpeed;
+	}
+
+	// Apply the temporary cap (weapon swap, reload, ...)
+	if (SpeedLimit == EZSpeedLimit::Jog)
+	{
+		NewSpeed = FMath::Min(NewSpeed, JogSpeed);
+	}
+	else if (SpeedLimit == EZSpeedLimit::Walk)
+	{
+		NewSpeed = FMath::Min(NewSpeed, WalkSpeed);
+	}
+
+	GetCharacterMovement()->MaxWalkSpeed = NewSpeed;
+}
+
+bool AZSurvivalGameCharacter::CanSprintInMoveDirection() const
+{
+	// Use the input direction so the check reacts immediately, not after the velocity has turned
+	const FVector MoveDirection = GetCharacterMovement()->GetCurrentAcceleration().GetSafeNormal2D();
+	if (MoveDirection.IsNearlyZero())
+	{
+		return true; // Not pressing a direction, nothing to block
+	}
+
+	const FVector FacingDirection = GetActorForwardVector().GetSafeNormal2D();
+	return FVector::DotProduct(MoveDirection, FacingDirection) >= FMath::Cos(FMath::DegreesToRadians(MaxSprintAngle));
 }
 
 void AZSurvivalGameCharacter::UpdateRotationMode()
