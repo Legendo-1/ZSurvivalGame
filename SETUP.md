@@ -10,5 +10,4 @@ Things you need to install or do yourself after cloning. Everything else comes w
 
 ## Before first launch
 
-1. Right-click `ZSurvivalGame.uproject` → **Switch Unreal Engine version** → choose **5.8**.
-2. Double-click `ZSurvivalGame.uproject` and click **Yes** when asked to rebuild the `ZSurvivalGame` module. The first launch also compiles shaders and can take a while.
+Double-click `ZSurvivalGame.uproject` and click **Yes** when asked to rebuild the `ZSurvivalGame` module. The first launch also compiles shaders and can take a while.
