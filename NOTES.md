@@ -34,3 +34,4 @@ Things learned the hard way, and known issues. Remove a known issue once it's fi
 ## Known issues
 
 - **Pistol run, right knee on slopes:** the right knee bends outward when the right foot lands on a slope while running with the pistol. Something in the pistol animation causes it, not the IK settings.
+- **Rifle aim, left shoulder on backward walks:** the left shoulder moves oddly in `MF_Rifle_Walk_Bwd`, `Bwd_Left` and `Bwd_Right`. It's in the animations themselves. Probably the upper arm, but no single value in Sequencer stands out, and rotating one bone moves the others too.
