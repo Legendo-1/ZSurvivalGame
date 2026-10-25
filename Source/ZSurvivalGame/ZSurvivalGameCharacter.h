@@ -4,40 +4,29 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "AbilitySystemInterface.h"
 #include "Logging/LogMacros.h"
+#include "ZSurvivalGameTypes.h"
 #include "ZSurvivalGameCharacter.generated.h"
 
 class USpringArmComponent;
 class UCameraComponent;
 class UInputAction;
+class UAbilitySystemComponent;
+class UZGameplayAbility;
+class UZCharacterMovementComponent;
 struct FInputActionValue;
+struct FGameplayAttribute;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
-
-/** Which weapon animation set the character uses */
-UENUM(BlueprintType)
-enum class EZWeaponType : uint8
-{
-	Unarmed,
-	Pistol,
-	Rifle
-};
-
-/** Temporary cap on movement speed, e.g. during a weapon swap or reload */
-UENUM(BlueprintType)
-enum class EZSpeedLimit : uint8
-{
-	None,	// no cap
-	Jog,	// can't sprint, jogging allowed
-	Walk	// capped at WalkSpeed
-};
 
 /**
  *  A simple player-controllable third person character
  *  Implements a controllable orbiting camera
+ *  Sprint, aim and dodge are abilities (see AbilitySystem/); health and stamina live on the PlayerState
  */
 UCLASS(abstract)
-class AZSurvivalGameCharacter : public ACharacter
+class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
@@ -48,7 +37,7 @@ class AZSurvivalGameCharacter : public ACharacter
 	/** Follow camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FollowCamera;
-	
+
 protected:
 
 	/** Jump Input Action */
@@ -79,28 +68,21 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* AimAction;
 
+	/** --- ABILITIES --- */
+
+	/** Abilities the player gets when this character is possessed */
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TArray<TSubclassOf<UZGameplayAbility>> DefaultAbilities;
+
 	/** --- SURVIVAL STATS & MOVEMENT --- */
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
-	float MaxHealth = 100.f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
-	float CurrentHealth = 100.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
-	float MaxStamina = 100.f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
-	float CurrentStamina = 100.f;
+	// Health and stamina are attributes on the PlayerState (UZAttributeSet); the dodge cost is on the Dodge ability
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
 	float StaminaDrainRate = 15.f; // Stamina per second while sprinting
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
 	float StaminaRegenRate = 10.f; // Stamina per second while idle/walking
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
-	float DodgeStaminaCost = 25.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
 	float JogSpeed = 350.f;
@@ -119,20 +101,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
 	float WalkSpeed = 150.f;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival|State")
-	bool bIsSprinting = false;
-
-	/** Active temporary speed cap (see SetSpeedLimit) */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival|State")
-	EZSpeedLimit SpeedLimit = EZSpeedLimit::None;
-
 	/** --- AIMING --- */
 
 	/** If true, the character always turns to face the camera direction; if false, only while aiming */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Aiming")
 	bool bAlwaysFaceCamera = true;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Survival|State")
+	/** Copy of the aiming state for the other players' machines (the owner and the server read it from the movement component) */
+	UPROPERTY(Replicated)
 	bool bIsAiming = false;
 
 	/** Camera boom length while aiming (closer over-the-shoulder view) */
@@ -148,14 +124,22 @@ protected:
 
 	/** --- WEAPON --- */
 
-	/** Current weapon animation set (set by hand for now; the weapon system will drive this in Phase 2) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Weapon")
+	/** Current weapon animation set; change it with SetWeaponType so everyone sees it (the weapon system will drive this in Phase 2) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = "Survival|Weapon")
 	EZWeaponType CurrentWeaponType = EZWeaponType::Unarmed;
+
+	/** The player's ability system, owned by the PlayerState */
+	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
 
 public:
 
 	/** Constructor */
-	AZSurvivalGameCharacter();
+	AZSurvivalGameCharacter(const FObjectInitializer& ObjectInitializer);
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** Returns the PlayerState's ability system (null until it's set up) */
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
 protected:
 
@@ -166,14 +150,37 @@ protected:
 	/** Reduces health when damaged (e.g. via UGameplayStatics::ApplyDamage) */
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
-	/** Switches between free movement rotation and facing the camera, based on current state */
-	void UpdateRotationMode();
+	/** Server: sets up the ability system and gives the default abilities */
+	virtual void PossessedBy(AController* NewController) override;
 
-	/** Sets MaxWalkSpeed from the current state (aiming, sprinting or jog), capped by SpeedLimit */
-	void UpdateMovementSpeed();
+	/** Client: sets up the ability system once the PlayerState has arrived */
+	virtual void OnRep_PlayerState() override;
 
-	/** True if the current movement direction is within MaxSprintAngle of where the character faces */
-	bool CanSprintInMoveDirection() const;
+	/** Client: sets up the ability system again when the controller arrives, so it knows this player is local */
+	virtual void NotifyControllerChanged() override;
+
+	/** Connects the PlayerState's ability system to this character */
+	void InitAbilitySystem();
+
+	/** Server: gives the abilities in DefaultAbilities, unless the player already has them (e.g. after a respawn) */
+	void GiveDefaultAbilities();
+
+	/** Server: called when Health reaches 0 */
+	void HandleOutOfHealth();
+
+	/** Server: drains stamina while sprinting and regenerates it otherwise */
+	void UpdateStamina(float DeltaTime);
+
+	/** Sends an ability input press or release to the ability system */
+	void PressAbilityInput(EZAbilityInputID InputID);
+	void ReleaseAbilityInput(EZAbilityInputID InputID);
+
+	/** Attribute as 0..1 of its max, for UI bars */
+	float GetAttributePercent(const FGameplayAttribute& Attribute, const FGameplayAttribute& MaxAttribute) const;
+
+	/** Asks the server to change the weapon type */
+	UFUNCTION(Server, Reliable)
+	void ServerSetWeaponType(EZWeaponType NewWeaponType);
 
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -202,7 +209,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
 
-	/** Survival Action Input Handlers */
+	/** Survival Action Input Handlers (they press/release the matching ability) */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoSprintStart();
 
@@ -218,21 +225,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoAimEnd();
 
-	/** Caps movement speed, e.g. Jog or Walk for the duration of a weapon swap or reload; None removes the cap */
+	/** Caps movement speed, e.g. Jog or Walk for the duration of a weapon swap or reload; None removes the cap. Call it on the owning player's machine (or in a predicted ability); it reaches the server with the next move */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	void SetSpeedLimit(EZSpeedLimit NewLimit);
 
+	/** Changes the weapon animation set, right away for this player and through the server for everyone */
+	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
+	void SetWeaponType(EZWeaponType NewWeaponType);
+
 	/** Health as 0..1, for UI bars */
 	UFUNCTION(BlueprintPure, Category = "Survival|Stats")
-	float GetHealthPercent() const { return MaxHealth > 0.f ? CurrentHealth / MaxHealth : 0.f; }
+	float GetHealthPercent() const;
 
 	/** Stamina as 0..1, for UI bars */
 	UFUNCTION(BlueprintPure, Category = "Survival|Stats")
-	float GetStaminaPercent() const { return MaxStamina > 0.f ? CurrentStamina / MaxStamina : 0.f; }
+	float GetStaminaPercent() const;
 
 	/** Animation getters */
 	UFUNCTION(BlueprintPure, Category = "Survival|Animation")
-	bool IsAiming() const { return bIsAiming; }
+	bool IsAiming() const;
 
 	UFUNCTION(BlueprintPure, Category = "Survival|Animation")
 	EZWeaponType GetWeaponType() const { return CurrentWeaponType; }
@@ -240,6 +251,18 @@ public:
 	/** Aim direction relative to the character's facing, for Aim Offsets (Pitch = up/down, Yaw = left/right) */
 	UFUNCTION(BlueprintPure, Category = "Survival|Animation")
 	FRotator GetAimOffset() const;
+
+	/** Max walk speed for the given state: aiming > sprinting > jog, capped by the speed limit. Used by the movement component */
+	float GetMaxWalkSpeedFor(bool bSprinting, bool bAiming, EZSpeedLimit Limit) const;
+
+	/** True if the current movement direction is within MaxSprintAngle of where the character faces */
+	bool CanSprintInMoveDirection() const;
+
+	/** True if the character always faces the camera, not only while aiming */
+	bool ShouldAlwaysFaceCamera() const { return bAlwaysFaceCamera; }
+
+	/** Returns the movement component, which syncs sprint, aim and speed limits with the server */
+	UZCharacterMovementComponent* GetZMovement() const;
 
 public:
 

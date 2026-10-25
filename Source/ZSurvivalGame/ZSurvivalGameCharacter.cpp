@@ -10,22 +10,32 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "AbilitySystemComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
+#include "ZSurvivalGamePlayerState.h"
+#include "ZCharacterMovementComponent.h"
+#include "AbilitySystem/ZAttributeSet.h"
+#include "AbilitySystem/ZGameplayTags.h"
+#include "AbilitySystem/Abilities/ZGameplayAbility_Sprint.h"
+#include "AbilitySystem/Abilities/ZGameplayAbility_Aim.h"
+#include "AbilitySystem/Abilities/ZGameplayAbility_Dodge.h"
 
-AZSurvivalGameCharacter::AZSurvivalGameCharacter()
+AZSurvivalGameCharacter::AZSurvivalGameCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UZCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	PrimaryActorTick.bCanEverTick = true; // Enable ticking for stamina management
 
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
-		
+
 	// Don't snap to the controller rotation; the movement component smoothly turns us instead.
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
 	// Configure character movement
-	// Face the camera direction by default (Remnant-style); see UpdateRotationMode()
+	// Face the camera direction by default (Remnant-style); the movement component switches this before each move
 	GetCharacterMovement()->bOrientRotationToMovement = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
@@ -51,8 +61,29 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
 
-	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
+	// The player's abilities, given to the PlayerState's ability system in PossessedBy
+	DefaultAbilities.Add(UZGameplayAbility_Sprint::StaticClass());
+	DefaultAbilities.Add(UZGameplayAbility_Aim::StaticClass());
+	DefaultAbilities.Add(UZGameplayAbility_Dodge::StaticClass());
+
+	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character)
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+}
+
+void AZSurvivalGameCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	// everyone needs the weapon type for the animations
+	DOREPLIFETIME(AZSurvivalGameCharacter, CurrentWeaponType);
+
+	// the owner already knows whether it's aiming
+	DOREPLIFETIME_CONDITION(AZSurvivalGameCharacter, bIsAiming, COND_SkipOwner);
+}
+
+UAbilitySystemComponent* AZSurvivalGameCharacter::GetAbilitySystemComponent() const
+{
+	return AbilitySystemComponent.Get();
 }
 
 void AZSurvivalGameCharacter::BeginPlay()
@@ -61,44 +92,62 @@ void AZSurvivalGameCharacter::BeginPlay()
 
 	// Respect whatever boom length the Blueprint uses as the non-aiming distance
 	DefaultArmLength = CameraBoom->TargetArmLength;
-
-	// Apply the rotation mode in case bAlwaysFaceCamera was changed in the Blueprint
-	UpdateRotationMode();
-
-	// Apply the starting speed in case JogSpeed was changed in the Blueprint
-	UpdateMovementSpeed();
 }
 
 void AZSurvivalGameCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// Smoothly zoom the camera in/out for aiming
-	const float TargetArmLength = bIsAiming ? AimArmLength : DefaultArmLength;
-	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaTime, AimZoomSpeed);
-
-	// Movement direction changes every frame, so re-check whether sprint speed is allowed
-	if (bIsSprinting)
+	// Smoothly zoom the camera in/out for aiming (only the local player looks through this camera)
+	if (IsLocallyControlled())
 	{
-		UpdateMovementSpeed();
+		const float TargetArmLength = IsAiming() ? AimArmLength : DefaultArmLength;
+		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaTime, AimZoomSpeed);
 	}
 
-	// Handle Sprinting Stamina Drain & Speed Control (no drain while sprint is held but blocked by direction)
-	if (bIsSprinting && GetVelocity().SizeSquared() > 0.f && CanSprintInMoveDirection())
+	if (HasAuthority())
 	{
-		CurrentStamina = FMath::Max(0.f, CurrentStamina - (StaminaDrainRate * DeltaTime));
-		if (CurrentStamina <= 0.f)
+		// keep the other players' copy of the aiming state up to date
+		bIsAiming = IsAiming();
+
+		UpdateStamina(DeltaTime);
+	}
+}
+
+void AZSurvivalGameCharacter::UpdateStamina(float DeltaTime)
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	const UZCharacterMovementComponent* Movement = GetZMovement();
+	if (!ASC || !Movement)
+	{
+		return;
+	}
+
+	const FGameplayAttribute StaminaAttribute = UZAttributeSet::GetStaminaAttribute();
+	const float OldStamina = ASC->GetNumericAttributeBase(StaminaAttribute);
+	float NewStamina = OldStamina;
+
+	// Handle Sprinting Stamina Drain (no drain while sprint is held but blocked by direction)
+	if (Movement->IsSprinting() && GetVelocity().SizeSquared() > 0.f)
+	{
+		NewStamina = FMath::Max(0.f, OldStamina - (StaminaDrainRate * DeltaTime));
+		if (NewStamina <= 0.f)
 		{
-			DoSprintEnd(); // Stop sprinting when out of stamina
+			// Stop sprinting when out of stamina (the server ends the ability, which also ends it on the player's machine)
+			const FGameplayTagContainer SprintTags(ZGameplayTags::Ability_Sprint.GetTag());
+			ASC->CancelAbilities(&SprintTags);
 		}
 	}
 	else
 	{
 		// Regenerate stamina when not sprinting
-		if (CurrentStamina < MaxStamina)
-		{
-			CurrentStamina = FMath::Min(MaxStamina, CurrentStamina + (StaminaRegenRate * DeltaTime));
-		}
+		const float MaxStamina = ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute());
+		NewStamina = FMath::Min(MaxStamina, OldStamina + (StaminaRegenRate * DeltaTime));
+	}
+
+	if (NewStamina != OldStamina)
+	{
+		ASC->SetNumericAttributeBase(StaminaAttribute, NewStamina);
 	}
 }
 
@@ -106,18 +155,106 @@ float AZSurvivalGameCharacter::TakeDamage(float DamageAmount, FDamageEvent const
 {
 	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	CurrentHealth = FMath::Clamp(CurrentHealth - ActualDamage, 0.f, MaxHealth);
-
-	// TODO: handle death when CurrentHealth reaches 0
+	// health only changes on the server; the new value replicates to everyone (UZAttributeSet keeps it in range)
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (HasAuthority() && ASC && ActualDamage > 0.f)
+	{
+		const FGameplayAttribute HealthAttribute = UZAttributeSet::GetHealthAttribute();
+		ASC->SetNumericAttributeBase(HealthAttribute, ASC->GetNumericAttributeBase(HealthAttribute) - ActualDamage);
+	}
 
 	return ActualDamage;
+}
+
+void AZSurvivalGameCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	// the server sets up the ability system here; clients do it in OnRep_PlayerState
+	InitAbilitySystem();
+	GiveDefaultAbilities();
+}
+
+void AZSurvivalGameCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	InitAbilitySystem();
+}
+
+void AZSurvivalGameCharacter::NotifyControllerChanged()
+{
+	Super::NotifyControllerChanged();
+
+	// on clients the controller can arrive after the PlayerState (the server already did this in PossessedBy)
+	if (!HasAuthority())
+	{
+		InitAbilitySystem();
+	}
+}
+
+void AZSurvivalGameCharacter::InitAbilitySystem()
+{
+	AZSurvivalGamePlayerState* ZPlayerState = GetPlayerState<AZSurvivalGamePlayerState>();
+	if (!ZPlayerState)
+	{
+		UE_CLOG(GetPlayerState() != nullptr, LogZSurvivalGame, Warning, TEXT("'%s' has no AZSurvivalGamePlayerState, so it has no abilities. Check the GameMode's Player State Class."), *GetNameSafe(this));
+		return;
+	}
+
+	// the PlayerState owns the ability system; this character is the body it acts through
+	UAbilitySystemComponent* ASC = ZPlayerState->GetAbilitySystemComponent();
+	ASC->InitAbilityActorInfo(ZPlayerState, this);
+	AbilitySystemComponent = ASC;
+
+	if (HasAuthority())
+	{
+		UZAttributeSet* Attributes = ZPlayerState->GetAttributeSet();
+		Attributes->OnOutOfHealth.RemoveAll(this);
+		Attributes->OnOutOfHealth.AddUObject(this, &AZSurvivalGameCharacter::HandleOutOfHealth);
+	}
+}
+
+void AZSurvivalGameCharacter::GiveDefaultAbilities()
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!HasAuthority() || !ASC)
+	{
+		return;
+	}
+
+	for (const TSubclassOf<UZGameplayAbility>& AbilityClass : DefaultAbilities)
+	{
+		// the PlayerState keeps its abilities across respawns, so don't give them twice
+		if (!AbilityClass || ASC->FindAbilitySpecFromClass(AbilityClass))
+		{
+			continue;
+		}
+
+		// the input ID lets the ability react to its key (see PressAbilityInput)
+		const EZAbilityInputID InputID = AbilityClass.GetDefaultObject()->InputID;
+		const int32 SpecInputID = InputID == EZAbilityInputID::None ? INDEX_NONE : static_cast<int32>(InputID);
+		ASC->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, SpecInputID, this));
+	}
+}
+
+void AZSurvivalGameCharacter::HandleOutOfHealth()
+{
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		// State.Dead blocks every ability (see UZGameplayAbility); it replicates so clients block them too
+		ASC->CancelAllAbilities();
+		ASC->AddLooseGameplayTag(ZGameplayTags::State_Dead, 1, EGameplayTagReplicationState::TagOnly);
+	}
+
+	// TODO: death animation/ragdoll, then respawn or revive (and remove State.Dead again)
 }
 
 void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
-		
+
 		// Jumping
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
@@ -182,10 +319,10 @@ void AZSurvivalGameCharacter::DoMove(float Right, float Forward)
 		// get forward vector
 		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 
-		// get right vector 
+		// get right vector
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
-		// add movement 
+		// add movement
 		AddMovementInput(ForwardDirection, Forward);
 		AddMovementInput(RightDirection, Right);
 	}
@@ -215,76 +352,146 @@ void AZSurvivalGameCharacter::DoJumpEnd()
 
 void AZSurvivalGameCharacter::DoSprintStart()
 {
-	if (bIsAiming || SpeedLimit != EZSpeedLimit::None)
-	{
-		return; // Can't sprint while aiming or while a speed limit is active
-	}
-
-	if (CurrentStamina > 10.f) // Minimum stamina needed to initiate sprint
-	{
-		bIsSprinting = true;
-		UpdateMovementSpeed();
-	}
+	// the Sprint ability checks aiming, speed limits and stamina
+	PressAbilityInput(EZAbilityInputID::Sprint);
 }
 
 void AZSurvivalGameCharacter::DoSprintEnd()
 {
-	bIsSprinting = false;
-	UpdateMovementSpeed();
+	ReleaseAbilityInput(EZAbilityInputID::Sprint);
 }
 
 void AZSurvivalGameCharacter::DoAimStart()
 {
-	DoSprintEnd(); // Aiming cancels sprint
-
-	bIsAiming = true;
-	UpdateMovementSpeed();
-	UpdateRotationMode();
+	// the Aim ability also cancels sprint
+	PressAbilityInput(EZAbilityInputID::Aim);
 }
 
 void AZSurvivalGameCharacter::DoAimEnd()
 {
-	bIsAiming = false;
-	UpdateMovementSpeed();
-	UpdateRotationMode();
+	ReleaseAbilityInput(EZAbilityInputID::Aim);
+}
+
+void AZSurvivalGameCharacter::DoDodge()
+{
+	// a dodge is a single press; the Dodge ability checks and pays the stamina
+	PressAbilityInput(EZAbilityInputID::Dodge);
+	ReleaseAbilityInput(EZAbilityInputID::Dodge);
+}
+
+void AZSurvivalGameCharacter::PressAbilityInput(EZAbilityInputID InputID)
+{
+	// activates the ability with this input ID, predicted on this machine and confirmed by the server
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		ASC->AbilityLocalInputPressed(static_cast<int32>(InputID));
+	}
+}
+
+void AZSurvivalGameCharacter::ReleaseAbilityInput(EZAbilityInputID InputID)
+{
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		ASC->AbilityLocalInputReleased(static_cast<int32>(InputID));
+	}
 }
 
 void AZSurvivalGameCharacter::SetSpeedLimit(EZSpeedLimit NewLimit)
 {
-	if (NewLimit != EZSpeedLimit::None)
+	UZCharacterMovementComponent* Movement = GetZMovement();
+	if (!Movement)
 	{
-		DoSprintEnd(); // Any speed limit cancels sprint
+		return;
 	}
 
-	SpeedLimit = NewLimit;
-	UpdateMovementSpeed();
+	// Any speed limit cancels sprint
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (NewLimit != EZSpeedLimit::None && ASC)
+	{
+		const FGameplayTagContainer SprintTags(ZGameplayTags::Ability_Sprint.GetTag());
+		ASC->CancelAbilities(&SprintTags);
+	}
+
+	// the movement component sends it to the server with the next move
+	Movement->SetSpeedLimit(NewLimit);
 }
 
-void AZSurvivalGameCharacter::UpdateMovementSpeed()
+void AZSurvivalGameCharacter::SetWeaponType(EZWeaponType NewWeaponType)
+{
+	// change it right away for this player, and through the server for everyone else
+	CurrentWeaponType = NewWeaponType;
+
+	if (!HasAuthority())
+	{
+		ServerSetWeaponType(NewWeaponType);
+	}
+}
+
+void AZSurvivalGameCharacter::ServerSetWeaponType_Implementation(EZWeaponType NewWeaponType)
+{
+	// TODO Phase 2: check the player actually has a weapon of this type
+	CurrentWeaponType = NewWeaponType;
+}
+
+float AZSurvivalGameCharacter::GetHealthPercent() const
+{
+	return GetAttributePercent(UZAttributeSet::GetHealthAttribute(), UZAttributeSet::GetMaxHealthAttribute());
+}
+
+float AZSurvivalGameCharacter::GetStaminaPercent() const
+{
+	return GetAttributePercent(UZAttributeSet::GetStaminaAttribute(), UZAttributeSet::GetMaxStaminaAttribute());
+}
+
+float AZSurvivalGameCharacter::GetAttributePercent(const FGameplayAttribute& Attribute, const FGameplayAttribute& MaxAttribute) const
+{
+	const UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!ASC)
+	{
+		return 0.f;
+	}
+
+	const float MaxValue = ASC->GetNumericAttribute(MaxAttribute);
+	return MaxValue > 0.f ? ASC->GetNumericAttribute(Attribute) / MaxValue : 0.f;
+}
+
+bool AZSurvivalGameCharacter::IsAiming() const
+{
+	// the owner and the server know it from the movement component; the other players get a replicated copy
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		return bIsAiming;
+	}
+
+	const UZCharacterMovementComponent* Movement = GetZMovement();
+	return Movement && Movement->WantsToAim();
+}
+
+float AZSurvivalGameCharacter::GetMaxWalkSpeedFor(bool bSprinting, bool bAiming, EZSpeedLimit Limit) const
 {
 	// Base speed from state: aiming > sprinting (forward/sideways only) > jog
 	float NewSpeed = JogSpeed;
 
-	if (bIsAiming)
+	if (bAiming)
 	{
 		NewSpeed = AimWalkSpeed;
 	}
-	else if (bIsSprinting && CanSprintInMoveDirection())
+	else if (bSprinting)
 	{
 		NewSpeed = SprintSpeed;
 	}
 
 	// Apply the temporary cap (weapon swap, reload, ...)
-	if (SpeedLimit == EZSpeedLimit::Jog)
+	if (Limit == EZSpeedLimit::Jog)
 	{
 		NewSpeed = FMath::Min(NewSpeed, JogSpeed);
 	}
-	else if (SpeedLimit == EZSpeedLimit::Walk)
+	else if (Limit == EZSpeedLimit::Walk)
 	{
 		NewSpeed = FMath::Min(NewSpeed, WalkSpeed);
 	}
 
-	GetCharacterMovement()->MaxWalkSpeed = NewSpeed;
+	return NewSpeed;
 }
 
 bool AZSurvivalGameCharacter::CanSprintInMoveDirection() const
@@ -300,37 +507,14 @@ bool AZSurvivalGameCharacter::CanSprintInMoveDirection() const
 	return FVector::DotProduct(MoveDirection, FacingDirection) >= FMath::Cos(FMath::DegreesToRadians(MaxSprintAngle));
 }
 
-void AZSurvivalGameCharacter::UpdateRotationMode()
+UZCharacterMovementComponent* AZSurvivalGameCharacter::GetZMovement() const
 {
-	// Face the camera when always-face-camera is on or while aiming (TODO: also while attacking, once attacks exist), otherwise turn toward movement
-	const bool bFaceCamera = bAlwaysFaceCamera || bIsAiming;
-
-	GetCharacterMovement()->bOrientRotationToMovement = !bFaceCamera;
-	GetCharacterMovement()->bUseControllerDesiredRotation = bFaceCamera;
+	return Cast<UZCharacterMovementComponent>(GetCharacterMovement());
 }
 
 FRotator AZSurvivalGameCharacter::GetAimOffset() const
 {
 	// difference between where the camera aims and where the body faces, kept in -180..180
+	// (on other players' machines the engine replicates the aim pitch, see APawn::GetBaseAimRotation)
 	return (GetBaseAimRotation() - GetActorRotation()).GetNormalized();
-}
-
-void AZSurvivalGameCharacter::DoDodge()
-{
-	if (CurrentStamina >= DodgeStaminaCost)
-	{
-		CurrentStamina -= DodgeStaminaCost;
-
-		// Directional Impulse Dodge Roll
-		FVector LaunchDirection = GetLastMovementInputVector();
-		if (LaunchDirection.IsNearlyZero())
-		{
-			LaunchDirection = GetActorForwardVector(); // Fallback to forward dodge if stationary
-		}
-
-		LaunchDirection.Normalize();
-		LaunchCharacter(LaunchDirection * 1200.f + FVector(0.f, 0.f, 150.f), true, true);
-
-		// TODO Phase 1 Step 2: Play Dodge Roll Animation Montage here when ready
-	}
 }
