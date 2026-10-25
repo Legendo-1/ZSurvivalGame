@@ -13,8 +13,9 @@ UZGameplayAbility_Sprint::UZGameplayAbility_Sprint()
 	SetAssetTags(FGameplayTagContainer(ZGameplayTags::Ability_Sprint.GetTag()));
 	ActivationOwnedTags.AddTag(ZGameplayTags::State_Sprinting);
 
-	// can't sprint while aiming
+	// can't sprint while aiming or firing
 	ActivationBlockedTags.AddTag(ZGameplayTags::State_Aiming);
+	ActivationBlockedTags.AddTag(ZGameplayTags::State_Firing);
 }
 
 bool UZGameplayAbility_Sprint::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const

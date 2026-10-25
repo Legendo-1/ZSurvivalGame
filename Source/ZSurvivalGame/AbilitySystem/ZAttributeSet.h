@@ -7,8 +7,8 @@
 #include "AbilitySystemComponent.h"
 #include "ZAttributeSet.generated.h"
 
-/** Broadcast on the server when Health reaches 0 */
-DECLARE_MULTICAST_DELEGATE(FZOutOfHealthDelegate);
+/** Broadcast on the server when Health reaches 0, with who caused it (null if unknown, e.g. engine damage) */
+DECLARE_MULTICAST_DELEGATE_OneParam(FZOutOfHealthDelegate, AActor* /*DamageInstigator*/);
 
 /**
  *  The player's attributes: health and stamina
@@ -65,6 +65,9 @@ private:
 
 	/** Keeps Health and Stamina between 0 and their max, and the max values at 1 or more */
 	void ClampAttribute(const FGameplayAttribute& Attribute, float& NewValue) const;
+
+	/** Who is dealing the damage being applied right now (set only during PostGameplayEffectExecute) */
+	TWeakObjectPtr<AActor> CurrentDamageInstigator;
 
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Health, Category = "Attributes|Health", meta = (AllowPrivateAccess = "true"))
 	FGameplayAttributeData Health;

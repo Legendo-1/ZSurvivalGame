@@ -13,6 +13,9 @@ UZGameplayAbility_Dodge::UZGameplayAbility_Dodge()
 	InputID = EZAbilityInputID::Dodge;
 	SetAssetTags(FGameplayTagContainer(ZGameplayTags::Ability_Dodge.GetTag()));
 	ActivationOwnedTags.AddTag(ZGameplayTags::State_Dodging);
+
+	// a dodge interrupts a reload
+	CancelAbilitiesWithTag.AddTag(ZGameplayTags::Ability_Reload);
 }
 
 bool UZGameplayAbility_Dodge::CheckCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, FGameplayTagContainer* OptionalRelevantTags) const

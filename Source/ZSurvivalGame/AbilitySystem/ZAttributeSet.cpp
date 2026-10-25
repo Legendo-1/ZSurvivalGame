@@ -61,7 +61,7 @@ void UZAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, fl
 
 	if (Attribute == GetHealthAttribute() && OldValue > 0.f && NewValue <= 0.f)
 	{
-		OnOutOfHealth.Broadcast();
+		OnOutOfHealth.Broadcast(CurrentDamageInstigator.Get());
 	}
 }
 
@@ -77,7 +77,10 @@ void UZAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackD
 
 		if (DamageTaken > 0.f)
 		{
+			// remember who did it while the health changes, so OnOutOfHealth can tell
+			CurrentDamageInstigator = Data.EffectSpec.GetContext().GetInstigator();
 			SetHealth(GetHealth() - DamageTaken);
+			CurrentDamageInstigator = nullptr;
 		}
 	}
 }

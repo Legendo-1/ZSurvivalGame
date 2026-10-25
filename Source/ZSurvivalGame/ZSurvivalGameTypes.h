@@ -3,7 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/EngineTypes.h"
 #include "ZSurvivalGameTypes.generated.h"
+
+/** Trace channel for weapon shots (set up in DefaultEngine.ini). Characters ignore it with their capsule and block it with their mesh, so hits know the bone */
+inline constexpr ECollisionChannel ZTraceChannel_Weapon = ECC_GameTraceChannel1;
 
 /** Which weapon animation set the character uses */
 UENUM(BlueprintType)
@@ -30,5 +34,16 @@ enum class EZAbilityInputID : uint8
 	None,
 	Sprint,
 	Aim,
-	Dodge
+	Dodge,
+	Fire,
+	Reload
+};
+
+/** Which side a character is on. Same team: no damage between them. Different teams: hostile */
+UENUM(BlueprintType)
+enum class EZTeam : uint8
+{
+	Players,
+	Monsters,	// zombies and other monsters
+	Humans		// human NPCs that fight both (friendly NPCs use Players)
 };

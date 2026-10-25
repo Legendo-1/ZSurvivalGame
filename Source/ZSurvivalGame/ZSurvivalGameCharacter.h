@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "GenericTeamAgentInterface.h"
 #include "Logging/LogMacros.h"
 #include "ZSurvivalGameTypes.h"
 #include "ZSurvivalGameCharacter.generated.h"
@@ -15,6 +16,8 @@ class UInputAction;
 class UAbilitySystemComponent;
 class UZGameplayAbility;
 class UZCharacterMovementComponent;
+class UZWeaponData;
+class AZWeapon;
 struct FInputActionValue;
 struct FGameplayAttribute;
 
@@ -23,10 +26,10 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 /**
  *  A simple player-controllable third person character
  *  Implements a controllable orbiting camera
- *  Sprint, aim and dodge are abilities (see AbilitySystem/); health and stamina live on the PlayerState
+ *  Sprint, aim, dodge, fire and reload are abilities (see AbilitySystem/); health and stamina live on the PlayerState
  */
 UCLASS(abstract)
-class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface
+class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface
 {
 	GENERATED_BODY()
 
@@ -67,6 +70,14 @@ protected:
 	/** Aim Input Action (hold) */
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* AimAction;
+
+	/** Fire Input Action (hold for automatic weapons) */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* FireAction;
+
+	/** Reload Input Action */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* ReloadAction;
 
 	/** --- ABILITIES --- */
 
@@ -124,9 +135,34 @@ protected:
 
 	/** --- WEAPON --- */
 
-	/** Current weapon animation set; change it with SetWeaponType so everyone sees it (the weapon system will drive this in Phase 2) */
+	/** Weapons the character spawns with (one Data Asset each); the 1/2/3 keys switch between them by weapon type */
+	UPROPERTY(EditDefaultsOnly, Category = "Survival|Weapon")
+	TArray<TObjectPtr<UZWeaponData>> StartingWeapons;
+
+	/** Current weapon animation set; follows the equipped weapon (set with SetWeaponType) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = "Survival|Weapon")
 	EZWeaponType CurrentWeaponType = EZWeaponType::Unarmed;
+
+	/** Weapons the character carries (spawned by the server); only the owning player needs the list */
+	UPROPERTY(Replicated)
+	TArray<TObjectPtr<AZWeapon>> Weapons;
+
+	/** The weapon in the hands, or null when unarmed */
+	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)
+	TObjectPtr<AZWeapon> EquippedWeapon;
+
+	/** True while the fire button is held, for automatic weapons (owning player's machine) */
+	bool bFireHeld = false;
+
+	/** When the server last confirmed a hit, and whether it was a kill (owning player's machine) */
+	double LastHitTime = -1000.0;
+	bool bLastHitWasKill = false;
+
+	/** --- DEATH --- */
+
+	/** Set by the server when health reaches 0; everyone then plays the death (ragdoll) */
+	UPROPERTY(ReplicatedUsing = OnRep_IsDead)
+	bool bIsDead = false;
 
 	/** The player's ability system, owned by the PlayerState */
 	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
@@ -141,17 +177,26 @@ public:
 	/** Returns the PlayerState's ability system (null until it's set up) */
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
+	/** Players are all on the same team */
+	virtual FGenericTeamId GetGenericTeamId() const override;
+
 protected:
 
 	virtual void BeginPlay() override;
 
 	virtual void Tick(float DeltaTime) override;
 
+	/** Server: removes the weapons with the character */
+	virtual void Destroyed() override;
+
 	/** Reduces health when damaged (e.g. via UGameplayStatics::ApplyDamage) */
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
-	/** Server: sets up the ability system and gives the default abilities */
+	/** Server: sets up the ability system, gives the default abilities and the starting weapons */
 	virtual void PossessedBy(AController* NewController) override;
+
+	/** Server: lets go of the PlayerState's ability system (e.g. the dead body after a respawn) */
+	virtual void UnPossessed() override;
 
 	/** Client: sets up the ability system once the PlayerState has arrived */
 	virtual void OnRep_PlayerState() override;
@@ -165,15 +210,42 @@ protected:
 	/** Server: gives the abilities in DefaultAbilities, unless the player already has them (e.g. after a respawn) */
 	void GiveDefaultAbilities();
 
-	/** Server: called when Health reaches 0 */
-	void HandleOutOfHealth();
+	/** Server: called when Health reaches 0 (DamageInstigator is who did it, or null) */
+	void HandleOutOfHealth(AActor* DamageInstigator);
+
+	/** Every machine: ragdoll and stop moving */
+	void PlayDeath();
+
+	UFUNCTION()
+	void OnRep_IsDead();
 
 	/** Server: drains stamina while sprinting and regenerates it otherwise */
 	void UpdateStamina(float DeltaTime);
 
+	/** Server: spawns the StartingWeapons and equips the one matching CurrentWeaponType */
+	void SpawnStartingWeapons();
+
+	/** Server: puts the weapon of this type in the hands (or none, e.g. for Unarmed) */
+	void EquipWeaponOfType(EZWeaponType WeaponType);
+
+	/** The carried weapon of this type, or null */
+	AZWeapon* FindWeaponOfType(EZWeaponType WeaponType) const;
+
+	/** Server: removes all carried weapons */
+	void DestroyWeapons();
+
+	/** Shows the equipped weapon and hides the others */
+	void UpdateWeaponVisibility();
+
+	UFUNCTION()
+	void OnRep_EquippedWeapon();
+
 	/** Sends an ability input press or release to the ability system */
 	void PressAbilityInput(EZAbilityInputID InputID);
 	void ReleaseAbilityInput(EZAbilityInputID InputID);
+
+	/** Cancels firing and reloading, e.g. when switching weapons */
+	void CancelWeaponAbilities();
 
 	/** Attribute as 0..1 of its max, for UI bars */
 	float GetAttributePercent(const FGameplayAttribute& Attribute, const FGameplayAttribute& MaxAttribute) const;
@@ -225,13 +297,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoAimEnd();
 
+	/** Fire pressed: shoots (automatic weapons keep shooting while held); reloads instead when the magazine is empty */
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoFireStart();
+
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoFireEnd();
+
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoReload();
+
 	/** Caps movement speed, e.g. Jog or Walk for the duration of a weapon swap or reload; None removes the cap. Call it on the owning player's machine (or in a predicted ability); it reaches the server with the next move */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	void SetSpeedLimit(EZSpeedLimit NewLimit);
 
-	/** Changes the weapon animation set, right away for this player and through the server for everyone */
+	/** Switches to the carried weapon of this type (or just the animation set if there's none), right away for this player and through the server for everyone */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
 	void SetWeaponType(EZWeaponType NewWeaponType);
+
+	/** The weapon in the hands, or null when unarmed */
+	UFUNCTION(BlueprintPure, Category = "Survival|Weapon")
+	AZWeapon* GetEquippedWeapon() const { return EquippedWeapon; }
 
 	/** Health as 0..1, for UI bars */
 	UFUNCTION(BlueprintPure, Category = "Survival|Stats")
@@ -240,6 +326,22 @@ public:
 	/** Stamina as 0..1, for UI bars */
 	UFUNCTION(BlueprintPure, Category = "Survival|Stats")
 	float GetStaminaPercent() const;
+
+	/** True after health reached 0, until the player respawns as a new character */
+	UFUNCTION(BlueprintPure, Category = "Survival|Stats")
+	bool IsDead() const { return bIsDead; }
+
+	/** Sent by the server to this player's machine when one of their shots dealt damage (for the hit marker) */
+	UFUNCTION(Client, Unreliable)
+	void ClientConfirmHit(bool bKilledTarget);
+
+	/** Seconds since this player's last confirmed hit (for the HUD's hit marker) */
+	UFUNCTION(BlueprintPure, Category = "Survival|Weapon")
+	float GetTimeSinceLastHit() const;
+
+	/** True if the last confirmed hit killed its target */
+	UFUNCTION(BlueprintPure, Category = "Survival|Weapon")
+	bool WasLastHitAKill() const { return bLastHitWasKill; }
 
 	/** Animation getters */
 	UFUNCTION(BlueprintPure, Category = "Survival|Animation")

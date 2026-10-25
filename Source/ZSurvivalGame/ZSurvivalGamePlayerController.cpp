@@ -8,7 +8,14 @@
 #include "Blueprint/UserWidget.h"
 #include "UI/ZSurvivalHUDWidget.h"
 #include "ZSurvivalGame.h"
+#include "ZCheatManager.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+
+AZSurvivalGamePlayerController::AZSurvivalGamePlayerController()
+{
+	// test commands like ZSpawnZombies (see UZCheatManager)
+	CheatClass = UZCheatManager::StaticClass();
+}
 
 void AZSurvivalGamePlayerController::BeginPlay()
 {

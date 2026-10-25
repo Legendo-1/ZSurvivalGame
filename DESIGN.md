@@ -68,9 +68,14 @@ Tie base defense directly to the expedition loop:
   * Aiming: Camera-facing orient with camera zoom and speed slowdown (300 walk speed, sprint blocked).  
   * Modular parameters in Blueprint (Aim Walk Speed, Aim Arm Length, Aim Zoom Speed).  
   * Unified rotation control via UpdateRotationMode().  
+* \[x\] Basic AI Zombie melee chase logic and attack range detection (AI base class for zombies, monsters and human NPCs, enemy spawner).  
+* \[x\] Multiplayer (listen server, up to 4 players) with the Gameplay Ability System: sprint, aim, dodge, fire and reload as abilities; health and stamina on the PlayerState.  
+* \[x\] Hitscan shooting and reloading with pistol and rifle weapon data assets, headshots, teams (no friendly fire).  
+* \[x\] Death as a ragdoll; players respawn after a few seconds.  
+* \[x\] Rifle aim strafe animations (2D BlendSpace for walking sideways/backwards when aiming) and aim offset.  
 * \[ \] **Open Phase 1 Items:**  
-  * Strafe animations / 2D BlendSpace for walking sideways/backwards when aiming.  
-  * Basic AI Zombie melee chase logic and attack range detection.
+  * Pistol aim strafe animations and aim offset.  
+  * Weapon meshes, shot effects and sounds (GameplayCues), fire and reload animations.
 
 ### **Phase 2: Item & Mod Data Architecture (UP NEXT)**
 

@@ -49,6 +49,13 @@ protected:
 	UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
 	bool bForceTouchControls = false;
 
+public:
+
+	/** Constructor */
+	AZSurvivalGamePlayerController();
+
+protected:
+
 	/** Gameplay initialization */
 	virtual void BeginPlay() override;
 
