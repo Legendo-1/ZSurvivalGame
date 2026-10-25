@@ -31,6 +31,10 @@ Things learned the hard way, and known issues. Remove a known issue once it's fi
 - **Keep idle out of the blend spaces.** The Idle state in ABP_Manny plays the idle animations directly. An idle sample combined with a changed Rate Scale on a jog made the character tilt when stopping.
 - **Set CurrentWeaponType in BP_ThirdPersonCharacter's Class Defaults.** The ABP's variable default only affects the ABP preview, not the game.
 
+### Aim offsets
+
+- **AO_Rifle's center pose had the wrong base pose.** `MM_Rifle_Idle_ADS_AO_CC` (Manny) had `MF_Rifle_Idle_ADS` (Quinn) as Base Pose Animation, so the character was rotated in game even when looking straight ahead. Fixed by setting its Base Pose Animation to `MM_Rifle_Idle_ADS_AO_CC`. `_CU` and `_CD` still have `MF_Rifle_Idle_ADS` as their base and look fine in game.
+
 ## Known issues
 
 - **Pistol run, right knee on slopes:** the right knee bends outward when the right foot lands on a slope while running with the pistol. Something in the pistol animation causes it, not the IK settings.
