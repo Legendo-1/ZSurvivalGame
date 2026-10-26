@@ -166,6 +166,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Crafting")
 	float GetCraftingProgressPercent() const;
 
+	/** Most crafts one combine can ask for (a recipe that changes an item is always made once) */
+	UFUNCTION(BlueprintPure, Category = "Crafting")
+	int32 GetMaxCraftsPerRequest() const { return MaxCraftsPerRequest; }
+
+	/** Most items one combine can use */
+	UFUNCTION(BlueprintPure, Category = "Crafting")
+	int32 GetMaxCombineItems() const { return MaxCombineItems; }
+
 	/** A crafting station of this kind near the player's character, or null */
 	UFUNCTION(BlueprintPure, Category = "Crafting")
 	AZCraftingStation* FindNearbyStation(FGameplayTag StationTag) const;

@@ -1,0 +1,116 @@
+# UI
+
+How the inventory screen and the HUD work, how to change their keys, and how to give them your own look.
+
+**Last updated:** 2026-10-26 (inventory screen with combining and the character panel added; the HUD section moved here from MULTIPLAYER.md)
+
+## The inventory screen
+
+- **Open and close it** with **I** or **Tab** (gamepad: the **View** button). It also opens when you use a crafting station with the interact key. **Esc** and gamepad **B** close it too (in the editor, Esc may stop Play instead; I and Tab always work).
+- **While it's open** the character stands still and can't shoot, and the mouse cursor shows. The game doesn't pause (it's co-op).
+- **Left:** your items, sorted by type (weapons, mods, ammo, consumables, tools, materials, salvage). **In hands** marks the weapon you're holding, and the bar at the bottom of a slot is its durability.
+- **Middle:** what the item under the mouse (or the selected one) is: its description and stats, e.g. a weapon's damage and what's in its mod slots, a mod's bonuses, durability, healing. Below that, buttons for the selected item (**Use** / **Equip** / **Read**, **Drop**, **Add to combine**) and the **combine area**.
+- **Right:** the character: level and experience, trait points, every trait with a **+** button, **Reset traits**, the tradeskills, and how many recipes you've found.
+
+| Mouse | What it does |
+|---|---|
+| Click an item | Selects it (the buttons work on it) |
+| Right-click or double-click | Uses it: equips a weapon, uses a bandage, reads a tome |
+| Drag onto another item | Tries the two together |
+| Drag onto the combine area | Puts it in the combine slots |
+| Drag outside the window | Drops the whole stack on the ground |
+| Click an item in the combine slots | Takes it out again |
+
+**Gamepad:** the D-pad or left stick moves between items, **A** selects, **X** uses, **Y** puts the item in the combine slots, **B** closes.
+
+**Combining:** put up to 6 items in the combine slots, choose how many with **−** and **+**, and press **Combine**. Recipes stay secret: the screen never says what goes together, only what happened ("Nothing comes of combining these.", "You need Electronics 20 for this. You have 8."). The items stay in the slots, so the same combination can be made again; the ones that were used up drop out. A craft that takes time shows a progress bar and can be stopped with **Stop**. **At the Workbench** shows when a crafting station is close enough.
+
+## Multiplayer
+
+- **It only shows the player's own things:** their items, traits and tradeskills are sent to that player only.
+- **Everything it does is a request the server checks:** using, dropping, combining, raising and resetting traits. The answer comes back like any other change, and the screen updates by itself.
+- **Each player has their own screen.** Nothing on it is shared.
+
+## Changing the keys
+
+`Content/Input/IMC_Default` → **IA_Inventory**: add, remove or change keys there. The **Close** button shows the first keyboard key, e.g. "Close (I)", and the screen closes on every key mapped to it.
+
+## Your own look
+
+The screen is made in C++ (`UZInventoryScreenWidget`) and has a complete built-in look. To make your own:
+
+1. Content Browser → right-click → **User Interface → Widget Blueprint** → **Pick Parent Class**: search **ZInventoryScreenWidget** → name it e.g. `WBP_Inventory`.
+2. Design it. The code finds widgets by their names (below); all of them are optional, so leave out what you don't want.
+3. `BP_ThirdPersonPlayerController` → **Class Defaults** → **UI** → **Inventory Screen Class** → `WBP_Inventory`.
+
+The same works for the parts: a Widget Blueprint with **ZItemSlotWidget**, **ZItemDetailsWidget**, **ZCharacterPanelWidget**, **ZTraitRowWidget** or **ZTradeskillRowWidget** as its parent class, set in **Item Slot Class**, **Trait Row Class** or **Tradeskill Row Class**. A Widget Blueprint without any widgets of its own gets the built-in look, so one can also just change settings (e.g. the slot colors).
+
+**ZInventoryScreenWidget** (the screen)
+
+| Name | Type | What it's for |
+|---|---|---|
+| `WindowPanel` | any | The window: an item dragged outside it is dropped on the ground |
+| `ItemsPanel` | Wrap Box (or another panel) | The item slots go in here; put it in a Scroll Box |
+| `ItemCountText` | Text | "15 items" |
+| `ItemDetails` | ZItemDetailsWidget | The item under the mouse, or the selected one |
+| `UseButton`, `UseButtonText` | Button, Text | Uses the selected item; the text becomes "Equip", "Use" or "Read" |
+| `DropButton` | Button | Drops the selected stack |
+| `AddToCombineButton` | Button | Puts the selected item in the combine slots |
+| `CombineArea` | any | Items dragged onto it go in the combine slots |
+| `CombinePanel` | Wrap Box (or another panel) | The combine slots go in here |
+| `CombineHint` | any | Shown while the combine slots are empty |
+| `CombineButton`, `ClearCombineButton` | Button | Combine; empty the slots |
+| `CraftCountText`, `CraftCountDownButton`, `CraftCountUpButton` | Text, Buttons | How many to make: "x3", − and + |
+| `CraftingProgressBar`, `CraftingStatusText`, `CancelCraftingButton` | Progress Bar, Text, Button | While crafting: "Crafting Bandage (2 left)" and Stop |
+| `StationText` | Text | "At the Workbench" or "No crafting station nearby" |
+| `ResultText` | Text | What the last combine did |
+| `CharacterPanel` | ZCharacterPanelWidget | Level, traits, tradeskills |
+| `CloseButton`, `CloseButtonText` | Button, Text | "Close (I)" |
+
+**ZItemSlotWidget** (one item): `Background` (Border, tinted for hovered/selected/drop target), `IconImage`, `NameText`, `CountText`, `DurabilityBar`, `EquippedMarker`. The colors are in its Class Defaults → **Appearance**.
+
+**ZItemDetailsWidget:** `NameText`, `TypeText`, `IconImage`, `DescriptionText`, `StatsText`. What's in `StatsText` comes from the item's fragments, so a new kind of item describes itself.
+
+**ZCharacterPanelWidget:** `LevelText`, `ExperienceBar`, `ExperienceText`, `TraitPointsText`, `TraitsPanel` (panel for the trait rows), `ResetTraitsButton` (hidden when resetting isn't allowed), `TradeskillsPanel` (panel for the tradeskill rows), `DiscoveriesText`.
+
+**ZTraitRowWidget:** `NameText`, `RankText`, `EffectText`, `RaiseButton`. **ZTradeskillRowWidget:** `NameText`, `LevelText`, `LevelProgressBar`.
+
+**For sounds and animations** each has Blueprint events: **On Selection Changed** and **On Crafting Result** (screen), **On Item Changed** and **On State Changed** (slot), **On Trait Changed**, **On Skill Changed**.
+
+**Icons:** an item's Data Asset has an **Icon**; slots and details show it once it's set (no item has one yet).
+
+**From Blueprints** the screen can do everything the mouse does: **Select Item**, **Use Item**, **Drop Item**, **Combine Items**, **Add To Combine**, **Combine Chosen Items**, **Set Craft Count**, **Close Screen**. The player controller has **Open Inventory**, **Close Inventory**, **Toggle Inventory** and **Is Inventory Open**.
+
+## HUD
+
+`WBP_HUD` (in `Content/UI`) is filled in by C++ (`UZSurvivalHUDWidget`). The code finds the widgets by name, so the names must match exactly:
+
+| Widget name | Type | Needed? | What the code does with it |
+|---|---|---|---|
+| `HealthBar` | Progress Bar | Yes | Health |
+| `StaminaBar` | Progress Bar | Yes | Stamina |
+| `AmmoText` | Text | Optional | "magazine / reserve", e.g. "12 / 60", while a weapon is in the hands, hidden otherwise |
+| `Crosshair` | any (e.g. Image) | Optional | Shown while a weapon is in the hands |
+| `HitMarker` | any (e.g. Image) | Optional | Flashes when a shot dealt damage (longer for a kill) |
+| `StatusText` | Text | Optional | "You died. Respawning..." while dead |
+| `InteractionText` | Text | Optional | "[E] Pick up Rifle Ammo x15" while looking at something to interact with |
+| `InteractionProgress` | Progress Bar | Optional | Fills while holding the interact key on an interaction that takes time |
+| `MessageText` | Text | Optional | The last few messages to the player, e.g. "Crafted Bandage x1." (if the HUD has none, one is added above the bottom middle of the screen) |
+
+## Console commands
+
+Open the console with the key under Esc while playing.
+
+| Command | What it does |
+|---|---|
+| `ZInventoryUI` | Opens or closes the inventory screen, like its key |
+| `ZInventoryUI select ID_Rifle` | Works the open screen like the mouse and writes what it shows to the Output Log (for automated tests). Also `use`, `drop`, `add`, `remove`, `clear`, `count 3`, `combine`, `drag ID_BrokenRadio ID_Screwdriver`, `raise Vigor`, `reset`, `show` |
+
+## Plan: what isn't built yet
+
+- **Item icons** (the Icon field is there).
+- **Sounds and small animations** (the Blueprint events are there).
+- **Dropping part of a stack** (Drop drops the whole stack; **Drop Item** already takes a count).
+- **Comparing** a weapon with the one in the hands.
+- **Storage chests:** the same item slots for the chest's inventory next to the player's.
+- **Changing keys in a settings menu** (Enhanced Input's user settings).

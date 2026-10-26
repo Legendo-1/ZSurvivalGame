@@ -1,8 +1,8 @@
 # Multiplayer & abilities
 
-How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md.
+How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md.
 
-**Last updated:** 2026-10-26 (weapon upgrades and mods change the weapon's stats; the weapon sends its item to its owner)
+**Last updated:** 2026-10-26 (the HUD section moved to UI.md, with the new inventory screen)
 
 ## The basic idea
 
@@ -115,21 +115,9 @@ To make one: in `Content/GameplayCues`, right-click → **Blueprint Class** → 
 
 Until then, the shooter sees **debug lines**: white = shot, yellow dot = hit, red dot = damage dealt (red only on the host, since only the server deals damage). Turn them off in the console with `Z.Weapon.DrawDebug 0`.
 
-## HUD
+## HUD and inventory screen
 
-`WBP_HUD` (in `Content/UI`) is filled in by C++ (`UZSurvivalHUDWidget`). The code finds the widgets by name, so the names must match exactly:
-
-| Widget name | Type | Needed? | What the code does with it |
-|---|---|---|---|
-| `HealthBar` | Progress Bar | Yes | Health |
-| `StaminaBar` | Progress Bar | Yes | Stamina |
-| `AmmoText` | Text | Optional | "magazine / reserve", e.g. "12 / 60", while a weapon is in the hands, hidden otherwise |
-| `Crosshair` | any (e.g. Image) | Optional | Shown while a weapon is in the hands |
-| `HitMarker` | any (e.g. Image) | Optional | Flashes when a shot dealt damage (longer for a kill) |
-| `StatusText` | Text | Optional | "You died. Respawning..." while dead |
-| `InteractionText` | Text | Optional | "[E] Pick up Rifle Ammo x15" while looking at something to interact with |
-| `InteractionProgress` | Progress Bar | Optional | Fills while holding the interact key on an interaction that takes time |
-| `MessageText` | Text | Optional | The last few messages to the player, e.g. "Crafted Bandage x1." (if the HUD has none, one is added above the bottom middle of the screen) |
+The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are explained in UI.md.
 
 ## What the other players see
 
@@ -196,7 +184,7 @@ Not decided in detail. This is the direction, so new systems fit what's already 
 - **Smarter AI:** AI perception (sight and hearing) instead of distance, monsters and human NPCs fighting each other, patrols and ranged attacks, possibly with a StateTree.
 - **Damage types** (acid, electric), e.g. from weapon mods: GameplayEffects with tags (Blueprint children of `UZGameplayEffect_Damage`). Effects everyone sees are GameplayCues.
 - **Armor weight tiers:** attributes changed by the armor's GameplayEffect, e.g. slower dodges for heavy armor.
-- **Inventory screen, harvesting, storage:** built on the item system (plans in ITEMS.md and CRAFTING.md).
+- **Harvesting and storage:** built on the item system (plans in ITEMS.md and CRAFTING.md).
 - **Spawn protection:** a few seconds without damage after respawning, so enemies at a Player Start can't kill a player again right away.
 - **Hub noise/heat and sieges:** values only the server keeps, sent to everyone through the GameState. Spawners can be started by a siege.
 - **Hosting and joining over the internet:** right now only in the editor. Real hosting needs an online service (Steam or Epic Online Services).

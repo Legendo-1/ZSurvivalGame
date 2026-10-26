@@ -35,6 +35,9 @@ public:
 	/** What using the item is called in the UI, e.g. "Use" or "Equip"; empty if this fragment doesn't make it usable */
 	virtual FText GetUseActionName() const { return FText::GetEmpty(); }
 
+	/** Lines for inventory screens about what this fragment does, e.g. "Heals 25" or "Durability 18 / 20" (Instance may be null: the item in general) */
+	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const {}
+
 #if WITH_EDITOR
 	/** Checks the fragment fits its item (called when the item is saved or validated) */
 	virtual void ValidateForItem(const class UZItemDefinition* Item, class FDataValidationContext& Context) const {}
@@ -118,6 +121,14 @@ public:
 	/** Its Item.Type.* tag (e.g. Item.Type.Ammo), for sorting and filters; empty if it has none */
 	UFUNCTION(BlueprintPure, Category = "Item")
 	FGameplayTag GetItemTypeTag() const;
+
+	/** "Weapon Mod" for Item.Type.WeaponMod; empty if it has no type */
+	UFUNCTION(BlueprintPure, Category = "Item")
+	FText GetTypeName() const;
+
+	/** What its fragments say about it for inventory screens, e.g. "Heals 25", "Durability 18 / 20" (for this instance's stats if one is given) */
+	UFUNCTION(BlueprintPure, Category = "Item")
+	TArray<FText> GetDescriptionLines(const UZItemInstance* Instance) const;
 
 	/** Its quality as a tool (from its Tool fragment); 0 if it isn't a tool */
 	UFUNCTION(BlueprintPure, Category = "Item")

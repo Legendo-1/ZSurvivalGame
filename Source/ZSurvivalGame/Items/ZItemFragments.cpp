@@ -18,6 +18,30 @@
 
 #define LOCTEXT_NAMESPACE "ZItems"
 
+namespace
+{
+	/** "2.5" (at most one decimal) */
+	FText AsDecimal(float Value)
+	{
+		FNumberFormattingOptions Format;
+		Format.MaximumFractionalDigits = 1;
+		return FText::AsNumber(Value, &Format);
+	}
+
+	/** The last part of a tag: "Barrel" for Weapon.ModSlot.Barrel */
+	FText GetTagLeafName(const FGameplayTag& Tag)
+	{
+		FString Name = Tag.ToString();
+		int32 LastDot = INDEX_NONE;
+		if (Name.FindLastChar(TEXT('.'), LastDot))
+		{
+			Name.RightChopInline(LastDot + 1);
+		}
+
+		return FText::FromString(FName::NameToDisplayString(Name, false));
+	}
+}
+
 void UZItemFragment_Weapon::OnInstanceCreated(UZItemInstance* Instance) const
 {
 	// a new weapon starts with a full magazine
@@ -42,6 +66,37 @@ bool UZItemFragment_Weapon::OnUse(UZItemInstance* Instance, APawn* User) const
 FText UZItemFragment_Weapon::GetUseActionName() const
 {
 	return LOCTEXT("EquipAction", "Equip");
+}
+
+void UZItemFragment_Weapon::GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const
+{
+	if (!WeaponData)
+	{
+		return;
+	}
+
+	// the item's own stats: its data with its upgrades and mods (the holder's traits come on top)
+	const auto Stat = [this, Instance](EZWeaponStat WeaponStat) { return UZWeaponStatsLibrary::GetWeaponStat(WeaponData, Instance, WeaponStat); };
+	const float SpreadScale = UZWeaponStatsLibrary::GetItemStatScale(WeaponData, Instance, EZWeaponStat::Spread);
+
+	OutLines.Add(FText::Format(LOCTEXT("WeaponDamageLine", "Damage {0}, {1} shots per second"), AsDecimal(Stat(EZWeaponStat::Damage)), AsDecimal(Stat(EZWeaponStat::FireRate))));
+	OutLines.Add(FText::Format(LOCTEXT("WeaponMagazineLine", "Magazine {0}, reload {1} s"), FMath::RoundToInt32(Stat(EZWeaponStat::MagazineSize)), AsDecimal(Stat(EZWeaponStat::ReloadTime))));
+	OutLines.Add(FText::Format(LOCTEXT("WeaponSpreadLine", "Spread {0}, aiming {1}, range {2} m"), AsDecimal(WeaponData->HipSpread * SpreadScale),
+		AsDecimal(WeaponData->AimSpread * SpreadScale), FMath::RoundToInt32(Stat(EZWeaponStat::Range) / 100.f)));
+
+	if (WeaponData->MaxUpgradeLevel > 0)
+	{
+		OutLines.Add(FText::Format(LOCTEXT("WeaponUpgradeLine", "Upgrade +{0} of +{1}"), Instance ? Instance->GetUpgradeLevel() : 0, WeaponData->MaxUpgradeLevel));
+	}
+
+	// each slot with the mod in it
+	TArray<FGameplayTag> Slots;
+	WeaponData->ModSlots.GetGameplayTagArray(Slots);
+	for (const FGameplayTag& Slot : Slots)
+	{
+		const UZItemDefinition* Mod = Instance ? Instance->GetModInSlot(Slot) : nullptr;
+		OutLines.Add(FText::Format(LOCTEXT("WeaponSlotLine", "{0}: {1}"), GetTagLeafName(Slot), Mod ? Mod->GetItemName() : LOCTEXT("EmptySlot", "empty")));
+	}
 }
 
 #if WITH_EDITOR
@@ -74,6 +129,30 @@ FText UZItemFragment_WeaponMod::GetModifiersText() const
 	}
 
 	return FText::Join(FText::FromString(TEXT("\n")), Lines);
+}
+
+void UZItemFragment_WeaponMod::GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const
+{
+	if (Slot.IsValid())
+	{
+		OutLines.Add(FText::Format(LOCTEXT("ModSlotLine", "Weapon mod for the {0} slot"), GetTagLeafName(Slot)));
+	}
+
+	for (const FZWeaponStatModifier& Modifier : Modifiers)
+	{
+		OutLines.Add(UZWeaponStatsLibrary::DescribeModifier(Modifier));
+	}
+
+	if (!AllowedWeaponTypes.IsEmpty())
+	{
+		TArray<FText> TypeNames;
+		for (const EZWeaponType Type : AllowedWeaponTypes)
+		{
+			TypeNames.Add(UEnum::GetDisplayValueAsText(Type));
+		}
+
+		OutLines.Add(FText::Format(LOCTEXT("ModOnlyForLine", "Only for: {0}"), FText::Join(LOCTEXT("ListSeparator", ", "), TypeNames)));
+	}
 }
 
 #if WITH_EDITOR
@@ -131,9 +210,30 @@ FText UZItemFragment_Consumable::GetUseActionName() const
 	return LOCTEXT("UseAction", "Use");
 }
 
+void UZItemFragment_Consumable::GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const
+{
+	if (HealAmount > 0.f)
+	{
+		OutLines.Add(FText::Format(LOCTEXT("HealsLine", "Heals {0}"), AsDecimal(HealAmount)));
+	}
+}
+
 void UZItemFragment_Durability::OnInstanceCreated(UZItemInstance* Instance) const
 {
 	Instance->SetStatTagStack(ZGameplayTags::Item_Stat_Durability, MaxDurability);
+}
+
+void UZItemFragment_Durability::GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const
+{
+	if (!Instance)
+	{
+		OutLines.Add(FText::Format(LOCTEXT("MaxDurabilityLine", "Durability {0}"), MaxDurability));
+		return;
+	}
+
+	OutLines.Add(Instance->IsBroken()
+		? LOCTEXT("BrokenLine", "Broken")
+		: FText::Format(LOCTEXT("DurabilityLine", "Durability {0} / {1}"), Instance->GetDurability(), MaxDurability));
 }
 
 #if WITH_EDITOR
@@ -162,6 +262,24 @@ bool UZItemFragment_Progression::OnUse(UZItemInstance* Instance, APawn* User) co
 FText UZItemFragment_Progression::GetUseActionName() const
 {
 	return LOCTEXT("ReadAction", "Read");
+}
+
+void UZItemFragment_Progression::GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const
+{
+	if (TraitPoints > 0)
+	{
+		OutLines.Add(FText::Format(LOCTEXT("TraitPointsLine", "Gives {0} trait {0}|plural(one=point,other=points)"), TraitPoints));
+	}
+
+	if (Experience > 0)
+	{
+		OutLines.Add(FText::Format(LOCTEXT("ExperienceLine", "Gives {0} experience"), Experience));
+	}
+}
+
+void UZItemFragment_Tool::GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const
+{
+	OutLines.Add(FText::Format(LOCTEXT("ToolQualityLine", "Tool quality {0}"), Quality));
 }
 
 #if WITH_EDITOR

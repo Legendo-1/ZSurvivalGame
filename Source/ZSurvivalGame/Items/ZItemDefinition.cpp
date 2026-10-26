@@ -71,6 +71,39 @@ FGameplayTag UZItemDefinition::GetItemTypeTag() const
 	return FGameplayTag();
 }
 
+FText UZItemDefinition::GetTypeName() const
+{
+	const FGameplayTag TypeTag = GetItemTypeTag();
+	if (!TypeTag.IsValid())
+	{
+		return FText::GetEmpty();
+	}
+
+	// the last part of the tag: WeaponMod → "Weapon Mod"
+	FString TypeName = TypeTag.ToString();
+	int32 LastDot = INDEX_NONE;
+	if (TypeName.FindLastChar(TEXT('.'), LastDot))
+	{
+		TypeName.RightChopInline(LastDot + 1);
+	}
+
+	return FText::FromString(FName::NameToDisplayString(TypeName, false));
+}
+
+TArray<FText> UZItemDefinition::GetDescriptionLines(const UZItemInstance* Instance) const
+{
+	TArray<FText> Lines;
+	for (const UZItemFragment* Fragment : Fragments)
+	{
+		if (Fragment)
+		{
+			Fragment->GetDescriptionLines(Instance, Lines);
+		}
+	}
+
+	return Lines;
+}
+
 int32 UZItemDefinition::GetToolQuality() const
 {
 	const UZItemFragment_Tool* Tool = FindFragment<UZItemFragment_Tool>();

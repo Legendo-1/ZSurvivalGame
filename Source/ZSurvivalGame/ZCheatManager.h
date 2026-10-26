@@ -59,6 +59,13 @@ public:
 	UFUNCTION(Exec)
 	void ZWeaponStats();
 
+	/**
+	 *  Works the inventory screen like the mouse does, and writes what it shows to the Output Log (for automated tests). ZInventoryUI on its own opens or closes it.
+	 *  open, close, show, select <item>, use <item>, drop <item>, add <item> (to the combine slots), remove <item>, clear, count <n>, combine, drag <item> <onto item>, raise <trait>, reset
+	 */
+	UFUNCTION(Exec)
+	void ZInventoryUI(const FString& Command = TEXT(""));
+
 	/** --- CRAFTING --- */
 
 	/** Combines items from your inventory, like the inventory screen does, e.g. ZCombine ID_BrokenRadio ID_Screwdriver (a number at the end crafts that many) */

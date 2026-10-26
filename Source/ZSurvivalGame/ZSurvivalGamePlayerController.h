@@ -9,13 +9,16 @@
 #include "ZSurvivalGamePlayerController.generated.h"
 
 class AZCraftingStation;
+class UInputAction;
 class UInputMappingContext;
 class UUserWidget;
+class UZInventoryScreenWidget;
 class UZSurvivalHUDWidget;
+struct FKey;
 
 /**
  *  Basic PlayerController class for a third person game
- *  Manages input mappings, the HUD and short messages to the player (e.g. what crafting made, level-ups)
+ *  Manages input mappings, the HUD, the inventory screen and short messages to the player (e.g. what crafting made, level-ups)
  */
 UCLASS(abstract)
 class AZSurvivalGamePlayerController : public APlayerController
@@ -48,6 +51,22 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UZSurvivalHUDWidget> HUDWidget;
 
+	/** Opens and closes the inventory screen (IA_Inventory: I, Tab or the gamepad's View button by default) */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> InventoryAction;
+
+	/** The inventory screen: your own Widget Blueprint with ZInventoryScreenWidget as its parent class, or the built-in one */
+	UPROPERTY(EditAnywhere, Category = "UI")
+	TSubclassOf<UZInventoryScreenWidget> InventoryScreenClass;
+
+	/** Above the HUD (0) */
+	UPROPERTY(EditAnywhere, Category = "UI")
+	int32 InventoryZOrder = 10;
+
+	/** The inventory screen, made the first time it's opened */
+	UPROPERTY()
+	TObjectPtr<UZInventoryScreenWidget> InventoryScreen;
+
 	/** Seconds a message (e.g. "Crafted Bandage x1.") stays on screen */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI", meta = (ClampMin = "0", Units = "s"))
 	float MessageDuration = 6.f;
@@ -65,9 +84,36 @@ public:
 	/** Constructor */
 	AZSurvivalGamePlayerController();
 
-	/** Server → this player: they used a crafting station */
+	/** Server → this player: they used a crafting station, so the inventory screen opens to combine items there */
 	UFUNCTION(Client, Reliable)
 	void ClientOpenCraftingStation(AZCraftingStation* Station);
+
+	/** --- INVENTORY SCREEN (local player only) --- */
+
+	/** Shows the inventory screen; while it's open the game gets no input (the character stands still) and the mouse cursor shows */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void OpenInventory();
+
+	/** Hides the inventory screen and gives the controls back to the game */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void CloseInventory();
+
+	/** What the inventory key does */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ToggleInventory();
+
+	UFUNCTION(BlueprintPure, Category = "UI")
+	bool IsInventoryOpen() const;
+
+	/** The inventory screen, or null if it was never opened */
+	UFUNCTION(BlueprintPure, Category = "UI")
+	UZInventoryScreenWidget* GetInventoryScreen() const { return InventoryScreen; }
+
+	/** True if the key is mapped to the inventory action (the screen closes on it, since the game gets no input while it's open) */
+	bool IsInventoryKey(const FKey& Key) const;
+
+	/** The keyboard key mapped to the inventory action, e.g. "I"; empty if there's none */
+	FText GetInventoryKeyName() const;
 
 	/** Shows a short message to this player, e.g. "Crafted Bandage x1." */
 	UFUNCTION(BlueprintCallable, Category = "UI")

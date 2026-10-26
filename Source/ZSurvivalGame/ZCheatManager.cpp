@@ -28,6 +28,9 @@
 #include "Progression/ZProgressionComponent.h"
 #include "Progression/ZProgressionSubsystem.h"
 #include "Progression/ZTraitDefinition.h"
+#include "UI/ZCharacterPanelWidget.h"
+#include "UI/ZInventoryScreenWidget.h"
+#include "UI/ZTraitRowWidget.h"
 #include "Weapons/ZWeapon.h"
 #include "Weapons/ZWeaponData.h"
 
@@ -452,6 +455,121 @@ void UZCheatManager::ZWeaponStats()
 	UE_LOG(LogZSurvivalGame, Log, TEXT("ZWeaponStats: %s +%d [mods: %s]: damage %.2f, fire rate %.2f/s, spread %.2f (aiming %.2f), recoil %.3f up %.3f sideways, range %.0f, magazine %d/%d, reload %.2f s"),
 		*GetNameSafe(Weapon->GetWeaponData()), Item ? Item->GetUpgradeLevel() : 0, Mods.Num() > 0 ? *FString::Join(Mods, TEXT(", ")) : (Item ? TEXT("none") : TEXT("no item here")),
 		Weapon->GetDamage(), Weapon->GetFireRate(), Weapon->GetSpread(false), Weapon->GetSpread(true), Recoil.X, Recoil.Y, Weapon->GetRange(), Weapon->GetAmmo(), Weapon->GetMagazineSize(), Weapon->GetReloadTime());
+}
+
+void UZCheatManager::ZInventoryUI(const FString& Command)
+{
+	AZSurvivalGamePlayerController* PlayerController = Cast<AZSurvivalGamePlayerController>(GetOuterAPlayerController());
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	TArray<FString> Words;
+	Command.ParseIntoArrayWS(Words);
+	const FString Action = Words.Num() > 0 ? Words[0].ToLower() : FString(TEXT("toggle"));
+
+	if (Action == TEXT("open") || Action == TEXT("close") || Action == TEXT("toggle"))
+	{
+		if (Action == TEXT("open"))
+		{
+			PlayerController->OpenInventory();
+		}
+		else if (Action == TEXT("close"))
+		{
+			PlayerController->CloseInventory();
+		}
+		else
+		{
+			PlayerController->ToggleInventory();
+		}
+
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZInventoryUI: the inventory screen is %s"), PlayerController->IsInventoryOpen() ? TEXT("open") : TEXT("closed"));
+		return;
+	}
+
+	UZInventoryScreenWidget* Screen = PlayerController->GetInventoryScreen();
+	if (!Screen || !PlayerController->IsInventoryOpen())
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZInventoryUI: open the inventory screen first (ZInventoryUI open)"));
+		return;
+	}
+
+	// items by asset name, the first of that kind in this player's inventory
+	const UZInventoryComponent* Inventory = Screen->GetInventory();
+	const auto FindInstance = [this, &Words, Inventory](int32 WordIndex) -> UZItemInstance*
+	{
+		const UZItemDefinition* Item = Words.IsValidIndex(WordIndex) ? FindItem(Words[WordIndex]) : nullptr;
+		return Item && Inventory ? Inventory->FindFirstInstance(Item) : nullptr;
+	};
+
+	UZCharacterPanelWidget* CharacterPanel = Screen->GetCharacterPanel();
+
+	if (Action == TEXT("select"))
+	{
+		Screen->SelectItem(FindInstance(1));
+	}
+	else if (Action == TEXT("use"))
+	{
+		Screen->UseItem(FindInstance(1));
+	}
+	else if (Action == TEXT("drop"))
+	{
+		Screen->DropItem(FindInstance(1), 0);
+	}
+	else if (Action == TEXT("add"))
+	{
+		Screen->AddToCombine(FindInstance(1));
+	}
+	else if (Action == TEXT("remove"))
+	{
+		Screen->RemoveFromCombine(FindInstance(1));
+	}
+	else if (Action == TEXT("clear"))
+	{
+		Screen->ClearCombine();
+	}
+	else if (Action == TEXT("count") && Words.IsValidIndex(1))
+	{
+		Screen->SetCraftCount(FCString::Atoi(*Words[1]));
+	}
+	else if (Action == TEXT("combine"))
+	{
+		Screen->CombineChosenItems();
+	}
+	else if (Action == TEXT("drag"))
+	{
+		Screen->CombineItems(FindInstance(1), FindInstance(2));
+	}
+	else if (Action == TEXT("raise") && CharacterPanel && Words.IsValidIndex(1))
+	{
+		// what the trait's + button does
+		const UZProgressionSubsystem* Subsystem = UZProgressionSubsystem::Get(GetWorld());
+		const UZTraitDefinition* Trait = Subsystem ? Subsystem->FindTraitByName(*Words[1]) : nullptr;
+		Trait = Trait ? Trait : (Subsystem ? Subsystem->FindTraitByName(*(TEXT("TR_") + Words[1])) : nullptr);
+		if (UZTraitRowWidget* Row = CharacterPanel->FindTraitRow(Trait))
+		{
+			Row->RaiseTrait();
+		}
+		else
+		{
+			UE_LOG(LogZSurvivalGame, Warning, TEXT("ZInventoryUI: no trait row for '%s'"), *Words[1]);
+		}
+	}
+	else if (Action == TEXT("reset") && CharacterPanel)
+	{
+		CharacterPanel->ResetTraits();
+	}
+	else if (Action != TEXT("show"))
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZInventoryUI: don't know '%s' (open, close, show, select, use, drop, add, remove, clear, count, combine, drag, raise, reset)"), *Command);
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZInventoryUI %s: %s"), *Command, *Screen->GetDebugString());
+	if (CharacterPanel)
+	{
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZInventoryUI character panel: %s"), *CharacterPanel->GetDebugString());
+	}
 }
 
 void UZCheatManager::ZSetDurability(const FString& ItemName, int32 Durability)

@@ -2,10 +2,15 @@
 
 
 #include "ZSurvivalGamePlayerController.h"
+#include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "Framework/Application/SlateApplication.h"
+#include "InputAction.h"
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
+#include "UI/ZInventoryScreenWidget.h"
 #include "UI/ZSurvivalHUDWidget.h"
 #include "ZSurvivalGame.h"
 #include "ZCheatManager.h"
@@ -19,6 +24,9 @@ AZSurvivalGamePlayerController::AZSurvivalGamePlayerController()
 {
 	// test commands like ZSpawnZombies (see UZCheatManager)
 	CheatClass = UZCheatManager::StaticClass();
+
+	// the built-in look until a Widget Blueprint is set
+	InventoryScreenClass = UZInventoryScreenWidget::StaticClass();
 }
 
 void AZSurvivalGamePlayerController::BeginPlay()
@@ -85,6 +93,13 @@ void AZSurvivalGamePlayerController::SetupInputComponent()
 				}
 			}
 		}
+
+		// on the controller, not the character: the inventory opens while dead or respawning too
+		UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent);
+		if (EnhancedInput && InventoryAction)
+		{
+			EnhancedInput->BindAction(InventoryAction, ETriggerEvent::Started, this, &AZSurvivalGamePlayerController::ToggleInventory);
+		}
 	}
 }
 
@@ -114,7 +129,89 @@ void AZSurvivalGamePlayerController::ClientOpenCraftingStation_Implementation(AZ
 	if (Station)
 	{
 		ShowMessage(FText::Format(LOCTEXT("AtStation", "At the {0}: combine items here to use it."), Station->GetStationName()));
+		OpenInventory();
 	}
+}
+
+void AZSurvivalGamePlayerController::OpenInventory()
+{
+	if (!IsLocalPlayerController() || IsInventoryOpen())
+	{
+		return;
+	}
+
+	if (!InventoryScreen)
+	{
+		InventoryScreen = CreateWidget<UZInventoryScreenWidget>(this, InventoryScreenClass ? InventoryScreenClass.Get() : UZInventoryScreenWidget::StaticClass());
+		if (!InventoryScreen)
+		{
+			UE_LOG(LogZSurvivalGame, Error, TEXT("Could not create the inventory screen (Inventory Screen Class '%s')."), *GetNameSafe(InventoryScreenClass));
+			return;
+		}
+	}
+
+	// the game gets no input while it's open (no walking or shooting by accident), and keys held down count as let go
+	InventoryScreen->AddToPlayerScreen(InventoryZOrder);
+	UWidgetBlueprintLibrary::SetInputMode_UIOnlyEx(this, InventoryScreen, EMouseLockMode::DoNotLock, true);
+	SetShowMouseCursor(true);
+
+	// a gamepad needs something focused to move around with; the mouse doesn't
+	if (FSlateApplication::IsInitialized() && FSlateApplication::Get().IsGamepadAttached())
+	{
+		InventoryScreen->FocusFirstItem();
+	}
+}
+
+void AZSurvivalGamePlayerController::CloseInventory()
+{
+	if (!IsInventoryOpen())
+	{
+		return;
+	}
+
+	InventoryScreen->RemoveFromParent();
+	UWidgetBlueprintLibrary::SetInputMode_GameOnly(this, true);
+	SetShowMouseCursor(false);
+}
+
+void AZSurvivalGamePlayerController::ToggleInventory()
+{
+	if (IsInventoryOpen())
+	{
+		CloseInventory();
+	}
+	else
+	{
+		OpenInventory();
+	}
+}
+
+bool AZSurvivalGamePlayerController::IsInventoryOpen() const
+{
+	return InventoryScreen && InventoryScreen->IsInViewport();
+}
+
+bool AZSurvivalGamePlayerController::IsInventoryKey(const FKey& Key) const
+{
+	const UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+	return InventoryAction && Subsystem && Subsystem->QueryKeysMappedToAction(InventoryAction).Contains(Key);
+}
+
+FText AZSurvivalGamePlayerController::GetInventoryKeyName() const
+{
+	const UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+	if (InventoryAction && Subsystem)
+	{
+		for (const FKey& Key : Subsystem->QueryKeysMappedToAction(InventoryAction))
+		{
+			if (!Key.IsGamepadKey())
+			{
+				return Key.GetDisplayName(false);
+			}
+		}
+	}
+
+	return FText::GetEmpty();
 }
 
 void AZSurvivalGamePlayerController::ShowMessage(const FText& Message)

@@ -2,7 +2,7 @@
 
 How character levels, trait points and traits work, and how to add new traits.
 
-**Last updated:** 2026-10-26 (levels, trait points and traits added)
+**Last updated:** 2026-10-26 (traits are raised and reset in the inventory screen's character panel)
 
 ## The idea
 
@@ -23,8 +23,8 @@ How character levels, trait points and traits work, and how to add new traits.
   - levels
   - bosses: an enemy's **Trait Point Reward** (Class Defaults → **AI|Rewards**, e.g. 1 to 3 for a boss; every player gets them)
   - items with a **Grants Progression** fragment, like the **Tome of Knowledge** (1 point). Hide them in secret places.
-- **Spending:** each rank of a trait costs its **Points Per Rank** (1 for now).
-- **Taking them back:** `ZResetTraits` for now; later a button on the character screen. Turn it off with **Allow Trait Reset** in the Progression settings.
+- **Spending:** in the inventory screen's character panel (I or Tab, see UI.md), the **+** next to a trait. Each rank costs its **Points Per Rank** (1 for now).
+- **Taking them back:** the **Reset traits** button in the same panel. Turn it off with **Allow Trait Reset** in the Progression settings (the button is hidden then).
 - **Max Trait Points** limits how many a player can earn in total (0 = no limit).
 
 ## The traits there are
@@ -99,7 +99,6 @@ Open the console with the key under Esc. Commands marked *host* only work in the
 
 ## Plan: what isn't built yet
 
-- **Character screen:** level, experience bar, trait points, and buttons to raise traits.
 - **Saving** progression.
 - **Unlocking traits** by doing things (e.g. a trait that appears after beating a boss).
 - **Where resets happen:** maybe only at the hub, or with a rare item.

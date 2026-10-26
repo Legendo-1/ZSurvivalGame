@@ -2,7 +2,7 @@
 
 How crafting works: combining items, tools, crafting stations and tradeskills, weapon upgrades and mods, and how to add new recipes.
 
-**Last updated:** 2026-10-26 (weapon upgrades, weapon mods and tool repair)
+**Last updated:** 2026-10-26 (combining in the inventory screen; stations open it)
 
 ## How players craft
 
@@ -11,7 +11,7 @@ How crafting works: combining items, tools, crafting stations and tradeskills, w
 - **The server crafts it**, which takes the recipe's Craft Time. Combining the same items again makes another; a count can craft several in a row.
 - **The first time** a player makes a recipe it's a discovery: "New discovery!" and extra tradeskill experience.
 - **Some recipes change an item instead of making one:** upgrading a weapon, installing or taking off mods, repairing a tool. The item they change is kept (their **Target**). They're made once per combine, so each change gets its own message, e.g. "Your Rifle is now +2."
-- For now, combining is done with the console command `ZCombine`. The inventory screen (dragging one item onto another, combine slots) comes next.
+- **Combining happens in the inventory screen** (I or Tab, see UI.md): drag one item onto another, or put up to 6 items in the combine slots, choose how many and press Combine. The console command `ZCombine` does the same.
 
 What players are told when it doesn't work. It never names the recipe, only what was tried:
 
@@ -59,7 +59,7 @@ What players are told when it doesn't work. It never names the recipe, only what
 ## Crafting stations
 
 - **BP_Workbench** (`Content/Crafting/Stations`): recipes whose Required Station is `Crafting.Station.Workbench` only work within 4 m of one (its Crafting Radius).
-- **Standing nearby is enough.** Using it with the interact key says the player is at the workbench; later it will open the inventory screen.
+- **Standing nearby is enough.** Using it with the interact key opens the inventory screen, which shows "At the Workbench".
 - **A new kind of station:** a Blueprint child of `ZCraftingStation` with a new `Crafting.Station.*` tag in Station Tags, a Display Name and its own mesh.
 
 ## The recipes there are
@@ -137,7 +137,6 @@ Open the console with the key under Esc. Commands marked *host* only work in the
 
 ## Plan: what isn't built yet
 
-- **Inventory screen:** drag one item onto another to combine them, combine slots for more items, and the tradeskills.
 - **Mods you can see:** a mesh per mod on the weapon's sockets (now they only change the stats).
 - **Saving** tradeskills and discoveries.
 - **Harvesting** (trees, scrap) for materials, and more stations (forge, chemistry set).

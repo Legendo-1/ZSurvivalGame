@@ -1,8 +1,8 @@
 # Items & inventory
 
-How items, the inventory, pickups, loot and interacting work, and how to add new ones. Crafting has its own guide: CRAFTING.md.
+How items, the inventory, pickups, loot and interacting work, and how to add new ones. Crafting has its own guide: CRAFTING.md. The inventory screen: UI.md.
 
-**Last updated:** 2026-10-26 (weapon mods, upgrade levels and Weapon Parts added)
+**Last updated:** 2026-10-26 (the inventory screen: using and dropping items from it, see UI.md)
 
 ## The pieces
 
@@ -58,7 +58,7 @@ How items, the inventory, pickups, loot and interacting work, and how to add new
 
 ## Using and dropping items
 
-- The inventory has **UseItem** and **DropItem** (and the character has **EquipItem**) for an inventory screen later. For now there are console commands.
+- **The inventory screen** (I or Tab, see UI.md): right-click an item to use it, drag it out of the window to drop it. It calls the inventory's **UseItem** and **DropItem**, which Blueprints can use too. There are also console commands.
 - **Using** a bandage heals 25 and uses one up. At full health nothing happens and the bandage is kept.
 - **Using** a weapon item takes it out, like its weapon key.
 - **Dropped items** land in front of the player and are picked up with the interact key, not by walking over them. A dropped weapon keeps its magazine, upgrades and mods.
@@ -92,13 +92,12 @@ A wrong item name lists all the items there are. Numbers can be left out in the 
   2. Make an item with a **Weapon** fragment pointing to it.
   3. Add the item to **Starting Items** or a loot table.
 - **A new tool or weapon mod:** see CRAFTING.md → How to add things.
-- **A new kind of item feature** (armor, ...): a new fragment class in C++ (a child of `UZItemFragment`). Existing items don't change.
+- **A new kind of item feature** (armor, ...): a new fragment class in C++ (a child of `UZItemFragment`). Existing items don't change. Its `GetDescriptionLines` is what the inventory screen shows about it (e.g. "Heals 25").
 - **A new loot table:** Data Asset **ZLootTable** in `Content/Items/LootTables`, then set it on an enemy: Class Defaults → **AI|Loot → Loot Table**.
 - **Items placed in a level:** drag a **Z Pickup** into the level and set its **Item** (item and count) in Details.
 
 ## Plan: what isn't built yet
 
-- **Inventory screen:** it can use `GetItems`, the `OnInventoryChanged` event, `UseItem`, `DropItem` and `EquipItem`.
 - **Carry limits:** `MaxSlots` on the inventory exists (0 = no limit for now); weight could come later.
 - **Harvesting:** trees and scrap as interactables that take time and give items.
 - **Storage chests:** an inventory component on a chest, sent to the players using it.

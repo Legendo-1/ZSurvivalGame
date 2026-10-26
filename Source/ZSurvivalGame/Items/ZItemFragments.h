@@ -33,6 +33,9 @@ public:
 
 	virtual FText GetUseActionName() const override;
 
+	/** Its stats with the item's upgrades and mods, and what's in each mod slot */
+	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
+
 #if WITH_EDITOR
 	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;
 #endif
@@ -66,6 +69,8 @@ public:
 
 	/** "Recoil -25%", one line per modifier */
 	FText GetModifiersText() const;
+
+	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
 
 #if WITH_EDITOR
 	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;
@@ -101,6 +106,8 @@ public:
 	virtual bool ShouldConsumeOnUse() const override { return bConsumeOnUse; }
 
 	virtual FText GetUseActionName() const override;
+
+	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
 };
 
 /**
@@ -123,6 +130,8 @@ public:
 	bool bBreaksWhenEmpty = true;
 
 	virtual void OnInstanceCreated(UZItemInstance* Instance) const override;
+
+	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
 
 #if WITH_EDITOR
 	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;
@@ -152,6 +161,8 @@ public:
 	virtual bool ShouldConsumeOnUse() const override { return true; }
 
 	virtual FText GetUseActionName() const override;
+
+	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
 };
 
 /**
@@ -169,6 +180,8 @@ public:
 	/** How good the tool is: 1 = basic, 2 = precision, 3 = advanced, ... It meets every recipe asking for this quality or less */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Tool", meta = (ClampMin = "1"))
 	int32 Quality = 1;
+
+	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
 
 #if WITH_EDITOR
 	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;
