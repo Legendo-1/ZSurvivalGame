@@ -2,7 +2,7 @@
 
 How to give the game its sounds, particles and character animations: shots, reloads, deaths, taking out a weapon, crafting, footsteps and the rest, so they work for every player.
 
-**Last updated:** 2026-10-26 (first version: events for shots, reloads, deaths, taking out weapons, level-ups, pickups, items and crafting; UI sounds; take-out animations)
+**Last updated:** 2026-10-26 (footsteps that match the surface and the gait: walk, jog, sprint, starts, stops, jumps and landings)
 
 ## Who does what
 
@@ -11,7 +11,7 @@ How to give the game its sounds, particles and character animations: shots, relo
 | **When** something happens (a shot, a death, a pickup), and sending it to every player | C++ (done) | It's game logic and networking; the server decides |
 | **What it sounds and looks like** | The editor: GameplayCue Notify assets, sounds, Niagara effects | Change and try sounds without touching code |
 | **Which weapon, character or item uses which sound** | Their Data Assets and Class Defaults (a tag) | Each weapon can sound different, nothing hard-coded |
-| **Sounds that belong to an animation** (footsteps, magazine clicks, a swing) | Anim Notifies in the animation | They stay in time with the movement |
+| **Sounds that belong to an animation** (footsteps, magazine clicks, a swing) | Anim Notifies in the animation (footsteps: the **Footstep** notify, see Footsteps) | They stay in time with the movement |
 | **Which animation plays** (fire, reload, take out) | The weapon's Data Asset | One place per weapon |
 
 C++ never names a sound file. It only sends an **event** with a **tag**, e.g. `GameplayCue.Weapon.Fire`. A **GameplayCue Notify** asset with the same tag (in `Content/GameplayCues`) says what plays. No asset for a tag means nothing plays, and nothing breaks. So adding a sound is making an asset, and removing it is deleting the asset.
@@ -42,7 +42,7 @@ C++ never names a sound file. It only sends an **event** with a **tag**, e.g. `G
 ## Making a sound for an event
 
 1. **Import the sound:** drag a `.wav` file into the Content Browser, e.g. into `Content/Audio`.
-   - For a few versions played at random (shots, footsteps): select them, right-click → **Create Cue** → open the Sound Cue and put a **Random** node in front of them.
+   - For a few versions played at random (e.g. shots): select them, right-click → **Create Cue** → open the Sound Cue and put a **Random** node in front of them. (Footsteps don't need this: DA_Footsteps picks from its lists.)
    - **Sounds in the world need an Attenuation** so they get quieter with distance. Open the sound → **Attenuation → Override Attenuation** (or pick a shared **Sound Attenuation** asset). Without one, every player hears it at full volume anywhere on the map.
 2. **Make the GameplayCue Notify:** in `Content/GameplayCues` (create the folder if it's not there), right-click → **Blueprint Class** → **All Classes** → search **GameplayCueNotify_Burst** (it shows as **GCN Burst**). Name it after its tag, e.g. `GCN_Weapon_Fire`.
 3. Open it → **Class Defaults** → **Gameplay Cue Tag**: `GameplayCue.Weapon.Fire`.
@@ -77,10 +77,80 @@ A different loop for some recipes: a child tag (e.g. `GameplayCue.Crafting.Worki
 
 **Turning an event off** for one thing: clear its tag. For everything: delete the GCN asset.
 
-## Sounds in animations (footsteps, reloads, swings)
+## Footsteps
 
-1. Open the animation (e.g. the run animation, or a reload montage).
-2. In the **Notifies** track, right-click at the right moment → **Add Notify → Play Sound** → pick the sound in its Details. For footsteps: one at each moment a foot touches the ground.
+Footsteps match the ground under the foot (concrete, metal, wood, ...) and how fast the character moves (walk, jog, sprint). They're set up for the sound pack in `Content/Audio/Essential_Foosteps_SK`.
+
+| Sound | When | Comes from |
+|---|---|---|
+| **Step** (walk, jog or sprint) | A foot touches the ground | A **Footstep** notify in the animation |
+| **Start** | Starting to move, or speeding up (e.g. starting to sprint) | The movement |
+| **Stop** | Coming to a stop (a sharp turn scuffs too) | The movement |
+| **Jump** | Leaving the ground in a jump | The movement |
+| **Land** | Landing: harder landings are louder, tiny drops are silent | The movement |
+
+Walk, jog or sprint comes from the speed. The player's speeds are in its Class Defaults → **Survival → Movement** (Aim Walk Speed, Jog Speed, Sprint Speed), so footsteps follow them; other characters use their **Footsteps** component → **Gait Speeds**.
+
+### The pieces
+
+| Piece | Where | What it's for |
+|---|---|---|
+| **Surfaces** | Project Settings → Physics → **Physical Surface** | The names: Concrete, Dirt, Glass, Gravel, Leaves, Metal, Sand, Slush, Snow, Wood |
+| **Physical Materials** | `Content/Physics`: `PM_Concrete` ... `PM_Wood` | Tell a floor which surface it is |
+| **DA_Footsteps** | `Content/Audio/Footsteps` | Which sounds play on each surface: Walk, Jog and Sprint (each with Steps, Start and Stop), Jump, Land |
+| **ATT_Footsteps**, **SCON_Footsteps** | `Content/Audio/Footsteps` | How far footsteps are heard (full volume within 2 m, gone at 25 m); at most 12 at once, e.g. in a crowd of zombies |
+| **Footsteps** component | On every character, players and enemies | Plays them. Its **Footstep Data** says which sounds; empty = Project Settings → Game → Footsteps → **Default Footstep Data** |
+| **Footstep** notify | In the animations, on the **Footsteps** track | The moments a foot touches the ground |
+
+### Making a floor sound like metal (or wood, gravel, ...)
+
+Floors without a Physical Material sound like concrete (DA_Footsteps → **Fallback Surface**).
+- **Everything with one material:** open the material → **Details → Physical Material → Phys Material** → `PM_Metal` → Save. Every mesh with that material sounds like metal.
+- **One object in the level:** select it → **Details → Collision → Phys Material Override** → `PM_Metal`.
+- **A landscape:** each paint layer's **Layer Info** asset → **Phys Material**.
+
+To try a surface without changing anything: press Play, stand on a floor and type `ZFloorSurface Metal` (it lasts until Play stops). `ZFloorSurface` on its own says what the floor under you is.
+
+### Changing the sounds
+
+Open `DA_Footsteps` → **Surfaces** → e.g. **Concrete** → **Jog** → **Steps**: the sounds for jogging on concrete. Each step picks one at random, never the same one twice in a row. **+** adds a sound, the bin removes one. A list can also hold a single Sound Cue or MetaSound that does its own randomizing.
+- **Start:** the pack has no start sounds, so each Start list has that gait's steps (a firm first step). Put other sounds there if you find some; an empty list plays nothing.
+- **Playback:** Volume; Volume Variation and Pitch Variation make each step a little different; Attenuation and Concurrency are the assets above.
+- **Landing:** landings slower than **Min Land Speed** make no sound (e.g. stepping off a curb); **Full Land Speed** and faster is full volume.
+
+### A new surface (e.g. Grass)
+
+1. Project Settings → Physics → **Physical Surface**: type `Grass` in the first empty line.
+2. Content Browser → `Content/Physics` → right-click → **Physics → Physical Material** → name it `PM_Grass` → open it → **Surface Type**: Grass → Save.
+3. `DA_Footsteps` → **Surfaces → +** → pick **Grass** in the new line → fill in its sounds.
+4. Put `PM_Grass` on the grass floors (above).
+
+### Footstep notifies in animations
+
+Every walking, jogging and sprinting animation in the player's blend spaces has them already, on a **Footsteps** track. The zombies use some of the same animations. For a new animation:
+1. Open it, play it and pause where a foot touches the ground.
+2. Right-click on the **Footsteps** track (or any track) → **Add Notify → Footstep**.
+3. In its Details: **Foot** Left or Right (Auto takes the lower foot). Leave **Gait From Movement** on.
+4. One for each time a foot lands; Save. While the animation plays in the editor you hear the default footsteps, to check the timing. Drag a notify to move it.
+
+Only walking and running animations need them: starts, stops, jumps and landings come from the movement. An animation that *shows* one of those (e.g. a landing roll) can have a Footstep notify with **Event** set to it; then turn off **Play Movement Sounds** on that character's Footsteps component, so it doesn't play twice.
+
+### Enemies and other characters
+
+They have the Footsteps component too and use the default (DA_Footsteps). Zombies with their own sounds (e.g. shuffling bare feet): duplicate DA_Footsteps, change its sounds, and set it in a ZZombieCharacter Blueprint child → **Footsteps → Footstep Data**.
+
+### Checking
+
+Console: `Z.Footsteps.Debug 1`. Every footstep is written to the Output Log (who, what, which surface, how fast, which sound) and shows in the world as a dot with text: white steps, green starts, red stops, blue jumps, orange landings. `0` turns it off.
+
+### Multiplayer
+
+Nothing is sent over the network for footsteps: every player's machine already plays every character's animations and knows how they move, so each machine plays them itself. Your own machine knows the moment you start sprinting; the others notice from your speed a moment later.
+
+## Other sounds in animations (reloads, swings)
+
+1. Open the animation (e.g. a reload montage, or the zombie's attack).
+2. In the **Notifies** track, right-click at the right moment → **Add Notify → Play Sound** → pick the sound in its Details.
 3. Save.
 
 Every player's machine plays every character's animations, so these sounds play for everyone without any networking. The same works for enemies, e.g. a swing sound in the zombie's attack animation, and for Niagara effects (**Add Notify → Play Niagara Effect**).
@@ -138,7 +208,8 @@ Blueprints can call **Execute Cue** too, e.g. a door Blueprint when it opens (on
 ## Plan: what isn't made yet
 
 - **Most sounds and effects:** only the shot has one so far (`GCN_Weapon_Fire`). `Content/Audio/FreeWeaponSFX` also has reload and take-out sounds, and a handgun shot for the pistol's own `GameplayCue.Weapon.Fire.Pistol`.
-- **Footsteps that depend on the ground** (grass, metal, wood): a notify that checks the surface under the foot.
+- **Footstep effects:** dust, splashes or snow puffs per surface, next to the sounds in DA_Footsteps.
+- **Enemies hearing footsteps:** sprinting louder than walking, for AI that listens (see MULTIPLAYER.md → Smarter AI).
 - **Music and ambience:** ambient sounds in the levels, music that changes in fights.
 - **Volume settings:** Sound Classes and a Sound Mix, for music / effects / UI sliders in a settings menu.
 - **Enemy idle sounds:** groans while walking around.

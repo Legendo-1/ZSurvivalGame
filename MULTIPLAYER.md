@@ -2,7 +2,7 @@
 
 How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md.
 
-**Last updated:** 2026-10-26 (more effect events, explained in AUDIO.md)
+**Last updated:** 2026-10-26 (footsteps; enemies walk by accelerating, so their walk animation plays)
 
 ## The basic idea
 
@@ -86,7 +86,7 @@ Every ability is blocked while dead.
 
 - **`AZAICharacter`** is the base class for every AI character (zombies, other monsters, human NPCs). Each one has its own health, team, AI ranges and melee numbers (Class Defaults: **Survival|Stats**, **AI**, **AI|Melee**).
 - **`AZZombieCharacter`** is the first enemy type: the Quinn mannequin with the combat template's animations and punch, until zombie models exist. 60 health, slower than a jogging player, 15 damage per hit.
-- **The AI** (`AZAIController`, server only) goes for the closest living player within its aggro range, walks there and attacks when close. With a **Nav Mesh** in the level it walks around obstacles; without one it walks straight at you.
+- **The AI** (`AZAIController`, server only) goes for the closest living player within its aggro range, walks there and attacks when close. With a **Nav Mesh** in the level it walks around obstacles; without one it walks straight at you. It moves by accelerating, like a player's input (**Use Acceleration For Paths**, set in `AZAICharacter`), so the animation Blueprint plays its walk instead of sliding it along in the standing pose.
 - **`AZEnemySpawner`**: place it in a level to keep spawning enemies around it (Max Alive, Spawn Interval, Spawn Radius, Total To Spawn, Enemy Class).
 
 **A new enemy type:** right-click in the Content Browser → **Blueprint Class** → search **ZZombieCharacter** (or **ZAICharacter** for something completely different) → change its mesh, animation Blueprint, attack montage and numbers. A special attack (e.g. a spitter's acid) is a new ability added to **Default Abilities**.
@@ -122,6 +122,7 @@ The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are expl
 | Shots, impacts, hits, deaths, reloads, taking out weapons, crafting, ... | GameplayCues, sent by the server (AUDIO.md) |
 | Attack, fire and reload animations | The ability system plays them for everyone |
 | The animation for taking out a weapon | It comes with the equip GameplayCue |
+| Footsteps | Nothing is sent: every machine plays them from the animations and movement it already has (AUDIO.md → Footsteps) |
 | Death (ragdoll) | `bIsDead`, sent by the server |
 | Enemies | They replicate like any character; only their decisions stay on the server |
 
@@ -160,6 +161,8 @@ The **Server** window is the host. The **Client** window is the second player.
 | `ZKillEnemies` | Kills every enemy |
 | `ZHeal` | Fills your health and stamina |
 | `ZHurt 50` | Takes 50 health (`ZHurt 0` shows your health) |
+| `ZFloorSurface Metal` | The floor under you sounds like metal until Play stops; `ZFloorSurface` says what it is |
+| `Z.Footsteps.Debug 1` / `0` | Shows / hides every footstep (Output Log and in the world) |
 | `Z.Weapon.DrawDebug 0` / `1` | Hides / shows the shot debug lines |
 | `log LogZSurvivalGame Verbose` | Writes every shot, reload, pickup and inventory change to the Output Log |
 

@@ -14,6 +14,7 @@
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_MeleeAttack.h"
+#include "Audio/ZFootstepComponent.h"
 #include "Items/ZLootTable.h"
 #include "Items/ZPickup.h"
 #include "Progression/ZProgressionComponent.h"
@@ -26,6 +27,8 @@ AZAICharacter::AZAICharacter()
 	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Minimal);
 
 	AttributeSet = CreateDefaultSubobject<UZAttributeSet>(TEXT("AttributeSet"));
+
+	FootstepComponent = CreateDefaultSubobject<UZFootstepComponent>(TEXT("Footsteps"));
 
 	// AI characters don't need as many updates as players
 	SetNetUpdateFrequency(30.f);
@@ -45,6 +48,10 @@ AZAICharacter::AZAICharacter()
 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 360.f, 0.f);
 	GetCharacterMovement()->MaxWalkSpeed = 300.f;
+
+	// path following moves it through acceleration, like a player's input: anim blueprints only play walking while accelerating,
+	// and without it the character would glide in its idle pose (and make no footsteps)
+	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
 
 	AttackAbility = UZGameplayAbility_MeleeAttack::StaticClass();
 }

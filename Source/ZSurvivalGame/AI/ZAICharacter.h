@@ -15,6 +15,7 @@ class UAbilitySystemComponent;
 class UAnimMontage;
 class UGameplayAbility;
 class UZAttributeSet;
+class UZFootstepComponent;
 class UZLootTable;
 
 /**
@@ -34,6 +35,10 @@ class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public 
 	/** Health (and stamina, for future special attacks) */
 	UPROPERTY()
 	TObjectPtr<UZAttributeSet> AttributeSet;
+
+	/** Footstep sounds, matching the surface (its Footstep Data, or the project's default) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZFootstepComponent> FootstepComponent;
 
 public:
 

@@ -122,6 +122,12 @@ public:
 	UFUNCTION(Exec)
 	void ZResetTraits();
 
+	/** --- SOUND --- */
+
+	/** Makes the floor under you sound like a surface until the game ends, e.g. ZFloorSurface Metal (in this window only); ZFloorSurface on its own says what it is now */
+	UFUNCTION(Exec)
+	void ZFloorSurface(const FString& SurfaceName = TEXT(""));
+
 	/** --- TESTING --- */
 
 	/** Runs a console command after some seconds, e.g. ZDelay 3 ZSkills (for test runs with -ExecCmds, which runs everything at once) */

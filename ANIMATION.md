@@ -2,7 +2,7 @@
 
 How the character's animations are connected, from the mouse button to the pose you see.
 
-**Last updated:** 2026-10-26 (steps for montages on the upper body: reload, take out, fire)
+**Last updated:** 2026-10-26 (Footstep notifies in the walk, jog and sprint animations)
 
 The chain has three layers, each passing data to the next.
 
@@ -85,6 +85,10 @@ So the legs keep walking (and the feet keep their blend space) while the arms re
 Whole-body montages (a dodge roll, a death animation) keep `DefaultGroup.DefaultSlot`.
 
 **A take-out (equip) montage must stay in place:** in its animation's **Asset Details**, **Enable Root Motion** stays off. One that moves the character isn't played (AUDIO.md explains why).
+
+## Footsteps
+
+Every walking, jogging and sprinting animation in the blend spaces above has **Footstep** notifies on a **Footsteps** track, one where each foot touches the ground. They play the footstep sound for the surface under that foot. A new walk or run animation needs them too: AUDIO.md → Footsteps has the steps.
 
 ## Summary
 

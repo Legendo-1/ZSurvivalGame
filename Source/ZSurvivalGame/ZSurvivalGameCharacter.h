@@ -10,6 +10,7 @@
 #include "Logging/LogMacros.h"
 #include "ZSurvivalGameTypes.h"
 #include "AbilitySystem/ZGameplayCueLibrary.h"
+#include "Audio/ZFootstepComponent.h"
 #include "Items/ZItemDefinition.h"
 #include "ZSurvivalGameCharacter.generated.h"
 
@@ -34,7 +35,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
  *  Sprint, aim, dodge, fire and reload are abilities (see AbilitySystem/); health and stamina live on the PlayerState
  */
 UCLASS(abstract)
-class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IGameplayCueInterface, public IZCharacterCuesInterface
+class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IGameplayCueInterface, public IZCharacterCuesInterface, public IZGaitSpeedsInterface
 {
 	GENERATED_BODY()
 
@@ -49,6 +50,10 @@ class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterfac
 	/** Finds and uses interactables (pickups, later doors, crafting stations, ...) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZInteractionComponent> InteractionComponent;
+
+	/** Footstep sounds, matching the surface and the gait (walk, jog, sprint) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZFootstepComponent> FootstepComponent;
 
 protected:
 
@@ -418,6 +423,9 @@ public:
 
 	/** Max walk speed for the given state: aiming > sprinting > jog, capped by the speed limit. Used by the movement component */
 	float GetMaxWalkSpeedFor(bool bSprinting, bool bAiming, EZSpeedLimit Limit) const;
+
+	/** Walking (aiming or the Walk speed limit), jogging and sprinting speeds, for the footsteps */
+	virtual FZGaitSpeeds GetGaitSpeeds() const override;
 
 	/** True if the current movement direction is within MaxSprintAngle of where the character faces */
 	bool CanSprintInMoveDirection() const;

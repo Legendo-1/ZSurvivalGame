@@ -74,6 +74,7 @@ Tie base defense directly to the expedition loop:
 * \[x\] Death as a ragdoll; players respawn after a few seconds.  
 * \[x\] Rifle aim strafe animations (2D BlendSpace for walking sideways/backwards when aiming) and aim offset.  
 * \[x\] Sound and effect events (GameplayCues) for shots, impacts, reloads, taking out a weapon, hits, deaths, level-ups, pickups, used items and crafting, set per weapon, character, item and recipe; UI sounds; a take-out animation per weapon (see AUDIO.md).  
+* \[x\] Footsteps that match the surface (10 surfaces from Physical Materials) and the gait (walk, jog, sprint), with start, stop, jump and landing sounds, for players and enemies (see AUDIO.md).  
 * \[ \] **Open Phase 1 Items:**  
   * Pistol aim strafe animations and aim offset.  
   * Weapon meshes, the sounds and effects themselves (GameplayCue Notify assets), fire, reload and take-out animations on the upper body.

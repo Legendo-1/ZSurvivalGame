@@ -79,6 +79,8 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter(const FObjectInitializer& Objec
 
 	InteractionComponent = CreateDefaultSubobject<UZInteractionComponent>(TEXT("Interaction"));
 
+	FootstepComponent = CreateDefaultSubobject<UZFootstepComponent>(TEXT("Footsteps"));
+
 	// The player's abilities, given to the PlayerState's ability system in PossessedBy
 	DefaultAbilities.Add(UZGameplayAbility_Sprint::StaticClass());
 	DefaultAbilities.Add(UZGameplayAbility_Aim::StaticClass());
@@ -912,6 +914,15 @@ float AZSurvivalGameCharacter::GetMaxWalkSpeedFor(bool bSprinting, bool bAiming,
 	}
 
 	return NewSpeed;
+}
+
+FZGaitSpeeds AZSurvivalGameCharacter::GetGaitSpeeds() const
+{
+	FZGaitSpeeds Speeds;
+	Speeds.Walk = FMath::Max(AimWalkSpeed, WalkSpeed);
+	Speeds.Jog = JogSpeed;
+	Speeds.Sprint = SprintSpeed;
+	return Speeds;
 }
 
 bool AZSurvivalGameCharacter::CanSprintInMoveDirection() const

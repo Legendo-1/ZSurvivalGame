@@ -17,6 +17,7 @@
 #include "AI/ZZombieCharacter.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayTags.h"
+#include "Audio/ZFootstepComponent.h"
 #include "Crafting/ZCraftingComponent.h"
 #include "Crafting/ZCraftingRecipe.h"
 #include "Crafting/ZCraftingStation.h"
@@ -25,6 +26,7 @@
 #include "Items/ZItemDefinition.h"
 #include "Items/ZItemInstance.h"
 #include "Items/ZPickup.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Progression/ZProgressionComponent.h"
 #include "Progression/ZProgressionSubsystem.h"
 #include "Progression/ZTraitDefinition.h"
@@ -699,6 +701,48 @@ void UZCheatManager::ZResetTraits()
 	{
 		Progression->ResetTraits();
 	}
+}
+
+void UZCheatManager::ZFloorSurface(const FString& SurfaceName)
+{
+	const APlayerController* PlayerController = GetOuterAPlayerController();
+	const APawn* Pawn = PlayerController ? PlayerController->GetPawn() : nullptr;
+	if (!Pawn)
+	{
+		return;
+	}
+
+	// the floor under the player, the way footsteps find it
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ZFloorSurface), true, Pawn);
+	Params.bReturnPhysicalMaterial = true;
+	FHitResult Hit;
+	const FVector Start = Pawn->GetActorLocation();
+	UPrimitiveComponent* Floor = GetWorld()->LineTraceSingleByChannel(Hit, Start, Start - FVector(0.f, 0.f, 500.f), ECC_Visibility, Params) ? Hit.GetComponent() : nullptr;
+	if (!Floor)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZFloorSurface: there's no floor under you"));
+		return;
+	}
+
+	if (SurfaceName.IsEmpty())
+	{
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZFloorSurface: '%s' is %s (%s)"), *GetNameSafe(Floor->GetOwner()),
+			*UZFootstepComponent::GetSurfaceName(UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get())), *GetNameSafe(Hit.PhysMaterial.Get()));
+		return;
+	}
+
+	EPhysicalSurface Surface = SurfaceType_Default;
+	if (!UZFootstepComponent::FindSurfaceByName(SurfaceName, Surface))
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZFloorSurface: there's no surface '%s' (Project Settings > Physics > Physical Surface)"), *SurfaceName);
+		return;
+	}
+
+	// a physical material made just for this game session, like the Phys Material Override in a mesh's Details
+	UPhysicalMaterial* Material = NewObject<UPhysicalMaterial>(Floor);
+	Material->SurfaceType = Surface;
+	Floor->SetPhysMaterialOverride(Material);
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZFloorSurface: '%s' is now %s until the game ends"), *GetNameSafe(Floor->GetOwner()), *UZFootstepComponent::GetSurfaceName(Surface));
 }
 
 void UZCheatManager::ZDelay(float Seconds, const FString& Command)
