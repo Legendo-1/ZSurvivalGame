@@ -5,6 +5,7 @@
 #include "AbilitySystem/ZAttributeSet.h"
 #include "Crafting/ZCraftingComponent.h"
 #include "Items/ZInventoryComponent.h"
+#include "Progression/ZProgressionComponent.h"
 
 AZSurvivalGamePlayerState::AZSurvivalGamePlayerState()
 {
@@ -18,6 +19,7 @@ AZSurvivalGamePlayerState::AZSurvivalGamePlayerState()
 
 	Inventory = CreateDefaultSubobject<UZInventoryComponent>(TEXT("Inventory"));
 	Crafting = CreateDefaultSubobject<UZCraftingComponent>(TEXT("Crafting"));
+	Progression = CreateDefaultSubobject<UZProgressionComponent>(TEXT("Progression"));
 
 	// the PlayerState default (1 update per second) is too slow for abilities and attributes
 	SetNetUpdateFrequency(100.f);

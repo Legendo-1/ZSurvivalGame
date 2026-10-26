@@ -94,6 +94,31 @@ public:
 };
 
 /**
+ *  Gives progression when used, e.g. a Tome of Knowledge (a trait point) found in a hidden place; then it's used up
+ */
+UCLASS(meta = (DisplayName = "Grants Progression"))
+class UZItemFragment_Progression : public UZItemFragment
+{
+	GENERATED_BODY()
+
+public:
+
+	/** Trait points the user gets */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Progression", meta = (ClampMin = "0"))
+	int32 TraitPoints = 1;
+
+	/** Character experience the user gets */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Progression", meta = (ClampMin = "0"))
+	int32 Experience = 0;
+
+	virtual bool OnUse(UZItemInstance* Instance, APawn* User) const override;
+
+	virtual bool ShouldConsumeOnUse() const override { return true; }
+
+	virtual FText GetUseActionName() const override;
+};
+
+/**
  *  Makes the item a tool. Recipes ask for a kind of tool by its tags (e.g. Item.Tool.Screwdriver) and sometimes a minimum quality,
  *  so better tools (found in hidden places or crafted) open up harder recipes
  *  Give tools a Durability fragment too if they should wear out

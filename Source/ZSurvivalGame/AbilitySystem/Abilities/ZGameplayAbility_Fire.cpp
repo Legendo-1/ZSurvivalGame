@@ -130,8 +130,8 @@ void UZGameplayAbility_Fire::FireLocalShot()
 	const FVector AimDirection = ViewRotation.Vector();
 	const FVector TraceStart = ViewLocation + AimDirection * FVector::DotProduct(Character->GetActorLocation() - ViewLocation, AimDirection);
 
-	const float Spread = Character->IsAiming() ? WeaponData->AimSpread : WeaponData->HipSpread;
-	const float HalfConeRadians = FMath::DegreesToRadians(Spread * 0.5f);
+	const float HalfConeRadians = FMath::DegreesToRadians(Weapon->GetSpread(Character->IsAiming()) * 0.5f);
+	const float Range = Weapon->GetRange();
 
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ZWeaponTrace), false, Character);
 	QueryParams.AddIgnoredActor(Weapon);
@@ -142,7 +142,7 @@ void UZGameplayAbility_Fire::FireLocalShot()
 	for (int32 BulletIndex = 0; BulletIndex < WeaponData->BulletsPerShot; ++BulletIndex)
 	{
 		const FVector ShotDirection = FMath::VRandCone(AimDirection, HalfConeRadians);
-		const FVector TraceEnd = TraceStart + ShotDirection * WeaponData->Range;
+		const FVector TraceEnd = TraceStart + ShotDirection * Range;
 
 		FHitResult Hit;
 		if (!GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ZTraceChannel_Weapon, QueryParams))
@@ -156,9 +156,10 @@ void UZGameplayAbility_Fire::FireLocalShot()
 	}
 
 	// recoil: kick the camera up (and a little sideways)
+	const FVector2D Recoil = Weapon->GetRecoil();
 	FRotator ControlRotation = PlayerController->GetControlRotation();
-	ControlRotation.Pitch += WeaponData->RecoilPitch;
-	ControlRotation.Yaw += FMath::FRandRange(-WeaponData->RecoilYaw, WeaponData->RecoilYaw);
+	ControlRotation.Pitch += Recoil.X;
+	ControlRotation.Yaw += FMath::FRandRange(-Recoil.Y, Recoil.Y);
 	PlayerController->SetControlRotation(ControlRotation);
 
 	// clients send the hits to the server
@@ -242,10 +243,11 @@ void UZGameplayAbility_Fire::OnTargetDataReady(const FGameplayAbilityTargetDataH
 
 		// damage only on the server
 		bool bDealtDamage = false;
-		if (bIsServer && Hit->bBlockingHit && Hit->GetActor() && IsHitValid(*Hit, WeaponData->Range))
+		float Damage = 0.f;
+		if (bIsServer && Hit->bBlockingHit && Hit->GetActor() && IsHitValid(*Hit, Weapon->GetRange()))
 		{
 			const bool bHeadshot = Hit->BoneName.ToString().Contains(TEXT("head"));
-			const float Damage = WeaponData->Damage * (bHeadshot ? WeaponData->HeadshotMultiplier : 1.f);
+			Damage = Weapon->GetDamage() * (bHeadshot ? WeaponData->HeadshotMultiplier : 1.f);
 			bDealtDamage = UZCombatLibrary::ApplyDamage(Character, Hit->GetActor(), Damage, *Hit);
 
 			// hit marker on the shooter's screen (runs right away on the host)
@@ -256,7 +258,7 @@ void UZGameplayAbility_Fire::OnTargetDataReady(const FGameplayAbilityTargetDataH
 		}
 
 		UE_LOG(LogZSurvivalGame, Verbose, TEXT("Shot by '%s' hit '%s' (bone %s), damage dealt: %s, ammo left: %d"),
-			*GetNameSafe(Character), *GetNameSafe(Hit->GetActor()), *Hit->BoneName.ToString(), bDealtDamage ? TEXT("yes") : TEXT("no"), Weapon->GetAmmo());
+			*GetNameSafe(Character), *GetNameSafe(Hit->GetActor()), *Hit->BoneName.ToString(), bDealtDamage ? *FString::SanitizeFloat(Damage) : TEXT("no"), Weapon->GetAmmo());
 
 #if ENABLE_DRAW_DEBUG
 		if (bDrawDebug)

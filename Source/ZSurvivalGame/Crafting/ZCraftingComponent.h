@@ -342,6 +342,7 @@ private:
 	/** Server: the current combine, for its message at the end */
 	TArray<TWeakObjectPtr<UZItemInstance>> RequestItems;
 	int32 NumCrafted = 0;
+	int32 NumLuckyCrafts = 0;
 	bool bRequestDiscovered = false;
 	TArray<FText> RequestNotes;
 	TMap<FGameplayTag, int32> RequestExperience;

@@ -9,6 +9,7 @@
 #include "AbilitySystem/ZCombatLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "Items/ZItemInstance.h"
+#include "Progression/ZProgressionComponent.h"
 #include "Weapons/ZWeaponData.h"
 
 #if WITH_EDITOR
@@ -107,6 +108,24 @@ void UZItemFragment_Durability::ValidateForItem(const UZItemDefinition* Item, FD
 	}
 }
 #endif
+
+bool UZItemFragment_Progression::OnUse(UZItemInstance* Instance, APawn* User) const
+{
+	UZProgressionComponent* Progression = UZProgressionComponent::FindProgressionComponent(User);
+	if (!Progression || (TraitPoints <= 0 && Experience <= 0))
+	{
+		return false;
+	}
+
+	Progression->AddTraitPoints(TraitPoints);
+	Progression->AddExperience(Experience);
+	return true;
+}
+
+FText UZItemFragment_Progression::GetUseActionName() const
+{
+	return LOCTEXT("ReadAction", "Read");
+}
 
 #if WITH_EDITOR
 void UZItemFragment_Tool::ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const

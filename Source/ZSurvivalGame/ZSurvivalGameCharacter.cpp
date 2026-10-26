@@ -193,9 +193,10 @@ void AZSurvivalGameCharacter::UpdateStamina(float DeltaTime)
 	}
 	else
 	{
-		// Regenerate stamina when not sprinting
+		// Regenerate stamina when not sprinting (faster with the player's stamina regen from traits)
 		const float MaxStamina = ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute());
-		NewStamina = FMath::Min(MaxStamina, OldStamina + (StaminaRegenRate * DeltaTime));
+		const float RegenRate = StaminaRegenRate * ASC->GetNumericAttribute(UZAttributeSet::GetStaminaRegenMultiplierAttribute());
+		NewStamina = FMath::Min(MaxStamina, OldStamina + (RegenRate * DeltaTime));
 	}
 
 	if (NewStamina != OldStamina)

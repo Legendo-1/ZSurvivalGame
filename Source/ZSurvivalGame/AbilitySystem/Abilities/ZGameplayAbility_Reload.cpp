@@ -44,14 +44,18 @@ void UZGameplayAbility_Reload::ActivateAbility(const FGameplayAbilitySpecHandle 
 	// jog at most while reloading (also cancels sprint); runs on both the player's machine and the server
 	Character->SetSpeedLimit(EZSpeedLimit::Jog);
 
+	// the player's reload speed (traits) included; the server and the player's machine have the same value
+	const float ReloadTime = Weapon->GetReloadTime();
+	UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' reloading, %.2f s"), *GetNameSafe(Character), ReloadTime);
+
 	// character animation, stretched to the reload time (the ability system plays it for the others too)
 	if (UAnimMontage* ReloadMontage = WeaponData->ReloadMontage)
 	{
-		const float PlayRate = WeaponData->ReloadTime > 0.f ? ReloadMontage->GetPlayLength() / WeaponData->ReloadTime : 1.f;
+		const float PlayRate = ReloadTime > 0.f ? ReloadMontage->GetPlayLength() / ReloadTime : 1.f;
 		ActorInfo->AbilitySystemComponent->PlayMontage(this, ActivationInfo, ReloadMontage, PlayRate);
 	}
 
-	UAbilityTask_WaitDelay* WaitReload = UAbilityTask_WaitDelay::WaitDelay(this, WeaponData->ReloadTime);
+	UAbilityTask_WaitDelay* WaitReload = UAbilityTask_WaitDelay::WaitDelay(this, ReloadTime);
 	WaitReload->OnFinish.AddDynamic(this, &UZGameplayAbility_Reload::OnReloadFinished);
 	WaitReload->ReadyForActivation();
 }

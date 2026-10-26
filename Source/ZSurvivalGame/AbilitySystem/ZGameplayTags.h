@@ -55,6 +55,11 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Medicine);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Weaponsmithing);
 
+	// Trait categories: group traits on the character screen
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Trait_Category_Survival);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Trait_Category_Combat);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Trait_Category_Crafting);
+
 	// Gameplay cues: visuals and sounds everyone sees (made as GameplayCue Notify assets with the same tag)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Fire);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Impact);

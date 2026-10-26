@@ -8,6 +8,36 @@ UZProgressionSettings::UZProgressionSettings()
 	SectionName = TEXT("Progression");
 }
 
+int32 UZProgressionSettings::GetCharacterExperienceForLevel(int32 Level) const
+{
+	if (Level <= 1)
+	{
+		return 0;
+	}
+
+	const double Experience = CharacterExperienceBase * FMath::Pow(static_cast<double>(Level - 1), static_cast<double>(CharacterExperienceExponent));
+	return static_cast<int32>(FMath::Min(FMath::RoundToDouble(Experience), static_cast<double>(MAX_int32)));
+}
+
+int32 UZProgressionSettings::GetCharacterLevelForExperience(int32 Experience) const
+{
+	// invert the curve, then step to the exact level (rounding)
+	int32 Level = 1 + FMath::FloorToInt32(FMath::Pow(FMath::Max(Experience, 0) / FMath::Max(static_cast<double>(CharacterExperienceBase), 1.0), 1.0 / FMath::Max(static_cast<double>(CharacterExperienceExponent), 1.0)));
+	Level = FMath::Clamp(Level, 1, MaxCharacterLevel);
+
+	while (Level < MaxCharacterLevel && GetCharacterExperienceForLevel(Level + 1) <= Experience)
+	{
+		++Level;
+	}
+
+	while (Level > 1 && GetCharacterExperienceForLevel(Level) > Experience)
+	{
+		--Level;
+	}
+
+	return Level;
+}
+
 int32 UZProgressionSettings::GetTradeskillExperienceForLevel(int32 Level) const
 {
 	if (Level <= 0)

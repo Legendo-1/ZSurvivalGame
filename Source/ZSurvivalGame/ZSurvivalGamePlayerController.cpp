@@ -10,6 +10,7 @@
 #include "ZSurvivalGame.h"
 #include "ZCheatManager.h"
 #include "Crafting/ZCraftingStation.h"
+#include "Progression/ZProgressionSettings.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 #define LOCTEXT_NAMESPACE "ZSurvivalPlayerController"
@@ -162,28 +163,58 @@ TArray<FText> AZSurvivalGamePlayerController::GetRecentMessages() const
 
 void AZSurvivalGamePlayerController::BindToPlayerState()
 {
+	// only the local player's own messages; the PlayerState can change (e.g. after travelling), so swap over
 	UZCraftingComponent* Crafting = IsLocalPlayerController() ? UZCraftingComponent::FindCraftingComponent(this) : nullptr;
-	if (Crafting == BoundCrafting.Get())
+	if (Crafting != BoundCrafting.Get())
 	{
-		return;
+		if (UZCraftingComponent* OldCrafting = BoundCrafting.Get())
+		{
+			OldCrafting->OnCraftingResult.RemoveDynamic(this, &AZSurvivalGamePlayerController::HandleCraftingResult);
+		}
+
+		BoundCrafting = Crafting;
+
+		if (Crafting)
+		{
+			Crafting->OnCraftingResult.AddDynamic(this, &AZSurvivalGamePlayerController::HandleCraftingResult);
+		}
 	}
 
-	if (UZCraftingComponent* OldCrafting = BoundCrafting.Get())
+	UZProgressionComponent* Progression = IsLocalPlayerController() ? UZProgressionComponent::FindProgressionComponent(this) : nullptr;
+	if (Progression != BoundProgression.Get())
 	{
-		OldCrafting->OnCraftingResult.RemoveDynamic(this, &AZSurvivalGamePlayerController::HandleCraftingResult);
-	}
+		if (UZProgressionComponent* OldProgression = BoundProgression.Get())
+		{
+			OldProgression->OnLevelUp.RemoveDynamic(this, &AZSurvivalGamePlayerController::HandleLevelUp);
+			OldProgression->OnBonusTraitPoints.RemoveDynamic(this, &AZSurvivalGamePlayerController::HandleBonusTraitPoints);
+		}
 
-	BoundCrafting = Crafting;
+		BoundProgression = Progression;
 
-	if (Crafting)
-	{
-		Crafting->OnCraftingResult.AddDynamic(this, &AZSurvivalGamePlayerController::HandleCraftingResult);
+		if (Progression)
+		{
+			Progression->OnLevelUp.AddDynamic(this, &AZSurvivalGamePlayerController::HandleLevelUp);
+			Progression->OnBonusTraitPoints.AddDynamic(this, &AZSurvivalGamePlayerController::HandleBonusTraitPoints);
+		}
 	}
 }
 
 void AZSurvivalGamePlayerController::HandleCraftingResult(UZCraftingComponent* Crafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message)
 {
 	ShowMessage(Message);
+}
+
+void AZSurvivalGamePlayerController::HandleLevelUp(UZProgressionComponent* Progression, int32 NewLevel)
+{
+	const int32 Points = UZProgressionSettings::Get()->TraitPointsPerLevel;
+	ShowMessage(Points > 0
+		? FText::Format(LOCTEXT("LevelUpPoints", "Level {0}! +{1} trait {1}|plural(one=point,other=points)."), NewLevel, Points)
+		: FText::Format(LOCTEXT("LevelUp", "Level {0}!"), NewLevel));
+}
+
+void AZSurvivalGamePlayerController::HandleBonusTraitPoints(UZProgressionComponent* Progression, int32 Points)
+{
+	ShowMessage(FText::Format(LOCTEXT("BonusTraitPoints", "+{0} trait {0}|plural(one=point,other=points)."), Points));
 }
 
 #undef LOCTEXT_NAMESPACE

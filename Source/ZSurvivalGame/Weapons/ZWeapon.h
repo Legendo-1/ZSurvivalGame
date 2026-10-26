@@ -7,6 +7,7 @@
 #include "ZWeapon.generated.h"
 
 class ACharacter;
+struct FGameplayAttribute;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class UZItemDefinition;
@@ -57,6 +58,29 @@ public:
 	int32 GetMagazineSize() const;
 
 	bool IsAutomatic() const;
+
+	/** --- STATS: the weapon data, with the bonuses of the character holding it (traits) --- */
+
+	/** Damage per bullet */
+	float GetDamage() const;
+
+	/** Shots per second */
+	float GetFireRate() const;
+
+	/** Spread cone in degrees */
+	float GetSpread(bool bAiming) const;
+
+	/** Camera kick per shot in degrees: X up, Y the most it goes sideways */
+	FVector2D GetRecoil() const;
+
+	/** How far shots reach, in cm */
+	float GetRange() const;
+
+	/** Seconds a reload takes */
+	float GetReloadTime() const;
+
+	/** An attribute of the character holding it, e.g. their damage multiplier; Default if there's none */
+	float GetOwnerAttribute(const FGameplayAttribute& Attribute, float Default = 1.f) const;
 
 	/** Where shots and muzzle flashes start: the muzzle socket, or the weapon's location if there's none */
 	FVector GetMuzzleLocation() const;

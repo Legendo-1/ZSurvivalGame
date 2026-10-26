@@ -2,14 +2,14 @@
 
 How items, the inventory, pickups, loot and interacting work, and how to add new ones. Crafting has its own guide: CRAFTING.md.
 
-**Last updated:** 2026-10-26 (tools, durability and the crafting items added; using a weapon item takes it out)
+**Last updated:** 2026-10-26 (the Tome of Knowledge and the Grants Progression fragment added)
 
 ## The pieces
 
 | Piece | What it is | Where |
 |---|---|---|
 | **Item definition** (`UZItemDefinition`) | One Data Asset per item: name, description, icon, tags, stack size, auto pickup, look on the ground, and its **fragments** | `Content/Items`, named `ID_...` |
-| **Fragment** (`UZItemFragment`) | A feature of an item. **Weapon** makes it a weapon, **Consumable** makes it usable (heals), **Tool** makes it a tool for recipes (with a quality), **Durability** makes it wear out | Inside the item definition |
+| **Fragment** (`UZItemFragment`) | A feature of an item. **Weapon** makes it a weapon, **Consumable** makes it usable (heals), **Tool** makes it a tool for recipes (with a quality), **Durability** makes it wear out, **Grants Progression** gives trait points or experience when used | Inside the item definition |
 | **Item instance** (`UZItemInstance`) | One item in an inventory (or one stack). Holds what's special about it as stats, e.g. a weapon's magazine ammo (`Item.Stat.MagazineAmmo`) or a tool's durability (`Item.Stat.Durability`) | Made by the server |
 | **Inventory** (`UZInventoryComponent`) | The player's items as stacks. On the **PlayerState**, so it survives dying | On the PlayerState |
 | **Pickup** (`AZPickup`) | Items lying in the world: loot, dropped items, or placed in a level | Spawned, or dragged into a level |
@@ -25,6 +25,7 @@ How items, the inventory, pickups, loot and interacting work, and how to add new
 | `ID_Cloth`, `ID_Scrap`, `ID_BoneFragment`, `ID_RottenMeat` | Crafting material | 99 | Walking over it |
 | `ID_Bandage` | Consumable, heals 25 | 10 | Interact key |
 | `ID_Medkit` | Consumable, heals 60 | 5 | Interact key |
+| `ID_TomeOfKnowledge` | Gives a trait point when read (PROGRESSION.md) | 10 | Interact key |
 | `ID_Screwdriver`, `ID_PrecisionScrewdriver` | Tool (screwdriver, quality 1 / 2, durability 20 / 40) | 1 | Interact key |
 | `ID_AmmoPress` | Tool (ammo press, quality 1, durability 60) | 1 | Interact key |
 | `ID_DuctTape`, `ID_ElectronicParts`, `ID_Gunpowder`, `ID_CircuitBoard` | Crafting material | 20–99 | Walking over it |

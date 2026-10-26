@@ -11,6 +11,7 @@
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 #include "ZSurvivalGame.h"
+#include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZCombatLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "Crafting/ZCraftingRecipe.h"
@@ -567,6 +568,11 @@ void UZCraftingComponent::ApplyCraftPlan(const UZCraftingRecipe& Recipe, const F
 		}
 	}
 
+	// a lucky craft gives the results twice (the player's crafting yield chance, from traits)
+	const float YieldChance = UZAttributeSet::GetAttributeValue(GetOwner(), UZAttributeSet::GetCraftingYieldChanceAttribute(), 0.f);
+	const int32 Times = YieldChance > 0.f && FMath::FRand() < YieldChance ? 2 : 1;
+	NumLuckyCrafts += Times - 1;
+
 	// the ingredients are gone first, so their room can hold the results; what still doesn't fit goes on the ground
 	for (const FZItemStack& Result : Recipe.Results)
 	{
@@ -575,7 +581,8 @@ void UZCraftingComponent::ApplyCraftPlan(const UZCraftingRecipe& Recipe, const F
 			continue;
 		}
 
-		const int32 Leftover = Result.Count - Inventory->AddItem(Result.Item, Result.Count);
+		const int32 Count = Result.Count * Times;
+		const int32 Leftover = Count - Inventory->AddItem(Result.Item, Count);
 		if (Leftover > 0 && Inventory->DropOnGround(Result.Item, Leftover))
 		{
 			RequestNotes.Add(FText::Format(LOCTEXT("NoRoom", "No room for {0} x{1}, it's on the ground."), Result.Item->GetItemName(), Leftover));
@@ -588,6 +595,7 @@ void UZCraftingComponent::ApplyCraftPlan(const UZCraftingRecipe& Recipe, const F
 void UZCraftingComponent::GiveCraftExperience(const UZCraftingRecipe& Recipe, bool bFirstDiscovery)
 {
 	const UZProgressionSettings* Settings = UZProgressionSettings::Get();
+	const float ExperienceMultiplier = UZAttributeSet::GetAttributeValue(GetOwner(), UZAttributeSet::GetTradeskillExperienceMultiplierAttribute(), 1.f);
 	for (const FZSkillRequirement& Requirement : Recipe.SkillRequirements)
 	{
 		if (!Requirement.Skill.IsValid())
@@ -595,13 +603,10 @@ void UZCraftingComponent::GiveCraftExperience(const UZCraftingRecipe& Recipe, bo
 			continue;
 		}
 
-		// easy recipes teach less and less the further above them the player is
+		// easy recipes teach less and less the further above them the player is; traits can speed learning up
 		const int32 Level = GetSkillLevel(Requirement.Skill);
-		int32 Experience = FMath::RoundToInt32(Recipe.SkillExperience * Settings->GetTradeskillExperienceScale(Level, Requirement.MinLevel));
-		if (bFirstDiscovery)
-		{
-			Experience += Recipe.DiscoveryExperience;
-		}
+		const float BaseExperience = Recipe.SkillExperience * Settings->GetTradeskillExperienceScale(Level, Requirement.MinLevel) + (bFirstDiscovery ? Recipe.DiscoveryExperience : 0);
+		const int32 Experience = FMath::RoundToInt32(BaseExperience * ExperienceMultiplier);
 
 		RequestStartLevels.FindOrAdd(Requirement.Skill, Level);
 		RequestExperience.FindOrAdd(Requirement.Skill) += FMath::Max(Experience, 0);
@@ -618,6 +623,7 @@ void UZCraftingComponent::StartCrafting(UZCraftingRecipe* Recipe, int32 Count, T
 	}
 
 	NumCrafted = 0;
+	NumLuckyCrafts = 0;
 	bRequestDiscovered = false;
 	RequestNotes.Reset();
 	RequestExperience.Reset();
@@ -737,7 +743,11 @@ void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingRes
 			MessageParts.Add(LOCTEXT("NewDiscovery", "New discovery!"));
 		}
 
-		MessageParts.Add(FText::Format(LOCTEXT("CraftedResults", "Crafted {0}."), GetResultsText(*Recipe, NumCrafted)));
+		MessageParts.Add(FText::Format(LOCTEXT("CraftedResults", "Crafted {0}."), GetResultsText(*Recipe, NumCrafted + NumLuckyCrafts)));
+		if (NumLuckyCrafts > 0)
+		{
+			MessageParts.Add(LOCTEXT("LuckyCraft", "Lucky: you made extra."));
+		}
 
 		if (LastResult != EZCraftingResult::Success)
 		{
@@ -781,6 +791,7 @@ void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingRes
 	RequestStartLevels.Reset();
 	bRequestDiscovered = false;
 	NumCrafted = 0;
+	NumLuckyCrafts = 0;
 
 	SendResult(Result, Recipe, FText::Join(FText::FromString(TEXT(" ")), MessageParts));
 }

@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "Net/UnrealNetwork.h"
+#include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "Items/ZItemInstance.h"
 #include "Weapons/ZWeaponData.h"
@@ -76,6 +77,43 @@ bool AZWeapon::IsAutomatic() const
 	return WeaponData && WeaponData->bAutomatic;
 }
 
+float AZWeapon::GetDamage() const
+{
+	return WeaponData ? WeaponData->Damage * GetOwnerAttribute(UZAttributeSet::GetDamageMultiplierAttribute()) : 0.f;
+}
+
+float AZWeapon::GetFireRate() const
+{
+	return WeaponData ? WeaponData->FireRate : 1.f;
+}
+
+float AZWeapon::GetSpread(bool bAiming) const
+{
+	return WeaponData ? (bAiming ? WeaponData->AimSpread : WeaponData->HipSpread) : 0.f;
+}
+
+FVector2D AZWeapon::GetRecoil() const
+{
+	return WeaponData ? FVector2D(WeaponData->RecoilPitch, WeaponData->RecoilYaw) * GetOwnerAttribute(UZAttributeSet::GetRecoilMultiplierAttribute()) : FVector2D::ZeroVector;
+}
+
+float AZWeapon::GetRange() const
+{
+	return WeaponData ? WeaponData->Range : 0.f;
+}
+
+float AZWeapon::GetReloadTime() const
+{
+	// the attribute set keeps the speed above 0
+	return WeaponData ? WeaponData->ReloadTime / GetOwnerAttribute(UZAttributeSet::GetReloadSpeedMultiplierAttribute()) : 0.f;
+}
+
+float AZWeapon::GetOwnerAttribute(const FGameplayAttribute& Attribute, float Default) const
+{
+	// the holding character's ability system (players: the one on their PlayerState)
+	return UZAttributeSet::GetAttributeValue(GetOwner(), Attribute, Default);
+}
+
 FVector AZWeapon::GetMuzzleLocation() const
 {
 	const FName MuzzleSocket = WeaponData ? WeaponData->MuzzleSocket : NAME_None;
@@ -100,7 +138,7 @@ bool AZWeapon::IsReadyToFire(float Tolerance) const
 		return false;
 	}
 
-	const double TimeBetweenShots = 1.0 / WeaponData->FireRate;
+	const double TimeBetweenShots = 1.0 / FMath::Max(GetFireRate(), 0.1f);
 	return GetWorld()->GetTimeSeconds() - LastFireTime >= TimeBetweenShots * Tolerance;
 }
 

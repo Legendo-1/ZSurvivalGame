@@ -1,10 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Crafting/ZCraftingSubsystem.h"
-#include "Engine/AssetManager.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "ZSurvivalGame.h"
+#include "Core/ZPrimaryAssetUtils.h"
 #include "Crafting/ZCraftingRecipe.h"
 
 UZCraftingSubsystem* UZCraftingSubsystem::Get(const UObject* WorldContextObject)
@@ -93,26 +93,8 @@ void UZCraftingSubsystem::LoadRecipes()
 	bRecipesLoaded = true;
 	Recipes.Reset();
 
-	UAssetManager& AssetManager = UAssetManager::Get();
-	TArray<FPrimaryAssetId> RecipeIds;
-	AssetManager.GetPrimaryAssetIdList(UZCraftingRecipe::GetRecipeAssetType(), RecipeIds);
-
 	// small data assets, loaded together once; their items load with them
-	TArray<UZCraftingRecipe*> Loaded;
-	for (const FPrimaryAssetId& RecipeId : RecipeIds)
-	{
-		if (UZCraftingRecipe* Recipe = Cast<UZCraftingRecipe>(AssetManager.GetPrimaryAssetPath(RecipeId).TryLoad()))
-		{
-			Loaded.Add(Recipe);
-		}
-		else
-		{
-			UE_LOG(LogZSurvivalGame, Warning, TEXT("Couldn't load the recipe '%s'"), *RecipeId.ToString());
-		}
-	}
-
-	Loaded.Sort([](const UZCraftingRecipe& A, const UZCraftingRecipe& B) { return A.GetName() < B.GetName(); });
-	for (UZCraftingRecipe* Recipe : Loaded)
+	for (UZCraftingRecipe* Recipe : ZPrimaryAssetUtils::LoadAllOfType<UZCraftingRecipe>(UZCraftingRecipe::GetRecipeAssetType()))
 	{
 		Recipes.Add(Recipe);
 	}

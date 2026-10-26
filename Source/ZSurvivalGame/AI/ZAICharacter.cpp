@@ -5,6 +5,8 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerState.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
@@ -14,6 +16,7 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_MeleeAttack.h"
 #include "Items/ZLootTable.h"
 #include "Items/ZPickup.h"
+#include "Progression/ZProgressionComponent.h"
 
 AZAICharacter::AZAICharacter()
 {
@@ -156,6 +159,19 @@ void AZAICharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	if (LootTable)
 	{
 		LootTable->SpawnLoot(GetWorld(), GetActorLocation(), LootPickupClass, LootLifeSpan);
+	}
+
+	// every player gets the experience and trait points, not only the one who killed it
+	if (const AGameStateBase* GameState = GetWorld()->GetGameState())
+	{
+		for (const APlayerState* Player : GameState->PlayerArray)
+		{
+			if (UZProgressionComponent* Progression = UZProgressionComponent::FindProgressionComponent(Player))
+			{
+				Progression->AddExperience(ExperienceReward);
+				Progression->AddTraitPoints(TraitPointReward);
+			}
+		}
 	}
 
 	BP_OnDied(DamageInstigator);

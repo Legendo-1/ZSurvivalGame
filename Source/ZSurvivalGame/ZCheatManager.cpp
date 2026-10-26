@@ -24,6 +24,9 @@
 #include "Items/ZItemDefinition.h"
 #include "Items/ZItemInstance.h"
 #include "Items/ZPickup.h"
+#include "Progression/ZProgressionComponent.h"
+#include "Progression/ZProgressionSubsystem.h"
+#include "Progression/ZTraitDefinition.h"
 
 bool UZCheatManager::CheckIsHost(const TCHAR* CommandName) const
 {
@@ -36,7 +39,7 @@ bool UZCheatManager::CheckIsHost(const TCHAR* CommandName) const
 	return false;
 }
 
-void UZCheatManager::ZSpawnZombies(int32 Count)
+void UZCheatManager::ZSpawnZombies(int32 Count, float Distance)
 {
 	APlayerController* PlayerController = GetOuterAPlayerController();
 	if (!PlayerController || !CheckIsHost(TEXT("ZSpawnZombies")))
@@ -48,7 +51,7 @@ void UZCheatManager::ZSpawnZombies(int32 Count)
 	FRotator ViewRotation;
 	PlayerController->GetPlayerViewPoint(ViewLocation, ViewRotation);
 
-	// in a row across the view, 8 m ahead of the camera
+	// in a row across the view, ahead of the camera
 	const FRotator FlatRotation(0.f, ViewRotation.Yaw, 0.f);
 	const FVector Forward = FlatRotation.Vector();
 	const FVector Right = FRotationMatrix(FlatRotation).GetUnitAxis(EAxis::Y);
@@ -58,7 +61,7 @@ void UZCheatManager::ZSpawnZombies(int32 Count)
 	for (int32 Index = 0; Index < NumZombies; ++Index)
 	{
 		const float SideOffset = (Index - (NumZombies - 1) * 0.5f) * 150.f;
-		const FVector Spot = ViewLocation + Forward * 800.f + Right * SideOffset;
+		const FVector Spot = ViewLocation + Forward * FMath::Max(Distance, 100.f) + Right * SideOffset;
 
 		// drop it onto the ground
 		FHitResult Ground;
@@ -434,6 +437,114 @@ void UZCheatManager::ZSetDurability(const FString& ItemName, int32 Durability)
 	Instance->SetStatTagStack(ZGameplayTags::Item_Stat_Durability, FMath::Clamp(Durability, 0, Instance->GetMaxDurability()));
 	Inventory->BroadcastChanged();
 	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSetDurability: %s"), *Instance->GetDebugString());
+}
+
+void UZCheatManager::ZGiveXP(int32 Amount, const FString& Who)
+{
+	if (!CheckIsHost(TEXT("ZGiveXP")))
+	{
+		return;
+	}
+
+	for (const APlayerState* Player : GetTargetPlayers(Who))
+	{
+		if (UZProgressionComponent* Progression = UZProgressionComponent::FindProgressionComponent(Player))
+		{
+			Progression->AddExperience(Amount);
+			UE_LOG(LogZSurvivalGame, Log, TEXT("ZGiveXP: '%s' is %s"), *GetNameSafe(Player), *Progression->GetDebugString());
+		}
+	}
+}
+
+void UZCheatManager::ZGiveTraitPoints(int32 Points, const FString& Who)
+{
+	if (!CheckIsHost(TEXT("ZGiveTraitPoints")))
+	{
+		return;
+	}
+
+	for (const APlayerState* Player : GetTargetPlayers(Who))
+	{
+		if (UZProgressionComponent* Progression = UZProgressionComponent::FindProgressionComponent(Player))
+		{
+			Progression->AddTraitPoints(Points);
+			UE_LOG(LogZSurvivalGame, Log, TEXT("ZGiveTraitPoints: '%s' is %s"), *GetNameSafe(Player), *Progression->GetDebugString());
+		}
+	}
+}
+
+void UZCheatManager::ZTraits()
+{
+	const UZProgressionComponent* Progression = UZProgressionComponent::FindProgressionComponent(GetOuterAPlayerController());
+	if (!Progression)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZTraits: no progression yet"));
+		return;
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("Progression: %s"), *Progression->GetDebugString());
+	for (const UZTraitDefinition* Trait : Progression->GetAllTraits())
+	{
+		const int32 Rank = Progression->GetTraitRank(Trait);
+		UE_LOG(LogZSurvivalGame, Log, TEXT("Trait %s (%s): rank %d/%d, %d point(s) per rank%s %s"), *Trait->GetTraitName().ToString(), *Trait->GetName(), Rank, Trait->MaxRank,
+			Trait->PointsPerRank, Progression->CanRaiseTrait(Trait) ? TEXT(", can raise") : TEXT(""), *Trait->GetEffectText(FMath::Max(Rank, 1)).ToString().Replace(TEXT("\n"), TEXT("; ")));
+	}
+
+	// the stats the traits change, as this machine sees them
+	const APawn* Pawn = GetOuterAPlayerController() ? GetOuterAPlayerController()->GetPawn() : nullptr;
+	TArray<FString> Stats;
+	for (const FGameplayAttribute& Attribute : UZAttributeSet::GetTraitAttributes())
+	{
+		Stats.Add(FString::Printf(TEXT("%s %.2f"), *Attribute.GetName(), UZAttributeSet::GetAttributeValue(Pawn, Attribute, 0.f)));
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("Stats: Health %.1f, Stamina %.1f, %s"), UZAttributeSet::GetAttributeValue(Pawn, UZAttributeSet::GetHealthAttribute(), 0.f),
+		UZAttributeSet::GetAttributeValue(Pawn, UZAttributeSet::GetStaminaAttribute(), 0.f), *FString::Join(Stats, TEXT(", ")));
+}
+
+void UZCheatManager::ZRaiseTrait(const FString& TraitName)
+{
+	// a request to the server, so this works in every window
+	UZProgressionComponent* Progression = UZProgressionComponent::FindProgressionComponent(GetOuterAPlayerController());
+	const UZProgressionSubsystem* Subsystem = UZProgressionSubsystem::Get(GetWorld());
+	if (!Progression || !Subsystem)
+	{
+		return;
+	}
+
+	UZTraitDefinition* Trait = Subsystem->FindTraitByName(*TraitName);
+	if (!Trait)
+	{
+		Trait = Subsystem->FindTraitByName(*(TEXT("TR_") + TraitName));
+	}
+
+	if (!Trait)
+	{
+		TArray<FString> TraitNames;
+		for (const UZTraitDefinition* Candidate : Subsystem->GetAllTraits())
+		{
+			TraitNames.Add(Candidate->GetName());
+		}
+
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("No trait named '%s'. Traits: %s"), *TraitName, *FString::Join(TraitNames, TEXT(", ")));
+		return;
+	}
+
+	if (!Progression->CanRaiseTrait(Trait))
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZRaiseTrait: can't raise %s (rank %d/%d, %d point(s) unspent)"), *Trait->GetName(), Progression->GetTraitRank(Trait), Trait->MaxRank, Progression->GetUnspentTraitPoints());
+		return;
+	}
+
+	Progression->RaiseTrait(Trait);
+}
+
+void UZCheatManager::ZResetTraits()
+{
+	if (UZProgressionComponent* Progression = UZProgressionComponent::FindProgressionComponent(GetOuterAPlayerController()))
+	{
+		Progression->ResetTraits();
+	}
 }
 
 void UZCheatManager::ZDelay(float Seconds, const FString& Command)

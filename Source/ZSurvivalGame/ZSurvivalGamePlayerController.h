@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "Crafting/ZCraftingComponent.h"
+#include "Progression/ZProgressionComponent.h"
 #include "ZSurvivalGamePlayerController.generated.h"
 
 class AZCraftingStation;
@@ -14,7 +15,7 @@ class UZSurvivalHUDWidget;
 
 /**
  *  Basic PlayerController class for a third person game
- *  Manages input mappings, the HUD and short messages to the player (e.g. what crafting made)
+ *  Manages input mappings, the HUD and short messages to the player (e.g. what crafting made, level-ups)
  */
 UCLASS(abstract)
 class AZSurvivalGamePlayerController : public APlayerController
@@ -101,11 +102,17 @@ protected:
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
 
-	/** Listens to this player's crafting component for messages (local players only) */
+	/** Listens to this player's crafting and progression for messages (local players only) */
 	void BindToPlayerState();
 
 	UFUNCTION()
 	void HandleCraftingResult(UZCraftingComponent* Crafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message);
+
+	UFUNCTION()
+	void HandleLevelUp(UZProgressionComponent* Progression, int32 NewLevel);
+
+	UFUNCTION()
+	void HandleBonusTraitPoints(UZProgressionComponent* Progression, int32 Points);
 
 private:
 
@@ -118,4 +125,5 @@ private:
 	TArray<FPlayerMessage> Messages;
 
 	TWeakObjectPtr<UZCraftingComponent> BoundCrafting;
+	TWeakObjectPtr<UZProgressionComponent> BoundProgression;
 };

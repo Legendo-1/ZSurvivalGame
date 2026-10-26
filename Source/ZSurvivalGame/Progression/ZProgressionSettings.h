@@ -7,7 +7,7 @@
 #include "ZProgressionSettings.generated.h"
 
 /**
- *  The numbers behind progression: how tradeskills level up
+ *  The numbers behind progression: character levels, trait points and how tradeskills level up
  *  Project Settings → Game → Progression (saved in Config/DefaultGame.ini)
  */
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "Progression"))
@@ -20,6 +20,39 @@ public:
 	UZProgressionSettings();
 
 	static const UZProgressionSettings* Get() { return GetDefault<UZProgressionSettings>(); }
+
+	/** --- CHARACTER LEVEL --- */
+
+	/** Highest character level */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Character Level", meta = (ClampMin = "1"))
+	int32 MaxCharacterLevel = 50;
+
+	/** Total experience to reach a level = Base × (Level - 1) ^ Exponent. With 100 and 1.5: level 2 takes 100, level 10 takes 2700, level 50 takes 34300 */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Character Level", meta = (ClampMin = "1"))
+	float CharacterExperienceBase = 100.f;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Character Level", meta = (ClampMin = "1"))
+	float CharacterExperienceExponent = 1.5f;
+
+	/** --- TRAITS --- */
+
+	/** Trait points for each level gained (bosses and Tomes of Knowledge give more) */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Traits", meta = (ClampMin = "0"))
+	int32 TraitPointsPerLevel = 1;
+
+	/** Most trait points a player can earn in total, from levels, bosses and tomes; 0 = no limit */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Traits", meta = (ClampMin = "0"))
+	int32 MaxTraitPoints = 0;
+
+	/** Players can take back all their trait points and spend them again (so trying another build never ruins a character) */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Traits")
+	bool bAllowTraitReset = true;
+
+	/** Total experience needed to reach a character level (level 1 needs none) */
+	int32 GetCharacterExperienceForLevel(int32 Level) const;
+
+	/** The character level for this much total experience */
+	int32 GetCharacterLevelForExperience(int32 Experience) const;
 
 	/** --- TRADESKILLS --- */
 

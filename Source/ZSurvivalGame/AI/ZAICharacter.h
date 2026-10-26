@@ -137,6 +137,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Loot")
 	TObjectPtr<UZLootTable> LootTable;
 
+	/** Character experience every player gets when it dies (co-op: everyone shares it) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Rewards", meta = (ClampMin = "0"))
+	int32 ExperienceReward = 10;
+
+	/** Trait points every player gets when it dies, e.g. 1 for a boss */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Rewards", meta = (ClampMin = "0"))
+	int32 TraitPointReward = 0;
+
 	/** Pickup spawned for each drop (AZPickup if empty) */
 	UPROPERTY(EditAnywhere, Category = "AI|Loot")
 	TSubclassOf<AZPickup> LootPickupClass;

@@ -7,6 +7,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayTags.h"
+#include "ZSurvivalGame.h"
 
 UZGameplayAbility_Dodge::UZGameplayAbility_Dodge()
 {
@@ -58,9 +59,13 @@ void UZGameplayAbility_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle H
 		Direction = Character->GetActorForwardVector().GetSafeNormal2D();
 	}
 
+	// the player's dodge distance (traits) makes it faster over the same time; both machines have the same value
+	const float Speed = DodgeSpeed * UZAttributeSet::GetAttributeValue(Character, UZAttributeSet::GetDodgeDistanceMultiplierAttribute(), 1.f);
+	UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' dodging at %.0f cm/s for %.2f s"), *GetNameSafe(Character), Speed, DodgeDuration);
+
 	// root motion runs on the client and the server in sync, so the server doesn't pull the player back
 	UAbilityTask_ApplyRootMotionConstantForce* DodgeTask = UAbilityTask_ApplyRootMotionConstantForce::ApplyRootMotionConstantForce(
-		this, NAME_None, Direction, DodgeSpeed, DodgeDuration, false, nullptr,
+		this, NAME_None, Direction, Speed, DodgeDuration, false, nullptr,
 		ERootMotionFinishVelocityMode::ClampVelocity, FVector::ZeroVector, ExitSpeed, true);
 	DodgeTask->OnFinish.AddDynamic(this, &UZGameplayAbility_Dodge::OnDodgeFinished);
 	DodgeTask->ReadyForActivation();

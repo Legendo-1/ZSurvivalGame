@@ -19,9 +19,9 @@ public:
 
 	// numbers left out of a command use the defaults below (the engine only reads them in editor builds)
 
-	/** Spawns zombies 8 m in front of the camera, side by side */
+	/** Spawns zombies in front of the camera, side by side, Distance cm away (8 m if left out), e.g. ZSpawnZombies 3 */
 	UFUNCTION(Exec)
-	void ZSpawnZombies(int32 Count = 1);
+	void ZSpawnZombies(int32 Count = 1, float Distance = 800.f);
 
 	/** Kills every AI character in the level */
 	UFUNCTION(Exec)
@@ -88,6 +88,28 @@ public:
 	/** Sets the durability of your first item of this kind, e.g. ZSetDurability ID_Screwdriver 1 to see it break (host) */
 	UFUNCTION(Exec)
 	void ZSetDurability(const FString& ItemName, int32 Durability = 1);
+
+	/** --- PROGRESSION --- */
+
+	/** Gives you character experience, e.g. ZGiveXP 500; ZGiveXP 500 all gives it to every player (host) */
+	UFUNCTION(Exec)
+	void ZGiveXP(int32 Amount = 100, const FString& Who = TEXT(""));
+
+	/** Gives you trait points, like a boss or a Tome of Knowledge; ZGiveTraitPoints 3 all gives every player some (host) */
+	UFUNCTION(Exec)
+	void ZGiveTraitPoints(int32 Points = 1, const FString& Who = TEXT(""));
+
+	/** Writes your level, trait points, every trait and your stats to the Output Log */
+	UFUNCTION(Exec)
+	void ZTraits();
+
+	/** Spends points on a trait, e.g. ZRaiseTrait Vigor (the asset name, with or without TR_) */
+	UFUNCTION(Exec)
+	void ZRaiseTrait(const FString& TraitName);
+
+	/** Takes back all your spent trait points */
+	UFUNCTION(Exec)
+	void ZResetTraits();
 
 	/** --- TESTING --- */
 

@@ -1,8 +1,8 @@
 # Multiplayer & abilities
 
-How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md.
+How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md.
 
-**Last updated:** 2026-10-26 (crafting and tradeskills on the PlayerState, crafting stations, messages on the HUD)
+**Last updated:** 2026-10-26 (levels, trait points and traits on the PlayerState; enemies give every player experience; weapon stats include trait bonuses)
 
 ## The basic idea
 
@@ -14,7 +14,7 @@ How the player's actions, weapons, enemies, health and death work in multiplayer
 
 | What | Lives on | Why |
 |---|---|---|
-| Ability system, health, stamina, inventory, crafting and tradeskills | **PlayerState** (`AZSurvivalGamePlayerState`) | Every player has one on every machine, and it survives respawns |
+| Ability system, health, stamina, stats, inventory, crafting, tradeskills, level and traits | **PlayerState** (`AZSurvivalGamePlayerState`) | Every player has one on every machine, and it survives respawns |
 | Body, camera, input, the weapon in the hands | **Character** (`AZSurvivalGameCharacter`, BP_ThirdPersonCharacter) | The part you control and see |
 | Sprint, aim and speed limit states | **Movement component** (`UZCharacterMovementComponent`) | Sent to the server with every move, so the server moves you at the same speed |
 | Weapon stats | **Weapon Data Assets** (`UZWeaponData`: DA_Pistol, DA_Rifle) | One asset per weapon, easy to tune |
@@ -96,7 +96,7 @@ Every ability is blocked while dead.
 - **All damage goes through `UZCombatLibrary::ApplyDamage`**, which Blueprints can use too (e.g. traps). It checks the teams, lowers the target's health through a GameplayEffect on **IncomingDamage**, and plays the hit effect.
 - **Health and stamina** are attributes in `UZAttributeSet`: Health, MaxHealth, Stamina, MaxStamina. **Only the server changes them.** Health is sent to everyone, stamina only to its own player (for the HUD).
 - **A player at 0 health** falls as a ragdoll and puts the weapon away; the items stay in the inventory. After **5 seconds** they respawn at a Player Start with full health and stamina. The body disappears 10 seconds later.
-- **An enemy at 0 health** falls as a ragdoll, stops its AI, drops its loot (its **Loot Table**) and disappears after 10 seconds. Its Blueprint can react with the **On Died** event, which also says who killed it (e.g. to count kills later).
+- **An enemy at 0 health** falls as a ragdoll, stops its AI, drops its loot (its **Loot Table**) and disappears after 10 seconds. Every player gets its **Experience Reward** and **Trait Point Reward** (for bosses), see PROGRESSION.md. Its Blueprint can react with the **On Died** event, which also says who killed it (e.g. to count kills later).
 - **Player Starts:** each level needs at least one; one per player is best. If they're all crowded, the character is moved to a free spot nearby instead of failing to spawn.
 
 ## Effects and sounds (GameplayCues)
@@ -150,6 +150,9 @@ Until then, the shooter sees **debug lines**: white = shot, yellow dot = hit, re
 | Stamina drain and regen per second | BP_ThirdPersonCharacter → Class Defaults → **Survival\|Stats** |
 | Starting items (weapons, ammo, ...) | BP_ThirdPersonCharacter → Class Defaults → **Survival\|Inventory** |
 | What enemies drop | The loot table in `Content/Items/LootTables` (set on the enemy: **AI\|Loot**) |
+| Experience and trait points for a kill | The enemy's Class Defaults → **AI\|Rewards** |
+| Levels, trait points, tradeskill levels | **Project Settings → Game → Progression** |
+| Traits | `Content/Progression/Traits` (PROGRESSION.md) |
 | Weapon damage, fire rate, spread, ammo, reload time, recoil | The weapon's Data Asset in `Content/Weapons` |
 | Max health and max stamina of players (100) | `UZAttributeSet` constructor in C++ |
 | Enemy health, team, speed, ranges, melee damage | `AZZombieCharacter` in C++, or a Blueprint child's Class Defaults |
@@ -168,14 +171,14 @@ The **Server** window is the host. The **Client** window is the second player.
 
 | Command | What it does |
 |---|---|
-| `ZSpawnZombies 3` | Spawns 3 zombies 8 m in front of the camera |
+| `ZSpawnZombies 3` | Spawns 3 zombies 8 m in front of the camera; `ZSpawnZombies 1 300` spawns one 3 m away |
 | `ZKillEnemies` | Kills every enemy |
 | `ZHeal` | Fills your health and stamina |
 | `ZHurt 50` | Takes 50 health (`ZHurt 0` shows your health) |
 | `Z.Weapon.DrawDebug 0` / `1` | Hides / shows the shot debug lines |
 | `log LogZSurvivalGame Verbose` | Writes every shot, reload, pickup and inventory change to the Output Log |
 
-The item commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZUseItem`, `ZSpawnPickup`) are in ITEMS.md, the crafting commands (`ZCombine`, `ZSkills`, ...) in CRAFTING.md.
+The item commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZUseItem`, `ZSpawnPickup`) are in ITEMS.md, the crafting commands (`ZCombine`, `ZSkills`, ...) in CRAFTING.md, the progression commands (`ZTraits`, `ZRaiseTrait`, ...) in PROGRESSION.md.
 
 **Automated test runs:** `-ExecCmds` runs every command at once at startup, before a client has joined. `ZDelay 5 <command>` runs a command later, and `ZOnClients <command>` (host) runs it on every client, e.g. `ZDelay 12 ZOnClients ZSkills`.
 
