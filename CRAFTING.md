@@ -2,7 +2,7 @@
 
 How crafting works: combining items, tools, crafting stations and tradeskills, weapon upgrades and mods, and how to add new recipes.
 
-**Last updated:** 2026-10-26 (combining in the inventory screen; stations open it)
+**Last updated:** 2026-10-26 (crafting sounds per recipe, see AUDIO.md)
 
 ## How players craft
 
@@ -96,6 +96,7 @@ New items for them (`Content/Items`): Screwdriver, Precision Screwdriver and Amm
 3. **Required Station** (optional), **Skill Requirements** (a tradeskill and its minimum level), **Skill Experience** per craft and **Discovery Experience** for the first time.
 4. **Results** and **Craft Time**.
 5. **Outcomes** (optional), for a recipe that changes its Target input: click **+** and pick one. **Upgrade Target** (a stat goes up, e.g. the upgrade level), **Install Mod**, **Remove Mods** or **Repair Target**. A recipe needs Results, Outcomes or both; with Outcomes it needs exactly one input with Usage Target, Count 1.
+6. **Effects** (optional): **Working Cue** plays for as long as the recipe is being made (only with a Craft Time; at the station if it needs one), **Done Cue** when something was made. They start as `GameplayCue.Crafting.Working` and `GameplayCue.Crafting.Done`, which every recipe shares. A child tag (e.g. `GameplayCue.Crafting.Working.Chemistry`) gives a recipe its own sound, an empty one none. How to make the sounds: AUDIO.md.
 
 Nothing else needs to list it: the game finds every recipe in `Content/Crafting` by itself, and deleting the asset removes the recipe. **Developer Notes** are for the team only. Right-click the asset → **Asset Actions → Validate Assets** checks it, e.g. for missing results, a tool quality the item doesn't have, or Outcomes without a Target.
 

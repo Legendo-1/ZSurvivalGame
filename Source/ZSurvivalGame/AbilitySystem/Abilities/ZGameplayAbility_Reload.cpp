@@ -4,6 +4,7 @@
 #include "AbilitySystemComponent.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "Animation/AnimMontage.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "ZSurvivalGame.h"
 #include "ZSurvivalGameCharacter.h"
@@ -33,7 +34,7 @@ bool UZGameplayAbility_Reload::CanActivateAbility(const FGameplayAbilitySpecHand
 void UZGameplayAbility_Reload::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
 	AZSurvivalGameCharacter* Character = GetZCharacter(ActorInfo);
-	const AZWeapon* Weapon = Character ? Character->GetEquippedWeapon() : nullptr;
+	AZWeapon* Weapon = Character ? Character->GetEquippedWeapon() : nullptr;
 	const UZWeaponData* WeaponData = Weapon ? Weapon->GetWeaponData() : nullptr;
 	if (!WeaponData || !CommitAbility(Handle, ActorInfo, ActivationInfo))
 	{
@@ -54,6 +55,14 @@ void UZGameplayAbility_Reload::ActivateAbility(const FGameplayAbilitySpecHandle 
 		const float PlayRate = ReloadTime > 0.f ? ReloadMontage->GetPlayLength() / ReloadTime : 1.f;
 		ActorInfo->AbilitySystemComponent->PlayMontage(this, ActivationInfo, ReloadMontage, PlayRate);
 	}
+
+	// the weapon's reload cue: the player hears it at once, the server sends it to the others
+	FGameplayCueParameters ReloadCue;
+	ReloadCue.RawMagnitude = ReloadTime;
+	ReloadCue.Instigator = Character;
+	ReloadCue.EffectCauser = Weapon;
+	ReloadCue.SourceObject = WeaponData;
+	UZGameplayCueLibrary::ExecuteCue(Character, WeaponData->ReloadCue, ReloadCue);
 
 	UAbilityTask_WaitDelay* WaitReload = UAbilityTask_WaitDelay::WaitDelay(this, ReloadTime);
 	WaitReload->OnFinish.AddDynamic(this, &UZGameplayAbility_Reload::OnReloadFinished);

@@ -8,6 +8,7 @@
 #include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
 #include "AbilitySystem/ZCombatLibrary.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "Items/ZItemFragments.h"
 #include "Items/ZItemInstance.h"
@@ -364,6 +365,11 @@ void UZInventoryComponent::ServerUseItem_Implementation(UZItemInstance* Instance
 
 	if (bConsume)
 	{
+		// the item's use sound, e.g. a bandage being wrapped (taking out a weapon has its own equip cue)
+		FGameplayCueParameters UseCue;
+		UseCue.SourceObject = Item;
+		UZGameplayCueLibrary::ExecuteCue(User, Item->UseCue, UseCue);
+
 		RemoveItemInstance(Instance, 1);
 	}
 }

@@ -2,7 +2,7 @@
 
 How character levels, trait points and traits work, and how to add new traits.
 
-**Last updated:** 2026-10-26 (traits are raised and reset in the inventory screen's character panel)
+**Last updated:** 2026-10-26 (a level-up sound and effect, see AUDIO.md)
 
 ## The idea
 
@@ -16,6 +16,7 @@ How character levels, trait points and traits work, and how to add new traits.
 - **Level L takes** 100 × (L − 1)^1.5 experience in total: level 2 = 100, level 10 = 2700, level 50 (the highest) = 34300.
 - **Each level gives 1 trait point.**
 - All of these numbers are in **Project Settings → Game → Progression**.
+- **A new level plays `GameplayCue.Character.LevelUp`** on the player, for everyone near them, e.g. a fanfare and a glow. How to make it: AUDIO.md.
 
 ## Trait points
 

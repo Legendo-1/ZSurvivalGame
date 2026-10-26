@@ -2,7 +2,7 @@
 
 How items, the inventory, pickups, loot and interacting work, and how to add new ones. Crafting has its own guide: CRAFTING.md. The inventory screen: UI.md.
 
-**Last updated:** 2026-10-26 (the inventory screen: using and dropping items from it, see UI.md)
+**Last updated:** 2026-10-26 (pickup and use sounds per item, see AUDIO.md)
 
 ## The pieces
 
@@ -88,9 +88,10 @@ A wrong item name lists all the items there are. Numbers can be left out in the 
 
 - **A new item:** in `Content/Items/<type folder>`, right-click → **Miscellaneous → Data Asset → ZItemDefinition**. Name it `ID_...` and fill in Display Name, Item Tags, Max Stack Size and Auto Pickup. Add its features under **Fragments → +**.
 - **A new weapon:**
-  1. Make a weapon Data Asset (**ZWeaponData**) with its stats and **Ammo Item**.
+  1. Make a weapon Data Asset (**ZWeaponData**) with its stats and **Ammo Item**. Its animations are under **Looks**, its sounds and effects under **Effects** (AUDIO.md).
   2. Make an item with a **Weapon** fragment pointing to it.
   3. Add the item to **Starting Items** or a loot table.
+- **Sounds and effects for an item:** its Data Asset → **Effects → Pickup Cue** (picked up) and **Use Cue** (used up, e.g. a bandage). They start as `GameplayCue.Item.Pickup` and `GameplayCue.Item.Use`, which every item shares. Pick a child tag to give an item its own, or clear it for none. How to make the sounds: AUDIO.md.
 - **A new tool or weapon mod:** see CRAFTING.md → How to add things.
 - **A new kind of item feature** (armor, ...): a new fragment class in C++ (a child of `UZItemFragment`). Existing items don't change. Its `GetDescriptionLines` is what the inventory screen shows about it (e.g. "Heals 25").
 - **A new loot table:** Data Asset **ZLootTable** in `Content/Items/LootTables`, then set it on an enemy: Class Defaults → **AI|Loot → Loot Table**.

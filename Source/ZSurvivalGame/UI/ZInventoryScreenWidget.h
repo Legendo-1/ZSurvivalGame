@@ -145,15 +145,15 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Inventory")
 	void OnSelectionChanged(UZItemInstance* NewSelection);
 
-	/** A combine finished or failed (the message is in Result Text too) */
+	/** A combine finished or failed (the message is in Result Text too); New Discovery is true the first time the recipe was made */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Inventory")
-	void OnCraftingResult(EZCraftingResult Result, const FText& Message);
+	void OnCraftingResult(EZCraftingResult Result, const FText& Message, bool bNewDiscovery);
 
 	UFUNCTION()
 	void HandleInventoryChanged(UZInventoryComponent* ChangedInventory);
 
 	UFUNCTION()
-	void HandleCraftingResult(UZCraftingComponent* ChangedCrafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message);
+	void HandleCraftingResult(UZCraftingComponent* ChangedCrafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message, bool bNewDiscovery);
 
 	UFUNCTION()
 	void HandleCraftingProgressChanged(UZCraftingComponent* ChangedCrafting);

@@ -5,9 +5,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "GameplayCueInterface.h"
 #include "GenericTeamAgentInterface.h"
 #include "Logging/LogMacros.h"
 #include "ZSurvivalGameTypes.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "Items/ZItemDefinition.h"
 #include "ZSurvivalGameCharacter.generated.h"
 
@@ -32,7 +34,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
  *  Sprint, aim, dodge, fire and reload are abilities (see AbilitySystem/); health and stamina live on the PlayerState
  */
 UCLASS(abstract)
-class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface
+class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IGameplayCueInterface, public IZCharacterCuesInterface
 {
 	GENERATED_BODY()
 
@@ -175,6 +177,12 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_IsDead)
 	bool bIsDead = false;
 
+	/** --- EFFECTS --- */
+
+	/** The player's hit and death cues (GameplayCue Notify assets with these tags play the sounds and effects, see AUDIO.md) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects")
+	FZCharacterCues CharacterCues;
+
 	/** The player's ability system, owned by the PlayerState */
 	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
 
@@ -190,6 +198,13 @@ public:
 
 	/** Players are all on the same team */
 	virtual FGenericTeamId GetGenericTeamId() const override;
+
+	virtual const FZCharacterCues& GetCharacterCues() const override { return CharacterCues; }
+
+	using IGameplayCueInterface::HandleGameplayCue;
+
+	/** Every machine: a cue arrived for this character. Sounds and effects are GameplayCue Notify assets; this plays the weapon's Equip Montage with its equip cue */
+	virtual void HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters) override;
 
 protected:
 

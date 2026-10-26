@@ -10,6 +10,8 @@
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 #include "UI/ZInventoryScreenWidget.h"
 #include "UI/ZSurvivalHUDWidget.h"
 #include "ZSurvivalGame.h"
@@ -154,6 +156,7 @@ void AZSurvivalGamePlayerController::OpenInventory()
 	InventoryScreen->AddToPlayerScreen(InventoryZOrder);
 	UWidgetBlueprintLibrary::SetInputMode_UIOnlyEx(this, InventoryScreen, EMouseLockMode::DoNotLock, true);
 	SetShowMouseCursor(true);
+	PlayUISound(InventoryOpenSound);
 
 	// a gamepad needs something focused to move around with; the mouse doesn't
 	if (FSlateApplication::IsInitialized() && FSlateApplication::Get().IsGamepadAttached())
@@ -172,6 +175,7 @@ void AZSurvivalGamePlayerController::CloseInventory()
 	InventoryScreen->RemoveFromParent();
 	UWidgetBlueprintLibrary::SetInputMode_GameOnly(this, true);
 	SetShowMouseCursor(false);
+	PlayUISound(InventoryCloseSound);
 }
 
 void AZSurvivalGamePlayerController::ToggleInventory()
@@ -296,9 +300,26 @@ void AZSurvivalGamePlayerController::BindToPlayerState()
 	}
 }
 
-void AZSurvivalGamePlayerController::HandleCraftingResult(UZCraftingComponent* Crafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message)
+void AZSurvivalGamePlayerController::HandleCraftingResult(UZCraftingComponent* Crafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message, bool bNewDiscovery)
 {
 	ShowMessage(Message);
+
+	if (Result == EZCraftingResult::Success)
+	{
+		PlayUISound(bNewDiscovery && DiscoverySound ? DiscoverySound.Get() : CraftedSound.Get());
+	}
+	else if (Result != EZCraftingResult::Cancelled)
+	{
+		PlayUISound(CraftFailedSound);
+	}
+}
+
+void AZSurvivalGamePlayerController::PlayUISound(USoundBase* Sound) const
+{
+	if (Sound && IsLocalPlayerController())
+	{
+		UGameplayStatics::PlaySound2D(this, Sound);
+	}
 }
 
 void AZSurvivalGamePlayerController::HandleLevelUp(UZProgressionComponent* Progression, int32 NewLevel)

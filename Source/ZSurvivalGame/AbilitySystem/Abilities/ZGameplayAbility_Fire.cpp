@@ -9,6 +9,7 @@
 #include "HAL/IConsoleManager.h"
 #include "ZSurvivalGame.h"
 #include "AbilitySystem/ZCombatLibrary.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "ZSurvivalGameCharacter.h"
 #include "Weapons/ZWeapon.h"
@@ -217,7 +218,7 @@ void UZGameplayAbility_Fire::OnTargetDataReady(const FGameplayAbilityTargetDataH
 
 		const FVector ShotDirection = (Hit->TraceEnd - Hit->TraceStart).GetSafeNormal();
 
-		// shot and impact effects: the shooter plays them right away, the server sends them to everyone else
+		// shot and impact effects (the weapon's own cues): the shooter plays them right away, the server sends them to everyone else
 		if (Index == 0)
 		{
 			FGameplayCueParameters FireCue;
@@ -226,7 +227,7 @@ void UZGameplayAbility_Fire::OnTargetDataReady(const FGameplayAbilityTargetDataH
 			FireCue.Instigator = Character;
 			FireCue.EffectCauser = Weapon;
 			FireCue.SourceObject = WeaponData;
-			ASC->ExecuteGameplayCue(ZGameplayTags::GameplayCue_Weapon_Fire, FireCue);
+			UZGameplayCueLibrary::ExecuteCue(Character, WeaponData->FireCue, FireCue);
 		}
 
 		if (Hit->bBlockingHit)
@@ -238,7 +239,7 @@ void UZGameplayAbility_Fire::OnTargetDataReady(const FGameplayAbilityTargetDataH
 			ImpactCue.EffectCauser = Weapon;
 			ImpactCue.SourceObject = WeaponData;
 			ImpactCue.PhysicalMaterial = Hit->PhysMaterial.Get();
-			ASC->ExecuteGameplayCue(ZGameplayTags::GameplayCue_Weapon_Impact, ImpactCue);
+			UZGameplayCueLibrary::ExecuteCue(Character, WeaponData->ImpactCue, ImpactCue);
 		}
 
 		// damage only on the server

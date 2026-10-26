@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
+#include "AbilitySystem/ZGameplayTags.h"
 #include "Items/ZItemDefinition.h"
 #include "Items/ZItemRequirement.h"
 #include "ZCraftingRecipe.generated.h"
@@ -114,6 +115,16 @@ public:
 	/** Seconds one craft takes (0 = right away) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Recipe|Results", meta = (ClampMin = "0", Units = "s"))
 	float CraftTime = 0.f;
+
+	/** --- EFFECTS: what plays is a GameplayCue Notify asset with the tag (see AUDIO.md); a child tag gives this recipe its own. Empty = nothing --- */
+
+	/** Lasts while it's being crafted, e.g. hammering (at the station if the recipe needs one, else at the player). Needs a Craft Time */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Recipe|Effects", meta = (Categories = "GameplayCue.Crafting.Working"))
+	FGameplayTag WorkingCue = ZGameplayTags::GameplayCue_Crafting_Working;
+
+	/** A combine made something (Raw Magnitude = how many crafts) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Recipe|Effects", meta = (Categories = "GameplayCue.Crafting.Done"))
+	FGameplayTag DoneCue = ZGameplayTags::GameplayCue_Crafting_Done;
 
 #if WITH_EDITORONLY_DATA
 	/** Notes for the team, e.g. where the ingredients are found (not in the game) */

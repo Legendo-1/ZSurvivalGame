@@ -2,7 +2,7 @@
 
 How the inventory screen and the HUD work, how to change their keys, and how to give them your own look.
 
-**Last updated:** 2026-10-26 (inventory screen with combining and the character panel added; the HUD section moved here from MULTIPLAYER.md)
+**Last updated:** 2026-10-26 (UI sounds for the inventory screen and crafting results)
 
 ## The inventory screen
 
@@ -75,11 +75,27 @@ The same works for the parts: a Widget Blueprint with **ZItemSlotWidget**, **ZIt
 
 **ZTraitRowWidget:** `NameText`, `RankText`, `EffectText`, `RaiseButton`. **ZTradeskillRowWidget:** `NameText`, `LevelText`, `LevelProgressBar`.
 
-**For sounds and animations** each has Blueprint events: **On Selection Changed** and **On Crafting Result** (screen), **On Item Changed** and **On State Changed** (slot), **On Trait Changed**, **On Skill Changed**.
+**For sounds and animations** each has Blueprint events: **On Selection Changed** and **On Crafting Result** (screen; **New Discovery** is true the first time a combine makes something), **On Item Changed** and **On State Changed** (slot), **On Trait Changed**, **On Skill Changed**.
 
 **Icons:** an item's Data Asset has an **Icon**; slots and details show it once it's set (no item has one yet).
 
 **From Blueprints** the screen can do everything the mouse does: **Select Item**, **Use Item**, **Drop Item**, **Combine Items**, **Add To Combine**, **Combine Chosen Items**, **Set Craft Count**, **Close Screen**. The player controller has **Open Inventory**, **Close Inventory**, **Toggle Inventory** and **Is Inventory Open**.
+
+## Sounds
+
+UI sounds play only for you, "in your ears" (2D), so they need no attenuation.
+
+1. **The ready-made ones:** `BP_ThirdPersonPlayerController` → **Class Defaults → UI → Sounds**:
+   - **Inventory Open Sound / Inventory Close Sound**
+   - **Crafted Sound:** a combine made something
+   - **Discovery Sound:** a combine made something for the first time (plays instead of Crafted Sound)
+   - **Craft Failed Sound:** a combine made nothing (stopping a craft is quiet)
+
+   An empty setting plays nothing.
+2. **Buttons** in your own Widget Blueprint: select the button → **Style → Pressed Sound / Hovered Sound**.
+3. **Anything else**, e.g. a click when an item is selected: the Blueprint events above → **Play Sound 2D**.
+
+Sounds in the world (shots, pickups, crafting at a station) are in AUDIO.md.
 
 ## HUD
 
@@ -109,7 +125,7 @@ Open the console with the key under Esc while playing.
 ## Plan: what isn't built yet
 
 - **Item icons** (the Icon field is there).
-- **Sounds and small animations** (the Blueprint events are there).
+- **The UI sounds themselves** (the settings are there) **and small animations** (the Blueprint events are there).
 - **Dropping part of a stack** (Drop drops the whole stack; **Drop Item** already takes a count).
 - **Comparing** a weapon with the one in the hands.
 - **Storage chests:** the same item slots for the chest's inventory next to the player's.

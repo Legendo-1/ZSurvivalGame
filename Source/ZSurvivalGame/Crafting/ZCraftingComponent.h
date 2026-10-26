@@ -121,7 +121,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FZOnRecipeDiscovered, UZCraftingCom
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FZOnTradeskillsChanged, UZCraftingComponent*, Crafting);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FZOnTradeskillLevelUp, UZCraftingComponent*, Crafting, FGameplayTag, Skill, int32, NewLevel);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FZOnCraftingProgressChanged, UZCraftingComponent*, Crafting);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FZOnCraftingResult, UZCraftingComponent*, Crafting, EZCraftingResult, Result, UZCraftingRecipe*, Recipe, const FText&, Message);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FZOnCraftingResult, UZCraftingComponent*, Crafting, EZCraftingResult, Result, UZCraftingRecipe*, Recipe, const FText&, Message, bool, bNewDiscovery);
 
 /**
  *  A player's crafting: combining items into new ones, their tradeskills and the recipes they found. On the PlayerState, so it survives dying
@@ -250,7 +250,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Crafting")
 	FZOnCraftingProgressChanged OnCraftingProgressChanged;
 
-	/** A combine finished or failed (on the owner's machine), with a message for the player */
+	/** A combine finished or failed (on the owner's machine), with a message for the player; New Discovery is true the first time the recipe was made */
 	UPROPERTY(BlueprintAssignable, Category = "Crafting")
 	FZOnCraftingResult OnCraftingResult;
 
@@ -267,7 +267,7 @@ protected:
 
 	/** Server → owner: how a combine went */
 	UFUNCTION(Client, Reliable)
-	void ClientCraftingResult(EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message);
+	void ClientCraftingResult(EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message, bool bNewDiscovery);
 
 	UFUNCTION()
 	void OnRep_CraftingProgress();
@@ -327,7 +327,13 @@ private:
 	void FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingResult LastResult, const FText& Reason = FText::GetEmpty());
 
 	/** Server: tells the owner how a combine went (and logs it) */
-	void SendResult(EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message);
+	void SendResult(EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message, bool bNewDiscovery = false);
+
+	/** Server: starts the recipe's working cue (e.g. hammering) on the player, at the station if it needs one */
+	void StartWorkingCue(const UZCraftingRecipe& Recipe);
+
+	/** Server: stops the working cue, if one is playing */
+	void StopWorkingCue();
 
 	/** True if the character is there and alive */
 	bool CanCraftNow() const;
@@ -366,4 +372,7 @@ private:
 	TMap<FGameplayTag, int32> RequestExperience;
 	TMap<FGameplayTag, int32> RequestStartLevels;
 	FTimerHandle CraftTimer;
+
+	/** Server: the working cue playing while crafting, to stop it again */
+	FGameplayTag ActiveWorkingCue;
 };

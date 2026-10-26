@@ -2,7 +2,7 @@
 
 How the character's animations are connected, from the mouse button to the pose you see.
 
-**Last updated:** 2026-10-25 (rifle aim walk and rifle aim offset added)
+**Last updated:** 2026-10-26 (steps for montages on the upper body: reload, take out, fire)
 
 The chain has three layers, each passing data to the next.
 
@@ -54,7 +54,7 @@ Inside the blend space, Direction and Speed pick which walk to play: forward, si
 
 ### Slot
 
-Where montages (firing, reloading) will be played later.
+Where montages play: the weapon's Fire, Reload and Equip Montage (set in its Data Asset, see AUDIO.md). Right now it's the whole body, so a reload would stop the legs. "Montages on the upper body" below changes that.
 
 ### AO_Rifle: up/down aim
 
@@ -67,6 +67,24 @@ The AO poses only store a **difference from a base pose**. See "Aim offsets" in 
 ### Control Rig
 
 Foot IK places the feet on the ground. It comes last so it always gets the final say on the feet.
+
+## Montages on the upper body
+
+So the legs keep walking (and the feet keep their blend space) while the arms reload, take out a weapon or fire. Do this once in ABP_Manny:
+
+1. **Make the slot:** open ABP_Manny → **Window → Anim Slot Manager** → **Add Slot** → name it `UpperBody` (in DefaultGroup) → **Save**.
+2. **Keep a copy of the walking pose:** in the AnimGraph, right-click empty space → search **New Save cached pose** → name it `LocomotionPose`. Connect **Main States**' output into it (instead of into the Slot).
+3. Right-click → search **Use cached pose 'LocomotionPose'**. Do it **twice**, so there are two of these nodes.
+4. Right-click → **Layered blend per bone**. Connect:
+   - the first **Use cached pose** into its **Base Pose**
+   - the second one into a new **Slot** node (right-click → **Slot 'DefaultSlot'**; in its Details set **Slot Name** to `DefaultGroup.UpperBody`), and that Slot into **Blend Poses 0**
+5. Select the **Layered blend per bone** → Details → **Layer Setup → Index [0] → Branch Filters → +** → **Bone Name** `spine_01`, **Blend Depth** `0`. Tick **Mesh Space Rotation Blend**.
+6. Connect the **Layered blend per bone** into the old **Slot** node (DefaultSlot, kept for whole-body montages like a dodge roll later), so the chain is: Layered blend per bone → Slot (DefaultSlot) → AO_Rifle → Control Rig → Output Pose. **Compile** and **Save**.
+7. **In each upper-body montage** (reload, take out, fire): open it → in the montage panel, the slot on the left says `DefaultGroup.DefaultSlot` → click it → pick `DefaultGroup.UpperBody` → **Save**.
+
+Whole-body montages (a dodge roll, a death animation) keep `DefaultGroup.DefaultSlot`.
+
+**A take-out (equip) montage must stay in place:** in its animation's **Asset Details**, **Enable Root Motion** stays off. One that moves the character isn't played (AUDIO.md explains why).
 
 ## Summary
 

@@ -859,14 +859,14 @@ void UZInventoryScreenWidget::HandleInventoryChanged(UZInventoryComponent* Chang
 	}
 }
 
-void UZInventoryScreenWidget::HandleCraftingResult(UZCraftingComponent* ChangedCrafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message)
+void UZInventoryScreenWidget::HandleCraftingResult(UZCraftingComponent* ChangedCrafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message, bool bNewDiscovery)
 {
 	if (ResultText)
 	{
 		ResultText->SetText(Message);
 	}
 
-	OnCraftingResult(Result, Message);
+	OnCraftingResult(Result, Message, bNewDiscovery);
 }
 
 void UZInventoryScreenWidget::HandleCraftingProgressChanged(UZCraftingComponent* ChangedCrafting)

@@ -1,7 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "AI/ZAICharacter.h"
-#include "AbilitySystemComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
@@ -11,6 +10,7 @@
 #include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
 #include "AI/ZAIController.h"
+#include "AbilitySystem/ZAbilitySystemComponent.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_MeleeAttack.h"
@@ -21,7 +21,7 @@
 AZAICharacter::AZAICharacter()
 {
 	// the ability system lives on the character itself (AI has no PlayerState); Minimal: only tags and cues replicate
-	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+	AbilitySystemComponent = CreateDefaultSubobject<UZAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
 	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Minimal);
 
@@ -149,6 +149,12 @@ void AZAICharacter::HandleOutOfHealth(AActor* DamageInstigator)
 
 	bIsDead = true;
 	UE_LOG(LogZSurvivalGame, Log, TEXT("AI character '%s' died (killed by '%s')"), *GetNameSafe(this), *GetNameSafe(DamageInstigator));
+
+	// death sound and effects for everyone
+	FGameplayCueParameters DeathCue;
+	DeathCue.Instigator = DamageInstigator;
+	DeathCue.EffectCauser = DamageInstigator;
+	UZGameplayCueLibrary::ExecuteCue(this, CharacterCues.DeathCue, DeathCue);
 
 	// State.Dead blocks every ability; it replicates so clients know too
 	AbilitySystemComponent->CancelAllAbilities();

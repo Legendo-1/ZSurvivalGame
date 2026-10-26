@@ -54,7 +54,15 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Trait_Category_Combat, "Trait.Category.Combat", "Damage, recoil and reloading");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Trait_Category_Crafting, "Trait.Category.Crafting", "Crafting and tradeskills");
 
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Fire, "GameplayCue.Weapon.Fire", "A weapon fired (Location = muzzle, Normal = shot direction)");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Impact, "GameplayCue.Weapon.Impact", "A shot hit something (Location = impact point, Normal = surface normal)");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_Hit, "GameplayCue.Character.Hit", "A character took damage (Location = hit point, RawMagnitude = damage)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Fire, "GameplayCue.Weapon.Fire", "A weapon fired (Location = muzzle, Normal = shot direction, Source Object = the weapon data)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Impact, "GameplayCue.Weapon.Impact", "A shot hit something (Location = impact point, Normal = surface normal, Physical Material = the surface)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Reload, "GameplayCue.Weapon.Reload", "A reload started (Raw Magnitude = seconds it takes, Source Object = the weapon data)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Equip, "GameplayCue.Weapon.Equip", "A weapon was taken out (Source Object = the weapon data; its Equip Montage plays too)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_Hit, "GameplayCue.Character.Hit", "A character took damage (Location = hit point, Raw Magnitude = damage)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_Death, "GameplayCue.Character.Death", "A character died (Instigator = the killer)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_LevelUp, "GameplayCue.Character.LevelUp", "A player reached a new level (Raw Magnitude = the level)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Item_Pickup, "GameplayCue.Item.Pickup", "A player picked something up (Source Object = the item, Raw Magnitude = how many)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Item_Use, "GameplayCue.Item.Use", "A player used up an item, e.g. a bandage (Source Object = the item)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Crafting_Working, "GameplayCue.Crafting.Working", "Lasts while a player crafts (Location = the station, if the recipe needs one; Source Object = the recipe)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Crafting_Done, "GameplayCue.Crafting.Done", "A combine made something (Source Object = the recipe, Raw Magnitude = how many crafts)");
 }

@@ -13,6 +13,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "AbilitySystemComponent.h"
+#include "Animation/AnimMontage.h"
 #include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
 #include "ZSurvivalGameGameMode.h"
@@ -336,6 +337,12 @@ void AZSurvivalGameCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	bIsDead = true;
 	UE_LOG(LogZSurvivalGame, Log, TEXT("Player '%s' died (killed by '%s')"), *GetNameSafe(this), *GetNameSafe(DamageInstigator));
 
+	// death sound and effects for everyone
+	FGameplayCueParameters DeathCue;
+	DeathCue.Instigator = DamageInstigator;
+	DeathCue.EffectCauser = DamageInstigator;
+	UZGameplayCueLibrary::ExecuteCue(this, CharacterCues.DeathCue, DeathCue);
+
 	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
 	{
 		// State.Dead blocks every ability (see UZGameplayAbility); it replicates so clients block them too
@@ -453,7 +460,43 @@ void AZSurvivalGameCharacter::EquipWeaponItem(UZItemInstance* Item)
 		EquippedWeapon = Weapon;
 		EquippedItem = Item;
 		CurrentWeaponType = WeaponFragment->WeaponData->WeaponType;
+
+		// the weapon's equip cue: its sound for everyone, and its Equip Montage on every machine (HandleGameplayCue)
+		FGameplayCueParameters EquipCue;
+		EquipCue.Instigator = this;
+		EquipCue.EffectCauser = Weapon;
+		EquipCue.SourceObject = WeaponFragment->WeaponData;
+		UZGameplayCueLibrary::ExecuteCue(this, WeaponFragment->WeaponData->EquipCue, EquipCue);
 	}
+}
+
+void AZSurvivalGameCharacter::HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters)
+{
+	// the animation for taking a weapon out comes with its equip cue, so every machine plays it at the moment it happens
+	// (a player who comes near later doesn't see an old one)
+	if (EventType == EGameplayCueEvent::Executed && GameplayCueTag.MatchesTag(ZGameplayTags::GameplayCue_Weapon_Equip) && !bIsDead)
+	{
+		const UZWeaponData* WeaponData = Cast<UZWeaponData>(Parameters.SourceObject.Get());
+		if (UAnimMontage* EquipMontage = WeaponData ? WeaponData->EquipMontage.Get() : nullptr)
+		{
+			// it starts on every machine on its own, without prediction, so one that moves the character would put its owner out of step with the server
+			if (EquipMontage->HasRootMotion())
+			{
+				UE_LOG(LogZSurvivalGame, Warning, TEXT("'%s' doesn't play the equip animation '%s': it moves the character (root motion), and take-out animations must stay in place"), *GetNameSafe(this), *GetNameSafe(EquipMontage));
+			}
+			else if (PlayAnimMontage(EquipMontage) > 0.f)
+			{
+				UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' plays the equip animation '%s'"), *GetNameSafe(this), *GetNameSafe(EquipMontage));
+			}
+			else
+			{
+				UE_LOG(LogZSurvivalGame, Warning, TEXT("'%s' can't play the equip animation '%s' (made for another skeleton?)"), *GetNameSafe(this), *GetNameSafe(EquipMontage));
+			}
+		}
+	}
+
+	// the default: Blueprint functions named after the tag
+	IGameplayCueInterface::HandleGameplayCue(Self, GameplayCueTag, EventType, Parameters);
 }
 
 void AZSurvivalGameCharacter::UnequipWeapon()

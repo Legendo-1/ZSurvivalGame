@@ -12,6 +12,7 @@
 #include "ZSurvivalGame.h"
 #include "ZSurvivalGameTypes.h"
 #include "AbilitySystem/ZCombatLibrary.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemInstance.h"
 
@@ -168,6 +169,12 @@ bool AZPickup::GiveTo(APawn* Pawn)
 	}
 
 	UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' picked up %s x%d"), *GetNameSafe(Pawn), *GetNameSafe(Item.Item), NumAdded);
+
+	// the item's pickup sound, on the player who took it
+	FGameplayCueParameters PickupCue;
+	PickupCue.SourceObject = Item.Item;
+	PickupCue.RawMagnitude = NumAdded;
+	UZGameplayCueLibrary::ExecuteCue(Pawn, Item.Item->PickupCue, PickupCue);
 
 	// whatever didn't fit stays on the ground
 	Item.Count -= NumAdded;

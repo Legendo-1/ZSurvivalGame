@@ -6,6 +6,7 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "ZSurvivalGameTypes.h"
+#include "AbilitySystem/ZGameplayTags.h"
 #include "ZWeaponData.generated.h"
 
 class USkeletalMesh;
@@ -58,9 +59,31 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
 	TObjectPtr<UAnimMontage> FireMontage;
 
-	/** Character animation played while reloading (optional) */
+	/** Character animation played while reloading (optional; it's sped up or slowed down to the reload time) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
 	TObjectPtr<UAnimMontage> ReloadMontage;
+
+	/** Character animation played when the weapon is taken out (optional; plays with the Equip Cue). It must stay in place: one that moves the character (root motion) isn't played */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
+	TObjectPtr<UAnimMontage> EquipMontage;
+
+	/** --- EFFECTS: what plays is a GameplayCue Notify asset with the tag (see AUDIO.md); a child tag gives this weapon its own. Empty = nothing --- */
+
+	/** Each shot, e.g. the bang and the muzzle flash (Location = the muzzle) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Weapon.Fire"))
+	FGameplayTag FireCue = ZGameplayTags::GameplayCue_Weapon_Fire;
+
+	/** Where a shot hits something (Location = the hit point; the surface's physical material can pick e.g. a metal or a wood sound) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Weapon.Impact"))
+	FGameplayTag ImpactCue = ZGameplayTags::GameplayCue_Weapon_Impact;
+
+	/** A reload starts (Raw Magnitude = the seconds it takes). With a reload animation, sounds put in the animation line up better */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Weapon.Reload"))
+	FGameplayTag ReloadCue = ZGameplayTags::GameplayCue_Weapon_Reload;
+
+	/** The weapon is taken out; the Equip Montage plays with it */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Weapon.Equip"))
+	FGameplayTag EquipCue = ZGameplayTags::GameplayCue_Weapon_Equip;
 
 	/** --- FIRING --- */
 
@@ -131,4 +154,8 @@ public:
 	/** Extra damage per upgrade level: 0.1 = +10% each */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Upgrades", meta = (ClampMin = "0"))
 	float DamagePerUpgradeLevel = 0.1f;
+
+#if WITH_EDITOR
+	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+#endif
 };

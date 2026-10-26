@@ -7,6 +7,7 @@
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "AbilitySystem/ZGameplayEffect_Damage.h"
 #include "AbilitySystem/ZGameplayEffect_Heal.h"
 #include "AbilitySystem/ZGameplayTags.h"
@@ -84,7 +85,7 @@ bool UZCombatLibrary::ApplyDamage(AActor* Source, AActor* Target, float Damage, 
 	Spec.Data->SetSetByCallerMagnitude(ZGameplayTags::SetByCaller_Damage, Damage);
 	EffectASC->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), TargetASC);
 
-	// hit visuals and sounds for everyone (needs a GameplayCue Notify asset with this tag)
+	// hit sounds and effects for everyone: the target's own hit cue (e.g. a zombie's differs from a player's)
 	FGameplayCueParameters CueParams;
 	CueParams.Location = Hit.bBlockingHit ? FVector(Hit.ImpactPoint) : Target->GetActorLocation();
 	CueParams.Normal = Hit.ImpactNormal;
@@ -92,7 +93,7 @@ bool UZCombatLibrary::ApplyDamage(AActor* Source, AActor* Target, float Damage, 
 	CueParams.Instigator = Source;
 	CueParams.EffectCauser = Source;
 	CueParams.PhysicalMaterial = Hit.PhysMaterial.Get();
-	TargetASC->ExecuteGameplayCue(ZGameplayTags::GameplayCue_Character_Hit, CueParams);
+	UZGameplayCueLibrary::ExecuteCue(Target, UZGameplayCueLibrary::GetCharacterCues(Target).HitCue, CueParams);
 
 	return true;
 }

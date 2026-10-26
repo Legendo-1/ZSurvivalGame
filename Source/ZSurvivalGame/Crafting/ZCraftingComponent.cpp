@@ -13,6 +13,7 @@
 #include "ZSurvivalGame.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZCombatLibrary.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "Crafting/ZCraftingRecipe.h"
 #include "Crafting/ZCraftingStation.h"
@@ -124,6 +125,8 @@ void UZCraftingComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		World->GetTimerManager().ClearTimer(CraftTimer);
 	}
+
+	StopWorkingCue();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -421,9 +424,9 @@ void UZCraftingComponent::ServerCancelCrafting_Implementation()
 	}
 }
 
-void UZCraftingComponent::ClientCraftingResult_Implementation(EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message)
+void UZCraftingComponent::ClientCraftingResult_Implementation(EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message, bool bNewDiscovery)
 {
-	OnCraftingResult.Broadcast(this, Result, Recipe, Message);
+	OnCraftingResult.Broadcast(this, Result, Recipe, Message, bNewDiscovery);
 }
 
 void UZCraftingComponent::OnRep_CraftingProgress()
@@ -723,6 +726,7 @@ void UZCraftingComponent::StartCrafting(UZCraftingRecipe* Recipe, int32 Count, T
 
 	CraftingProgress.Recipe = Recipe;
 	CraftingProgress.RemainingCount = Count;
+	StartWorkingCue(*Recipe);
 	StartNextCraft();
 }
 
@@ -803,6 +807,7 @@ EZCraftingResult UZCraftingComponent::CraftOnce(UZCraftingRecipe* Recipe, FText&
 void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingResult LastResult, const FText& Reason)
 {
 	GetWorld()->GetTimerManager().ClearTimer(CraftTimer);
+	StopWorkingCue();
 
 	if (IsCrafting())
 	{
@@ -871,6 +876,17 @@ void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingRes
 		MessageParts.Add(LastResultText);
 	}
 
+	// the recipe's done cue, e.g. a finishing clank, for everyone near the player
+	if (NumCrafted > 0 && Recipe)
+	{
+		FGameplayCueParameters DoneCue;
+		DoneCue.SourceObject = Recipe;
+		DoneCue.RawMagnitude = NumCrafted;
+		UZGameplayCueLibrary::ExecuteCue(GetOwner(), Recipe->DoneCue, DoneCue);
+	}
+
+	const bool bNewDiscovery = NumCrafted > 0 && bRequestDiscovered;
+
 	RequestItems.Reset();
 	RequestNotes.Reset();
 	RequestExperience.Reset();
@@ -879,15 +895,44 @@ void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingRes
 	NumCrafted = 0;
 	NumLuckyCrafts = 0;
 
-	SendResult(Result, Recipe, FText::Join(FText::FromString(TEXT(" ")), MessageParts));
+	SendResult(Result, Recipe, FText::Join(FText::FromString(TEXT(" ")), MessageParts), bNewDiscovery);
 }
 
-void UZCraftingComponent::SendResult(EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message)
+void UZCraftingComponent::SendResult(EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message, bool bNewDiscovery)
 {
 	UE_LOG(LogZSurvivalGame, Verbose, TEXT("Crafting for '%s': %s (%s) %s"), *GetNameSafe(GetOwner()), *UEnum::GetValueAsString(Result), *GetNameSafe(Recipe), *Message.ToString());
 
 	// for the host's own player this runs right here
-	ClientCraftingResult(Result, Recipe, Message);
+	ClientCraftingResult(Result, Recipe, Message, bNewDiscovery);
+}
+
+void UZCraftingComponent::StartWorkingCue(const UZCraftingRecipe& Recipe)
+{
+	StopWorkingCue();
+
+	// at the station the recipe needs (e.g. hammering at the workbench), otherwise on the player
+	FGameplayCueParameters WorkingCue;
+	WorkingCue.SourceObject = &Recipe;
+	if (AZCraftingStation* Station = FindNearbyStation(Recipe.RequiredStation))
+	{
+		WorkingCue.Location = Station->GetActorLocation();
+		WorkingCue.EffectCauser = Station;
+	}
+
+	// a lasting cue, so players who come near while it's being made hear it too
+	if (UZGameplayCueLibrary::AddCue(GetOwner(), Recipe.WorkingCue, WorkingCue))
+	{
+		ActiveWorkingCue = Recipe.WorkingCue;
+	}
+}
+
+void UZCraftingComponent::StopWorkingCue()
+{
+	if (ActiveWorkingCue.IsValid())
+	{
+		UZGameplayCueLibrary::RemoveCue(GetOwner(), ActiveWorkingCue);
+		ActiveWorkingCue = FGameplayTag();
+	}
 }
 
 bool UZCraftingComponent::CanCraftNow() const

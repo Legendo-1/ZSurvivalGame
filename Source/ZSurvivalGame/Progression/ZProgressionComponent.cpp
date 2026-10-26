@@ -9,7 +9,9 @@
 #include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
 #include "AbilitySystem/ZAttributeSet.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "AbilitySystem/ZGameplayEffect_Traits.h"
+#include "AbilitySystem/ZGameplayTags.h"
 #include "Progression/ZProgressionSettings.h"
 #include "Progression/ZProgressionSubsystem.h"
 #include "Progression/ZTraitDefinition.h"
@@ -112,6 +114,11 @@ void UZProgressionComponent::AddExperience(int32 Amount)
 	{
 		UE_LOG(LogZSurvivalGame, Log, TEXT("'%s' reached level %d"), *GetNameSafe(GetOwner()), NewLevel);
 		OnLevelUp.Broadcast(this, NewLevel);
+
+		// a level-up sound and effect on the player's character, for everyone
+		FGameplayCueParameters LevelUpCue;
+		LevelUpCue.RawMagnitude = NewLevel;
+		UZGameplayCueLibrary::ExecuteCue(GetOwner(), ZGameplayTags::GameplayCue_Character_LevelUp, LevelUpCue);
 	}
 
 	OnProgressionChanged.Broadcast(this);

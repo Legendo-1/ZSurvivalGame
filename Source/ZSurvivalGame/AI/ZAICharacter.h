@@ -7,6 +7,7 @@
 #include "AbilitySystemInterface.h"
 #include "GenericTeamAgentInterface.h"
 #include "ZSurvivalGameTypes.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "ZAICharacter.generated.h"
 
 class AZPickup;
@@ -22,7 +23,7 @@ class UZLootTable;
  *  Each enemy type is a child class or Blueprint that sets its looks and numbers (see AZZombieCharacter)
  */
 UCLASS(Abstract)
-class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface
+class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IZCharacterCuesInterface
 {
 	GENERATED_BODY()
 
@@ -44,6 +45,8 @@ public:
 
 	/** The character's Team */
 	virtual FGenericTeamId GetGenericTeamId() const override;
+
+	virtual const FZCharacterCues& GetCharacterCues() const override { return CharacterCues; }
 
 	/** Server: starts the attack ability if the attack cooldown allows it; returns true if it started */
 	bool TryAttack();
@@ -109,6 +112,10 @@ protected:
 	/** Seconds the body stays after dying */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI", meta = (ClampMin = "0"))
 	float DeadBodyLifeSpan = 10.f;
+
+	/** Its hit and death cues; give each kind of enemy its own (e.g. GameplayCue.Character.Death.Zombie) for its own sounds (see AUDIO.md) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects")
+	FZCharacterCues CharacterCues;
 
 	/** --- MELEE --- */
 

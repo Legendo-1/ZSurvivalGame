@@ -1,8 +1,8 @@
 # Multiplayer & abilities
 
-How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md.
+How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md.
 
-**Last updated:** 2026-10-26 (the HUD section moved to UI.md, with the new inventory screen)
+**Last updated:** 2026-10-26 (more effect events, explained in AUDIO.md)
 
 ## The basic idea
 
@@ -103,15 +103,7 @@ Every ability is blocked while dead.
 
 ## Effects and sounds (GameplayCues)
 
-The code already sends these events to every player. Nothing is shown or heard until a **GameplayCue Notify** asset with the same tag exists, in `Content/GameplayCues`:
-
-| Tag | When | Parameters |
-|---|---|---|
-| `GameplayCue.Weapon.Fire` | A weapon fired | Location = muzzle, Normal = shot direction |
-| `GameplayCue.Weapon.Impact` | A shot hit something | Location = impact point, Normal = surface |
-| `GameplayCue.Character.Hit` | A character took damage | Location = hit point, Raw Magnitude = damage |
-
-To make one: in `Content/GameplayCues`, right-click → **Blueprint Class** → search **GameplayCueNotify_Static** → name it e.g. `GC_Weapon_Fire` → in its Class Defaults set **Gameplay Cue Tag** → override **On Execute** and use the parameters (e.g. **Spawn Sound at Location** with the Location).
+The code sends an event (a GameplayCue tag) to every player for shots, impacts, hits, deaths, reloads, taking out weapons, level-ups, pickups, used items and crafting. Nothing is shown or heard until a **GameplayCue Notify** asset with the same tag exists in `Content/GameplayCues`. AUDIO.md lists every event and explains how to make the sounds, effects and animations.
 
 Until then, the shooter sees **debug lines**: white = shot, yellow dot = hit, red dot = damage dealt (red only on the host, since only the server deals damage). Turn them off in the console with `Z.Weapon.DrawDebug 0`.
 
@@ -127,8 +119,9 @@ The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are expl
 | Looking up/down (aim offset) | The engine sends the aim pitch |
 | Aiming (aim walk/idle) | `bIsAiming`, sent by the server |
 | Weapon type and the weapon in the hands | `CurrentWeaponType` and `EquippedWeapon`, set through `SetWeaponType` |
-| Shots, impacts, hits | GameplayCues, sent by the server |
+| Shots, impacts, hits, deaths, reloads, taking out weapons, crafting, ... | GameplayCues, sent by the server (AUDIO.md) |
 | Attack, fire and reload animations | The ability system plays them for everyone |
+| The animation for taking out a weapon | It comes with the equip GameplayCue |
 | Death (ragdoll) | `bIsDead`, sent by the server |
 | Enemies | They replicate like any character; only their decisions stay on the server |
 
@@ -178,7 +171,7 @@ The item commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZUseItem`, `ZSpa
 
 Not decided in detail. This is the direction, so new systems fit what's already there.
 
-- **Weapon looks:** weapon meshes, muzzle flash, sounds and impacts (GameplayCues), fire and reload animations.
+- **Weapon looks:** weapon meshes, and the sounds, effects and animations themselves. The events that play them are ready (AUDIO.md).
 - **Hit reactions:** enemies flinch or stagger when hit (an ability or GameplayCue triggered by damage).
 - **Downed and revive:** players go down first and teammates can revive them, before dying for real.
 - **Smarter AI:** AI perception (sight and hearing) instead of distance, monsters and human NPCs fighting each other, patrols and ranged attacks, possibly with a StateTree.

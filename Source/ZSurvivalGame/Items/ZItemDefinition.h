@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
+#include "AbilitySystem/ZGameplayTags.h"
 #include "ZItemDefinition.generated.h"
 
 class APawn;
@@ -89,6 +90,16 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item")
 	FVector PickupMeshScale = FVector(1.f);
+
+	/** --- EFFECTS: what plays is a GameplayCue Notify asset with the tag (see AUDIO.md); a child tag gives this item its own. Empty = nothing --- */
+
+	/** A player picks it up (Raw Magnitude = how many) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Item.Pickup"))
+	FGameplayTag PickupCue = ZGameplayTags::GameplayCue_Item_Pickup;
+
+	/** Using it uses one up, e.g. wrapping a bandage or reading a tome (weapons have their weapon data's Equip Cue instead) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Item.Use"))
+	FGameplayTag UseCue = ZGameplayTags::GameplayCue_Item_Use;
 
 	/** What the item can do: add a fragment for each feature (Weapon, Consumable, ...) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Instanced, Category = "Item")

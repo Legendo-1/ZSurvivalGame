@@ -1,7 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ZSurvivalGamePlayerState.h"
-#include "AbilitySystemComponent.h"
+#include "AbilitySystem/ZAbilitySystemComponent.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "Crafting/ZCraftingComponent.h"
 #include "Items/ZInventoryComponent.h"
@@ -10,7 +10,7 @@
 AZSurvivalGamePlayerState::AZSurvivalGamePlayerState()
 {
 	// Mixed: the owning player gets full gameplay effect info (needed for prediction), everyone else only tags and cues
-	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+	AbilitySystemComponent = CreateDefaultSubobject<UZAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
 	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 

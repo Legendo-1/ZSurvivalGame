@@ -73,9 +73,10 @@ Tie base defense directly to the expedition loop:
 * \[x\] Hitscan shooting and reloading with pistol and rifle weapon data assets, headshots, teams (no friendly fire).  
 * \[x\] Death as a ragdoll; players respawn after a few seconds.  
 * \[x\] Rifle aim strafe animations (2D BlendSpace for walking sideways/backwards when aiming) and aim offset.  
+* \[x\] Sound and effect events (GameplayCues) for shots, impacts, reloads, taking out a weapon, hits, deaths, level-ups, pickups, used items and crafting, set per weapon, character, item and recipe; UI sounds; a take-out animation per weapon (see AUDIO.md).  
 * \[ \] **Open Phase 1 Items:**  
   * Pistol aim strafe animations and aim offset.  
-  * Weapon meshes, shot effects and sounds (GameplayCues), fire and reload animations.
+  * Weapon meshes, the sounds and effects themselves (GameplayCue Notify assets), fire, reload and take-out animations on the upper body.
 
 ### **Phase 2: Item & Mod Data Architecture (IN PROGRESS)**
 

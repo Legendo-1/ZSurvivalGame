@@ -11,6 +11,7 @@
 class AZCraftingStation;
 class UInputAction;
 class UInputMappingContext;
+class USoundBase;
 class UUserWidget;
 class UZInventoryScreenWidget;
 class UZSurvivalHUDWidget;
@@ -66,6 +67,26 @@ protected:
 	/** The inventory screen, made the first time it's opened */
 	UPROPERTY()
 	TObjectPtr<UZInventoryScreenWidget> InventoryScreen;
+
+	/** --- UI SOUNDS: only this player hears them, not in the world (sounds others hear are GameplayCues, see AUDIO.md). Empty = silent --- */
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI|Sounds")
+	TObjectPtr<USoundBase> InventoryOpenSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI|Sounds")
+	TObjectPtr<USoundBase> InventoryCloseSound;
+
+	/** A combine made something */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI|Sounds")
+	TObjectPtr<USoundBase> CraftedSound;
+
+	/** A combine made something for the first time (instead of Crafted Sound; empty: Crafted Sound plays) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI|Sounds")
+	TObjectPtr<USoundBase> DiscoverySound;
+
+	/** A combine made nothing (the items don't go together, something is missing, ...) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI|Sounds")
+	TObjectPtr<USoundBase> CraftFailedSound;
 
 	/** Seconds a message (e.g. "Crafted Bandage x1.") stays on screen */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI", meta = (ClampMin = "0", Units = "s"))
@@ -152,7 +173,10 @@ protected:
 	void BindToPlayerState();
 
 	UFUNCTION()
-	void HandleCraftingResult(UZCraftingComponent* Crafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message);
+	void HandleCraftingResult(UZCraftingComponent* Crafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message, bool bNewDiscovery);
+
+	/** Plays a UI sound for this player only (does nothing if it's empty) */
+	void PlayUISound(USoundBase* Sound) const;
 
 	UFUNCTION()
 	void HandleLevelUp(UZProgressionComponent* Progression, int32 NewLevel);

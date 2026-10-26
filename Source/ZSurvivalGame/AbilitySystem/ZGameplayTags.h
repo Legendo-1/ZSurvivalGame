@@ -67,8 +67,17 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Trait_Category_Combat);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Trait_Category_Crafting);
 
-	// Gameplay cues: visuals and sounds everyone sees (made as GameplayCue Notify assets with the same tag)
+	// Gameplay cues: the moments sounds, particles and camera shakes play for everyone (GameplayCue Notify assets with the same tag, see AUDIO.md)
+	// Data assets can use a child tag (e.g. GameplayCue.Weapon.Fire.Rifle); without its own notify, the parent's plays
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Fire);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Impact);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Reload);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Equip);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Character_Hit);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Character_Death);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Character_LevelUp);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Item_Pickup);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Item_Use);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Crafting_Working);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Crafting_Done);
 }
