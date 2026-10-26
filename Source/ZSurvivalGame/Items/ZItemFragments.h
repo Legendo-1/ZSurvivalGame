@@ -10,7 +10,7 @@ class UGameplayEffect;
 class UZWeaponData;
 
 /**
- *  Makes the item a weapon: equipping it puts the weapon in the character's hands
+ *  Makes the item a weapon: using (equipping) it puts the weapon in the character's hands
  *  Each weapon item keeps its own magazine ammo (Item.Stat.MagazineAmmo), starting full
  */
 UCLASS(meta = (DisplayName = "Weapon"))
@@ -25,6 +25,15 @@ public:
 	TObjectPtr<UZWeaponData> WeaponData;
 
 	virtual void OnInstanceCreated(UZItemInstance* Instance) const override;
+
+	/** Puts the weapon in the user's hands */
+	virtual bool OnUse(UZItemInstance* Instance, APawn* User) const override;
+
+	virtual FText GetUseActionName() const override;
+
+#if WITH_EDITOR
+	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;
+#endif
 };
 
 /**
@@ -54,4 +63,53 @@ public:
 	virtual bool OnUse(UZItemInstance* Instance, APawn* User) const override;
 
 	virtual bool ShouldConsumeOnUse() const override { return bConsumeOnUse; }
+
+	virtual FText GetUseActionName() const override;
+};
+
+/**
+ *  Gives the item durability (Item.Stat.Durability), starting full. Tools lose some each time a recipe uses them
+ *  Only for items that don't stack, since each one keeps its own durability
+ */
+UCLASS(meta = (DisplayName = "Durability"))
+class UZItemFragment_Durability : public UZItemFragment
+{
+	GENERATED_BODY()
+
+public:
+
+	/** Durability of a new item */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Durability", meta = (ClampMin = "1"))
+	int32 MaxDurability = 20;
+
+	/** Removed from the inventory when its durability runs out; otherwise it stays, broken, until it's repaired */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Durability")
+	bool bBreaksWhenEmpty = true;
+
+	virtual void OnInstanceCreated(UZItemInstance* Instance) const override;
+
+#if WITH_EDITOR
+	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;
+#endif
+};
+
+/**
+ *  Makes the item a tool. Recipes ask for a kind of tool by its tags (e.g. Item.Tool.Screwdriver) and sometimes a minimum quality,
+ *  so better tools (found in hidden places or crafted) open up harder recipes
+ *  Give tools a Durability fragment too if they should wear out
+ */
+UCLASS(meta = (DisplayName = "Tool"))
+class UZItemFragment_Tool : public UZItemFragment
+{
+	GENERATED_BODY()
+
+public:
+
+	/** How good the tool is: 1 = basic, 2 = precision, 3 = advanced, ... It meets every recipe asking for this quality or less */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Tool", meta = (ClampMin = "1"))
+	int32 Quality = 1;
+
+#if WITH_EDITOR
+	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;
+#endif
 };

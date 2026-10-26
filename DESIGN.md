@@ -80,7 +80,7 @@ Tie base defense directly to the expedition loop:
 ### **Phase 2: Item & Mod Data Architecture (IN PROGRESS)**
 
 * \[x\] Item data assets in C++ with fragments (weapon, consumable), an inventory on the PlayerState that only the server changes, reserve ammo, pickups, the interact key and zombie loot (see ITEMS.md).  
-* \[ \] Crafting recipe data assets.  
+* \[x\] Crafting by combining items (hidden recipes, Anarchy Online style) with tools of different quality that wear out, crafting stations, and tradeskills that are a hard requirement and level up by crafting (see CRAFTING.md).  
 * \[ \] Implement weapon socket system reading attached ModData structs to alter fire modes and damage types.
 
 ### **Phase 3: Loot, Harvest, & Crafting Loops**

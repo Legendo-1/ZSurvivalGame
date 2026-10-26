@@ -1,17 +1,59 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "UI/ZSurvivalHUDWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "ZSurvivalGameCharacter.h"
+#include "ZSurvivalGamePlayerController.h"
 #include "Interaction/ZInteractionComponent.h"
 #include "Weapons/ZWeapon.h"
+
+void UZSurvivalHUDWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+
+	// no MessageText in the Widget Blueprint: put one above the bottom middle of the screen
+	UCanvasPanel* Canvas = WidgetTree ? Cast<UCanvasPanel>(WidgetTree->RootWidget) : nullptr;
+	if (MessageText || !Canvas)
+	{
+		return;
+	}
+
+	MessageText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("MessageText"));
+	FSlateFontInfo Font = MessageText->GetFont();
+	Font.Size = 15;
+	MessageText->SetFont(Font);
+	MessageText->SetColorAndOpacity(FSlateColor(FLinearColor(0.92f, 0.86f, 0.72f)));
+	MessageText->SetShadowOffset(FVector2D(1.f, 1.f));
+	MessageText->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.8f));
+	MessageText->SetJustification(ETextJustify::Center);
+	MessageText->SetVisibility(ESlateVisibility::Collapsed);
+
+	if (UCanvasPanelSlot* MessageSlot = Canvas->AddChildToCanvas(MessageText))
+	{
+		MessageSlot->SetAnchors(FAnchors(0.5f, 0.8f));
+		MessageSlot->SetAlignment(FVector2D(0.5f, 1.f));
+		MessageSlot->SetAutoSize(true);
+	}
+}
 
 void UZSurvivalHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// messages also show while there's no character (e.g. respawning)
+	if (MessageText)
+	{
+		const AZSurvivalGamePlayerController* PlayerController = Cast<AZSurvivalGamePlayerController>(GetOwningPlayer());
+		const TArray<FText> Messages = PlayerController ? PlayerController->GetRecentMessages() : TArray<FText>();
+		MessageText->SetVisibility(Messages.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		MessageText->SetText(FText::Join(FText::FromString(TEXT("\n")), Messages));
+	}
 
 	// read the stats from whatever character the player currently controls
 	const AZSurvivalGameCharacter* SurvivalCharacter = Cast<AZSurvivalGameCharacter>(GetOwningPlayerPawn());

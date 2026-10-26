@@ -26,8 +26,23 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Ammo, "Item.Type.Ammo", "Ammunition used when reloading");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Material, "Item.Type.Material", "Crafting materials");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Consumable, "Item.Type.Consumable", "Items used up from the inventory, e.g. bandages");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Tool, "Item.Type.Tool", "Tools that recipes need; kept when crafting");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Salvage, "Item.Type.Salvage", "Things found in the world that can be taken apart or combined");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Tool_Screwdriver, "Item.Tool.Screwdriver", "Counts as a screwdriver for recipes");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Tool_AmmoPress, "Item.Tool.AmmoPress", "Counts as an ammo press for recipes");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Stat_MagazineAmmo, "Item.Stat.MagazineAmmo", "Rounds in a weapon item's magazine");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Stat_Durability, "Item.Stat.Durability", "Durability left on an item with a Durability fragment");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Crafting_Station_Workbench, "Crafting.Station.Workbench", "A workbench, e.g. in the hub");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tradeskill, "Tradeskill", "Parent of every tradeskill");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tradeskill_Mechanics, "Tradeskill.Mechanics", "Tools, ammo and mechanical parts");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tradeskill_Electronics, "Tradeskill.Electronics", "Salvaging and building electronics");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tradeskill_Chemistry, "Tradeskill.Chemistry", "Gunpowder, acids and other chemicals");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tradeskill_Medicine, "Tradeskill.Medicine", "Bandages, medkits and other healing");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tradeskill_Weaponsmithing, "Tradeskill.Weaponsmithing", "Weapon upgrades and weapon mods");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Fire, "GameplayCue.Weapon.Fire", "A weapon fired (Location = muzzle, Normal = shot direction)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Impact, "GameplayCue.Weapon.Impact", "A shot hit something (Location = impact point, Normal = surface normal)");

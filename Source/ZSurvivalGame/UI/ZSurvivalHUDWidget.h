@@ -53,6 +53,13 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* StatusText;
 
+	/** The last few messages to the player, one per line, e.g. "Crafted Bandage x1." (optional) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* MessageText;
+
+	/** Adds a MessageText near the bottom of the screen if the Widget Blueprint has none, so messages always show */
+	virtual void NativeOnInitialized() override;
+
 	/** Updates the bars from the owning player's character every frame */
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 

@@ -8,6 +8,8 @@
 #include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
 #include "AbilitySystem/ZCombatLibrary.h"
+#include "AbilitySystem/ZGameplayTags.h"
+#include "Items/ZItemFragments.h"
 #include "Items/ZItemInstance.h"
 #include "Items/ZPickup.h"
 
@@ -131,6 +133,46 @@ int32 UZInventoryComponent::GetStackCount(const UZItemInstance* Instance) const
 	return Index != INDEX_NONE ? Inventory.Entries[Index].StackCount : 0;
 }
 
+int32 UZInventoryComponent::GetMatchingCount(const FZItemRequirement& Requirement) const
+{
+	int32 Total = 0;
+	for (const FZInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (Entry.Instance && Requirement.Matches(Entry.Instance->GetItemDefinition()))
+		{
+			Total += Entry.StackCount;
+		}
+	}
+
+	return Total;
+}
+
+int32 UZInventoryComponent::GetRoomFor(const UZItemDefinition* Item) const
+{
+	if (!Item)
+	{
+		return 0;
+	}
+
+	if (MaxSlots <= 0)
+	{
+		return MAX_int32;
+	}
+
+	// room left in its stacks, plus a full stack per free slot
+	int64 Room = 0;
+	for (const FZInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (Item->IsStackable() && Entry.Instance && Entry.Instance->GetItemDefinition() == Item)
+		{
+			Room += FMath::Max(Item->MaxStackSize - Entry.StackCount, 0);
+		}
+	}
+
+	Room += static_cast<int64>(FMath::Max(MaxSlots - Inventory.Entries.Num(), 0)) * Item->MaxStackSize;
+	return static_cast<int32>(FMath::Min<int64>(Room, MAX_int32));
+}
+
 UZItemInstance* UZInventoryComponent::FindFirstInstance(const UZItemDefinition* Item) const
 {
 	return FindFirstInstanceMatching([Item](const UZItemInstance* Instance) { return Instance->GetItemDefinition() == Item; });
@@ -249,6 +291,43 @@ int32 UZInventoryComponent::RemoveItemInstance(UZItemInstance* Instance, int32 C
 	return Taken;
 }
 
+bool UZInventoryComponent::ReduceDurability(UZItemInstance* Instance, int32 Amount)
+{
+	const UZItemFragment_Durability* Durability = Instance ? Instance->FindFragment<UZItemFragment_Durability>() : nullptr;
+	if (!GetOwner()->HasAuthority() || !Durability || Amount <= 0 || FindEntryIndex(Instance) == INDEX_NONE)
+	{
+		return false;
+	}
+
+	// the stat replicates with the instance; its OnRep refreshes the owner's inventory screen
+	Instance->RemoveStatTagStack(ZGameplayTags::Item_Stat_Durability, Amount);
+	const bool bBroke = Instance->GetDurability() <= 0;
+
+	UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' lost %d durability (%d left)%s"), *GetNameSafe(Instance->GetItemDefinition()), Amount, Instance->GetDurability(), bBroke ? TEXT(" and broke") : TEXT(""));
+
+	if (bBroke && Durability->bBreaksWhenEmpty)
+	{
+		RemoveItemInstance(Instance, GetStackCount(Instance));
+	}
+	else
+	{
+		BroadcastChanged();
+	}
+
+	return bBroke;
+}
+
+bool UZInventoryComponent::DropOnGround(UZItemDefinition* Item, int32 Count)
+{
+	if (!GetOwner()->HasAuthority() || !Item || Count <= 0)
+	{
+		return false;
+	}
+
+	// dropped by a player: picked up again with the interact key, not by standing on it
+	return AZPickup::SpawnPickup(GetWorld(), DropPickupClass, FZItemStack(Item, Count), GetDropLocation(), nullptr, false) != nullptr;
+}
+
 void UZInventoryComponent::UseItem(UZItemInstance* Instance)
 {
 	// on the server this runs right away
@@ -307,11 +386,8 @@ void UZInventoryComponent::ServerDropItem_Implementation(UZItemInstance* Instanc
 		OnItemRemoving.Broadcast(this, Instance);
 	}
 
-	const APawn* Dropper = GetOwningPawn();
-	const FVector DropLocation = Dropper ? Dropper->GetActorLocation() + Dropper->GetActorForwardVector() * DropDistance : GetOwner()->GetActorLocation();
-
 	// dropped by a player: picked up again with the interact key, not by standing on it
-	if (AZPickup::SpawnPickup(GetWorld(), DropPickupClass, FZItemStack(Item, DropCount), DropLocation, bKeepStats ? Instance : nullptr, false))
+	if (AZPickup::SpawnPickup(GetWorld(), DropPickupClass, FZItemStack(Item, DropCount), GetDropLocation(), bKeepStats ? Instance : nullptr, false))
 	{
 		RemoveItemInstance(Instance, DropCount);
 	}
@@ -394,6 +470,12 @@ APawn* UZInventoryComponent::GetOwningPawn() const
 
 	const APlayerState* PlayerState = Cast<APlayerState>(GetOwner());
 	return PlayerState ? PlayerState->GetPawn() : nullptr;
+}
+
+FVector UZInventoryComponent::GetDropLocation() const
+{
+	const APawn* Dropper = GetOwningPawn();
+	return Dropper ? Dropper->GetActorLocation() + Dropper->GetActorForwardVector() * DropDistance : GetOwner()->GetActorLocation();
 }
 
 void UZInventoryComponent::BroadcastChanged()

@@ -56,14 +56,45 @@ public:
 	/** Takes over another instance's stats, e.g. when a dropped weapon is picked up */
 	void CopyStatsFrom(const UZItemInstance* Other);
 
+	/** True if the item has a Durability fragment */
+	UFUNCTION(BlueprintPure, Category = "Item|Durability")
+	bool HasDurability() const;
+
+	/** Durability left (Item.Stat.Durability); 0 for items without durability */
+	UFUNCTION(BlueprintPure, Category = "Item|Durability")
+	int32 GetDurability() const;
+
+	/** Durability of a new item; 0 for items without durability */
+	UFUNCTION(BlueprintPure, Category = "Item|Durability")
+	int32 GetMaxDurability() const;
+
+	/** Durability as 0..1, for UI bars (1 for items without durability) */
+	UFUNCTION(BlueprintPure, Category = "Item|Durability")
+	float GetDurabilityPercent() const;
+
+	/** True if it has durability and it's used up (a broken tool can't be used for crafting) */
+	UFUNCTION(BlueprintPure, Category = "Item|Durability")
+	bool IsBroken() const;
+
 	/** "ID_Rifle (Item.Stat.MagazineAmmo 30)", for logs */
 	FString GetDebugString() const;
 
+protected:
+
+	/** Owner's machine: tells the inventory holding this item that it changed, so inventory screens refresh */
+	void NotifyInventory() const;
+
+	UFUNCTION()
+	void OnRep_ItemDefinition();
+
+	UFUNCTION()
+	void OnRep_StatTags();
+
 private:
 
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing = OnRep_ItemDefinition)
 	TObjectPtr<UZItemDefinition> ItemDefinition;
 
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing = OnRep_StatTags)
 	FZTagStackContainer StatTags;
 };

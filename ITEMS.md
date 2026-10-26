@@ -1,16 +1,16 @@
 # Items & inventory
 
-How items, the inventory, pickups, loot and interacting work, and how to add new ones.
+How items, the inventory, pickups, loot and interacting work, and how to add new ones. Crafting has its own guide: CRAFTING.md.
 
-**Last updated:** 2026-10-26 (items, inventory, pickups, loot, interacting and reserve ammo added)
+**Last updated:** 2026-10-26 (tools, durability and the crafting items added; using a weapon item takes it out)
 
 ## The pieces
 
 | Piece | What it is | Where |
 |---|---|---|
 | **Item definition** (`UZItemDefinition`) | One Data Asset per item: name, description, icon, tags, stack size, auto pickup, look on the ground, and its **fragments** | `Content/Items`, named `ID_...` |
-| **Fragment** (`UZItemFragment`) | A feature of an item. **Weapon** makes it a weapon, **Consumable** makes it usable (heals) | Inside the item definition |
-| **Item instance** (`UZItemInstance`) | One item in an inventory (or one stack). Holds what's special about it as stats, e.g. a weapon's magazine ammo (`Item.Stat.MagazineAmmo`) | Made by the server |
+| **Fragment** (`UZItemFragment`) | A feature of an item. **Weapon** makes it a weapon, **Consumable** makes it usable (heals), **Tool** makes it a tool for recipes (with a quality), **Durability** makes it wear out | Inside the item definition |
+| **Item instance** (`UZItemInstance`) | One item in an inventory (or one stack). Holds what's special about it as stats, e.g. a weapon's magazine ammo (`Item.Stat.MagazineAmmo`) or a tool's durability (`Item.Stat.Durability`) | Made by the server |
 | **Inventory** (`UZInventoryComponent`) | The player's items as stacks. On the **PlayerState**, so it survives dying | On the PlayerState |
 | **Pickup** (`AZPickup`) | Items lying in the world: loot, dropped items, or placed in a level | Spawned, or dragged into a level |
 | **Loot table** (`UZLootTable`) | What an enemy can drop, each entry with a chance | `Content/Items/LootTables`, named `LT_...` |
@@ -24,10 +24,16 @@ How items, the inventory, pickups, loot and interacting work, and how to add new
 | `ID_Ammo_Pistol`, `ID_Ammo_Rifle` | Ammo | 999 | Walking over it |
 | `ID_Cloth`, `ID_Scrap`, `ID_BoneFragment`, `ID_RottenMeat` | Crafting material | 99 | Walking over it |
 | `ID_Bandage` | Consumable, heals 25 | 10 | Interact key |
+| `ID_Medkit` | Consumable, heals 60 | 5 | Interact key |
+| `ID_Screwdriver`, `ID_PrecisionScrewdriver` | Tool (screwdriver, quality 1 / 2, durability 20 / 40) | 1 | Interact key |
+| `ID_AmmoPress` | Tool (ammo press, quality 1, durability 60) | 1 | Interact key |
+| `ID_DuctTape`, `ID_ElectronicParts`, `ID_Gunpowder`, `ID_CircuitBoard` | Crafting material | 20–99 | Walking over it |
+| `ID_BrokenRadio` | Salvage (something to take apart) | 5 | Interact key |
 
 - **Starting items:** pistol, rifle, 36 pistol ammo, 90 rifle ammo, 2 bandages. Change them in BP_ThirdPersonCharacter → Class Defaults → **Survival|Inventory → Starting Items**. A player gets them once; after dying they keep their inventory.
 - **Zombie loot** (`LT_Zombie`): rifle ammo 6–15 (50%), pistol ammo 4–10 (40%), cloth 1–2 (40%), scrap 1 (30%), bone fragments 1–2 (30%), rotten meat 1 (25%). The loot disappears after 2 minutes.
-- On the ground, items are placeholder shapes for now: boxes for weapons and ammo, balls for materials, a small cylinder for bandages. Set **Pickup Mesh** in an item to change it.
+- On the ground, items are placeholder shapes for now (boxes, balls and cylinders). Set **Pickup Mesh** in an item to change it.
+- What the crafting items are for is in CRAFTING.md.
 
 ## Weapons and ammo
 
@@ -51,6 +57,7 @@ How items, the inventory, pickups, loot and interacting work, and how to add new
 
 - The inventory has **UseItem** and **DropItem** (and the character has **EquipItem**) for an inventory screen later. For now there are console commands.
 - **Using** a bandage heals 25 and uses one up. At full health nothing happens and the bandage is kept.
+- **Using** a weapon item takes it out, like its weapon key.
 - **Dropped items** land in front of the player and are picked up with the interact key, not by walking over them. A dropped weapon keeps its magazine.
 
 ## Multiplayer
@@ -81,7 +88,8 @@ A wrong item name lists all the items there are. Numbers can be left out in the 
   1. Make a weapon Data Asset (**ZWeaponData**) with its stats and **Ammo Item**.
   2. Make an item with a **Weapon** fragment pointing to it.
   3. Add the item to **Starting Items** or a loot table.
-- **A new kind of item feature** (armor, durability, mods, ...): a new fragment class in C++ (a child of `UZItemFragment`). Existing items don't change.
+- **A new tool:** see CRAFTING.md → How to add things.
+- **A new kind of item feature** (armor, mods, ...): a new fragment class in C++ (a child of `UZItemFragment`). Existing items don't change.
 - **A new loot table:** Data Asset **ZLootTable** in `Content/Items/LootTables`, then set it on an enemy: Class Defaults → **AI|Loot → Loot Table**.
 - **Items placed in a level:** drag a **Z Pickup** into the level and set its **Item** (item and count) in Details.
 
@@ -89,9 +97,8 @@ A wrong item name lists all the items there are. Numbers can be left out in the 
 
 - **Inventory screen:** it can use `GetItems`, the `OnInventoryChanged` event, `UseItem`, `DropItem` and `EquipItem`.
 - **Carry limits:** `MaxSlots` on the inventory exists (0 = no limit for now); weight could come later.
-- **Crafting:** recipes as data assets that use material items, crafted at stations (interactables) in the hub.
 - **Harvesting:** trees and scrap as interactables that take time and give items.
 - **Storage chests:** an inventory component on a chest, sent to the players using it.
-- **Durability and weapon mods:** stats and fragments on the item instances.
+- **Weapon durability and mods:** more stats and fragments on the item instances (tools already have durability).
 - **Saving:** inventories saved by item ID (the Asset Manager already knows every item).
 - **What dying costs:** for now you keep everything.

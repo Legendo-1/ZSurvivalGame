@@ -31,6 +31,14 @@ public:
 
 	/** True if using the item takes one from the stack */
 	virtual bool ShouldConsumeOnUse() const { return false; }
+
+	/** What using the item is called in the UI, e.g. "Use" or "Equip"; empty if this fragment doesn't make it usable */
+	virtual FText GetUseActionName() const { return FText::GetEmpty(); }
+
+#if WITH_EDITOR
+	/** Checks the fragment fits its item (called when the item is saved or validated) */
+	virtual void ValidateForItem(const class UZItemDefinition* Item, class FDataValidationContext& Context) const {}
+#endif
 };
 
 /**
@@ -94,6 +102,30 @@ public:
 	}
 
 	bool IsStackable() const { return MaxStackSize > 1; }
+
+	/** Name for the UI: Display Name, or the asset name if that's empty */
+	UFUNCTION(BlueprintPure, Category = "Item")
+	FText GetItemName() const;
+
+	/** What using it is called, e.g. "Use" or "Equip"; empty if it can't be used */
+	UFUNCTION(BlueprintPure, Category = "Item")
+	FText GetUseActionName() const;
+
+	/** True if it can be used from the inventory (a fragment does something with it) */
+	UFUNCTION(BlueprintPure, Category = "Item")
+	bool IsUsable() const { return !GetUseActionName().IsEmpty(); }
+
+	/** Its Item.Type.* tag (e.g. Item.Type.Ammo), for sorting and filters; empty if it has none */
+	UFUNCTION(BlueprintPure, Category = "Item")
+	FGameplayTag GetItemTypeTag() const;
+
+	/** Its quality as a tool (from its Tool fragment); 0 if it isn't a tool */
+	UFUNCTION(BlueprintPure, Category = "Item")
+	int32 GetToolQuality() const;
+
+#if WITH_EDITOR
+	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+#endif
 };
 
 /** An item and how many, e.g. for starting items, loot and pickups */

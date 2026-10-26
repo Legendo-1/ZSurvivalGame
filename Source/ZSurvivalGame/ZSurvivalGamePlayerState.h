@@ -9,10 +9,11 @@
 
 class UAbilitySystemComponent;
 class UZAttributeSet;
+class UZCraftingComponent;
 class UZInventoryComponent;
 
 /**
- *  PlayerState that owns the player's ability system, attributes (health, stamina) and inventory
+ *  PlayerState that owns the player's ability system, attributes (health, stamina), inventory and known recipes
  *  They live here instead of on the character so they survive respawns
  */
 UCLASS()
@@ -32,6 +33,10 @@ class AZSurvivalGamePlayerState : public APlayerState, public IAbilitySystemInte
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZInventoryComponent> Inventory;
 
+	/** The recipes the player knows, and crafting them from the inventory */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Crafting", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZCraftingComponent> Crafting;
+
 public:
 
 	AZSurvivalGamePlayerState();
@@ -41,6 +46,8 @@ public:
 	UZAttributeSet* GetAttributeSet() const { return AttributeSet; }
 
 	UZInventoryComponent* GetInventory() const { return Inventory; }
+
+	UZCraftingComponent* GetCrafting() const { return Crafting; }
 
 	/** Server: true once the player got their starting items (so a respawn doesn't give them again) */
 	bool bReceivedStartingItems = false;

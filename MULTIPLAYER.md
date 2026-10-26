@@ -1,8 +1,8 @@
 # Multiplayer & abilities
 
-How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md.
+How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md.
 
-**Last updated:** 2026-10-26 (weapons now come from the inventory, reloading uses reserve ammo, crowded spawns fixed)
+**Last updated:** 2026-10-26 (crafting and tradeskills on the PlayerState, crafting stations, messages on the HUD)
 
 ## The basic idea
 
@@ -14,11 +14,12 @@ How the player's actions, weapons, enemies, health and death work in multiplayer
 
 | What | Lives on | Why |
 |---|---|---|
-| Ability system, health, stamina, inventory | **PlayerState** (`AZSurvivalGamePlayerState`) | Every player has one on every machine, and it survives respawns |
+| Ability system, health, stamina, inventory, crafting and tradeskills | **PlayerState** (`AZSurvivalGamePlayerState`) | Every player has one on every machine, and it survives respawns |
 | Body, camera, input, the weapon in the hands | **Character** (`AZSurvivalGameCharacter`, BP_ThirdPersonCharacter) | The part you control and see |
 | Sprint, aim and speed limit states | **Movement component** (`UZCharacterMovementComponent`) | Sent to the server with every move, so the server moves you at the same speed |
 | Weapon stats | **Weapon Data Assets** (`UZWeaponData`: DA_Pistol, DA_Rifle) | One asset per weapon, easy to tune |
 | A weapon in the hands | **Weapon actor** (`AZWeapon`) | Spawned by the server when a weapon item is equipped, attached to the hand on every machine; the server keeps its ammo |
+| A crafting station | **Station actor** (`AZCraftingStation`, BP_Workbench) | Placed in a level; recipes that need it only work nearby (the server checks the distance) |
 | Enemies' health and attacks | **The enemy itself** (`AZAICharacter`) | Enemies have no PlayerState, so their ability system is on the character |
 | Enemy decisions | **AI controller** (`AZAIController`) | Only exists on the server |
 
@@ -126,6 +127,7 @@ Until then, the shooter sees **debug lines**: white = shot, yellow dot = hit, re
 | `StatusText` | Text | Optional | "You died. Respawning..." while dead |
 | `InteractionText` | Text | Optional | "[E] Pick up Rifle Ammo x15" while looking at something to interact with |
 | `InteractionProgress` | Progress Bar | Optional | Fills while holding the interact key on an interaction that takes time |
+| `MessageText` | Text | Optional | The last few messages to the player, e.g. "Crafted Bandage x1." (if the HUD has none, one is added above the bottom middle of the screen) |
 
 ## What the other players see
 
@@ -173,7 +175,9 @@ The **Server** window is the host. The **Client** window is the second player.
 | `Z.Weapon.DrawDebug 0` / `1` | Hides / shows the shot debug lines |
 | `log LogZSurvivalGame Verbose` | Writes every shot, reload, pickup and inventory change to the Output Log |
 
-The item commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZUseItem`, `ZSpawnPickup`) are in ITEMS.md.
+The item commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZUseItem`, `ZSpawnPickup`) are in ITEMS.md, the crafting commands (`ZCombine`, `ZSkills`, ...) in CRAFTING.md.
+
+**Automated test runs:** `-ExecCmds` runs every command at once at startup, before a client has joined. `ZDelay 5 <command>` runs a command later, and `ZOnClients <command>` (host) runs it on every client, e.g. `ZDelay 12 ZOnClients ZSkills`.
 
 ## Plan: what isn't built yet
 
@@ -185,7 +189,7 @@ Not decided in detail. This is the direction, so new systems fit what's already 
 - **Smarter AI:** AI perception (sight and hearing) instead of distance, monsters and human NPCs fighting each other, patrols and ranged attacks, possibly with a StateTree.
 - **Weapon mods and damage types** (acid, electric): GameplayEffects with tags (Blueprint children of `UZGameplayEffect_Damage`). Effects everyone sees are GameplayCues.
 - **Armor weight tiers:** attributes changed by the armor's GameplayEffect, e.g. slower dodges for heavy armor.
-- **Inventory screen, crafting, harvesting, storage:** built on the item system (plan in ITEMS.md).
+- **Inventory screen, harvesting, storage:** built on the item system (plans in ITEMS.md and CRAFTING.md).
 - **Spawn protection:** a few seconds without damage after respawning, so enemies at a Player Start can't kill a player again right away.
 - **Hub noise/heat and sieges:** values only the server keeps, sent to everyone through the GameState. Spawners can be started by a siege.
 - **Hosting and joining over the internet:** right now only in the editor. Real hosting needs an online service (Steam or Epic Online Services).

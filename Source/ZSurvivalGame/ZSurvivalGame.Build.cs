@@ -18,6 +18,7 @@ public class ZSurvivalGame : ModuleRules
 			"GameplayTags",
 			"GameplayTasks",
 			"NetCore",
+			"DeveloperSettings",
 			"AIModule",
 			"StateTreeModule",
 			"GameplayStateTreeModule",

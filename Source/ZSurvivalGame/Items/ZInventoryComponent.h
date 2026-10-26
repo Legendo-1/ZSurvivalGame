@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "Net/Serialization/FastArraySerializer.h"
 #include "Items/ZItemDefinition.h"
+#include "Items/ZItemRequirement.h"
 #include "ZInventoryComponent.generated.h"
 
 class AZPickup;
@@ -139,6 +140,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetMaxSlots() const { return MaxSlots; }
 
+	/** How many items count toward the requirement (e.g. all cloth, or every item tagged Item.Tool.Screwdriver), over all stacks */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	int32 GetMatchingCount(const FZItemRequirement& Requirement) const;
+
+	/** How many more of this item fit (room in its stacks plus free slots); MAX_int32 if there's no slot limit */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	int32 GetRoomFor(const UZItemDefinition* Item) const;
+
 	/** --- CHANGING (server only) --- */
 
 	/** Adds items, filling existing stacks first. Returns how many fit */
@@ -155,6 +164,14 @@ public:
 	/** Takes from this instance's stack. Returns how many were taken */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Inventory")
 	int32 RemoveItemInstance(UZItemInstance* Instance, int32 Count = 1);
+
+	/** Wears down an item with durability, e.g. a tool used for crafting. Returns true if it broke (and was removed, if its Durability fragment says so) */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Inventory")
+	bool ReduceDurability(UZItemInstance* Instance, int32 Amount);
+
+	/** Puts items on the ground in front of the owner's character as a pickup (picked up with the interact key), e.g. crafted items that didn't fit */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Inventory")
+	bool DropOnGround(UZItemDefinition* Item, int32 Count);
 
 	/** --- REQUESTS FROM THE OWNING PLAYER (checked on the server) --- */
 
@@ -200,6 +217,9 @@ protected:
 
 	/** The character using this inventory (for players, their PlayerState's pawn) */
 	APawn* GetOwningPawn() const;
+
+	/** Where dropped items land: in front of the owner's character */
+	FVector GetDropLocation() const;
 
 	/** Most stacks it can hold; 0 = no limit */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (ClampMin = "0"))

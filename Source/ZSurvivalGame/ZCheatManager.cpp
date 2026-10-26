@@ -7,11 +7,19 @@
 #include "Engine/AssetManager.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "ZSurvivalGame.h"
+#include "ZSurvivalGamePlayerController.h"
 #include "AI/ZAICharacter.h"
 #include "AI/ZZombieCharacter.h"
 #include "AbilitySystem/ZAttributeSet.h"
+#include "AbilitySystem/ZGameplayTags.h"
+#include "Crafting/ZCraftingComponent.h"
+#include "Crafting/ZCraftingRecipe.h"
+#include "Crafting/ZCraftingStation.h"
+#include "Crafting/ZCraftingSubsystem.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemDefinition.h"
 #include "Items/ZItemInstance.h"
@@ -147,6 +155,28 @@ UZInventoryComponent* UZCheatManager::GetMyInventory() const
 	return UZInventoryComponent::FindInventoryComponent(GetOuterAPlayerController());
 }
 
+TArray<APlayerState*> UZCheatManager::GetTargetPlayers(const FString& Who) const
+{
+	TArray<APlayerState*> Players;
+	const APlayerController* PlayerController = GetOuterAPlayerController();
+	if (Who.Equals(TEXT("all"), ESearchCase::IgnoreCase))
+	{
+		if (const AGameStateBase* GameState = GetWorld()->GetGameState())
+		{
+			for (APlayerState* Player : GameState->PlayerArray)
+			{
+				Players.Add(Player);
+			}
+		}
+	}
+	else if (PlayerController && PlayerController->PlayerState)
+	{
+		Players.Add(PlayerController->PlayerState);
+	}
+
+	return Players;
+}
+
 void UZCheatManager::ZGiveItem(const FString& ItemName, int32 Count)
 {
 	UZInventoryComponent* Inventory = GetMyInventory();
@@ -209,4 +239,234 @@ void UZCheatManager::ZSpawnPickup(const FString& ItemName, int32 Count, float Di
 	const FVector Location = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * FMath::Max(Distance, 0.f);
 	const bool bSpawned = AZPickup::SpawnPickup(GetWorld(), nullptr, FZItemStack(Item, FMath::Max(Count, 1)), Location) != nullptr;
 	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSpawnPickup: %s"), bSpawned ? TEXT("spawned") : TEXT("failed"));
+}
+
+void UZCheatManager::ZCombine(const FString& ItemNames)
+{
+	// combining is a request to the server, so this works in every window
+	UZCraftingComponent* Crafting = UZCraftingComponent::FindCraftingComponent(GetOuterAPlayerController());
+	const UZInventoryComponent* Inventory = GetMyInventory();
+	if (!Crafting || !Inventory)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZCombine: no inventory yet"));
+		return;
+	}
+
+	TArray<FString> Names;
+	ItemNames.ParseIntoArrayWS(Names);
+
+	int32 Count = 1;
+	if (Names.Num() > 1 && Names.Last().IsNumeric())
+	{
+		Count = FCString::Atoi(*Names.Last());
+		Names.Pop();
+	}
+
+	TArray<UZItemInstance*> Items;
+	for (const FString& Name : Names)
+	{
+		const UZItemDefinition* Item = FindItem(Name);
+		if (!Item)
+		{
+			return;
+		}
+
+		// the same item named twice: another stack of it
+		UZItemInstance* Instance = Inventory->FindFirstInstanceMatching([Item, &Items](const UZItemInstance* Candidate)
+		{
+			return Candidate->GetItemDefinition() == Item && !Items.Contains(Candidate);
+		});
+
+		if (!Instance)
+		{
+			UE_LOG(LogZSurvivalGame, Warning, TEXT("ZCombine: you have no (more) %s"), *Name);
+			return;
+		}
+
+		Items.Add(Instance);
+	}
+
+	Crafting->CombineItems(Items, Count);
+}
+
+void UZCheatManager::ZSkills()
+{
+	const UZCraftingComponent* Crafting = UZCraftingComponent::FindCraftingComponent(GetOuterAPlayerController());
+	UE_LOG(LogZSurvivalGame, Log, TEXT("Crafting: %s"), Crafting ? *Crafting->GetDebugString() : TEXT("(none yet)"));
+}
+
+void UZCheatManager::ZSetSkill(const FString& SkillName, int32 Level)
+{
+	UZCraftingComponent* Crafting = UZCraftingComponent::FindCraftingComponent(GetOuterAPlayerController());
+	if (!Crafting || !CheckIsHost(TEXT("ZSetSkill")))
+	{
+		return;
+	}
+
+	const FGameplayTag Skill = FGameplayTag::RequestGameplayTag(*(TEXT("Tradeskill.") + SkillName), false);
+	if (!Skill.IsValid())
+	{
+		TArray<FString> SkillNames;
+		for (const FGameplayTag& Tradeskill : UZCraftingComponent::GetAllTradeskills())
+		{
+			SkillNames.Add(UZCraftingComponent::GetSkillName(Tradeskill).ToString());
+		}
+
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("No tradeskill named '%s'. Tradeskills: %s"), *SkillName, *FString::Join(SkillNames, TEXT(", ")));
+		return;
+	}
+
+	Crafting->SetSkillLevel(Skill, Level);
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSetSkill: %s is level %d"), *Skill.ToString(), Crafting->GetSkillLevel(Skill));
+}
+
+void UZCheatManager::ZListRecipes()
+{
+	const UZCraftingSubsystem* Subsystem = UZCraftingSubsystem::Get(GetWorld());
+	if (!Subsystem)
+	{
+		return;
+	}
+
+	for (const UZCraftingRecipe* Recipe : Subsystem->GetRecipes())
+	{
+		UE_LOG(LogZSurvivalGame, Log, TEXT("Recipe %s"), *Recipe->GetDebugString());
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZListRecipes: %d recipes"), Subsystem->GetRecipes().Num());
+}
+
+void UZCheatManager::ZForgetDiscoveries()
+{
+	UZCraftingComponent* Crafting = UZCraftingComponent::FindCraftingComponent(GetOuterAPlayerController());
+	if (Crafting && CheckIsHost(TEXT("ZForgetDiscoveries")))
+	{
+		Crafting->ForgetDiscoveries();
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZForgetDiscoveries: done"));
+	}
+}
+
+void UZCheatManager::ZGiveCraftingKit(const FString& Who)
+{
+	if (!CheckIsHost(TEXT("ZGiveCraftingKit")))
+	{
+		return;
+	}
+
+	// enough to find a few recipes; the screwdriver is the only tool
+	const TPair<const TCHAR*, int32> Kit[] = {
+		{ TEXT("ID_Cloth"), 9 }, { TEXT("ID_Scrap"), 12 }, { TEXT("ID_BoneFragment"), 6 }, { TEXT("ID_RottenMeat"), 3 },
+		{ TEXT("ID_DuctTape"), 4 }, { TEXT("ID_BrokenRadio"), 2 }, { TEXT("ID_ElectronicParts"), 3 }, { TEXT("ID_Gunpowder"), 2 }, { TEXT("ID_Screwdriver"), 1 }
+	};
+
+	for (APlayerState* Player : GetTargetPlayers(Who))
+	{
+		UZInventoryComponent* Inventory = UZInventoryComponent::FindInventoryComponent(Player);
+		if (!Inventory)
+		{
+			continue;
+		}
+
+		for (const TPair<const TCHAR*, int32>& Entry : Kit)
+		{
+			if (UZItemDefinition* Item = FindItem(Entry.Key))
+			{
+				Inventory->AddItem(Item, Entry.Value);
+			}
+		}
+
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZGiveCraftingKit: '%s' has %s"), *GetNameSafe(Player), *Inventory->GetDebugString());
+	}
+}
+
+void UZCheatManager::ZSpawnWorkbench(const FString& Who)
+{
+	if (!CheckIsHost(TEXT("ZSpawnWorkbench")))
+	{
+		return;
+	}
+
+	UClass* WorkbenchClass = LoadClass<AZCraftingStation>(nullptr, TEXT("/Game/Crafting/Stations/BP_Workbench.BP_Workbench_C"));
+	if (!WorkbenchClass)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZSpawnWorkbench: /Game/Crafting/Stations/BP_Workbench not found"));
+		return;
+	}
+
+	for (const APlayerState* Player : GetTargetPlayers(Who))
+	{
+		const APawn* Pawn = Player ? Player->GetPawn() : nullptr;
+		if (!Pawn)
+		{
+			continue;
+		}
+
+		// on the ground 2 m in front
+		const FVector Spot = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * 200.f;
+		FHitResult Ground;
+		const FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ZCheatSpawn), false, Pawn);
+		const bool bFoundGround = GetWorld()->LineTraceSingleByChannel(Ground, Spot + FVector(0.f, 0.f, 200.f), Spot - FVector(0.f, 0.f, 1000.f), ECC_Visibility, QueryParams);
+		const FVector SpawnLocation = bFoundGround ? FVector(Ground.ImpactPoint) + FVector(0.f, 0.f, 46.f) : Spot;
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		const AActor* Workbench = GetWorld()->SpawnActor<AActor>(WorkbenchClass, SpawnLocation, FRotator(0.f, Pawn->GetActorRotation().Yaw, 0.f), SpawnParams);
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZSpawnWorkbench: %s for '%s'"), Workbench ? TEXT("spawned") : TEXT("failed"), *GetNameSafe(Player));
+	}
+}
+
+void UZCheatManager::ZSetDurability(const FString& ItemName, int32 Durability)
+{
+	UZInventoryComponent* Inventory = GetMyInventory();
+	const UZItemDefinition* Item = FindItem(ItemName);
+	UZItemInstance* Instance = Inventory && Item ? Inventory->FindFirstInstance(Item) : nullptr;
+	if (!Instance || !CheckIsHost(TEXT("ZSetDurability")))
+	{
+		return;
+	}
+
+	if (!Instance->HasDurability())
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZSetDurability: %s has no durability"), *ItemName);
+		return;
+	}
+
+	Instance->SetStatTagStack(ZGameplayTags::Item_Stat_Durability, FMath::Clamp(Durability, 0, Instance->GetMaxDurability()));
+	Inventory->BroadcastChanged();
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSetDurability: %s"), *Instance->GetDebugString());
+}
+
+void UZCheatManager::ZDelay(float Seconds, const FString& Command)
+{
+	APlayerController* PlayerController = GetOuterAPlayerController();
+	if (!PlayerController || Command.IsEmpty())
+	{
+		return;
+	}
+
+	FTimerHandle DelayTimer;
+	GetWorld()->GetTimerManager().SetTimer(DelayTimer, FTimerDelegate::CreateWeakLambda(PlayerController, [PlayerController, Command]()
+	{
+		PlayerController->ConsoleCommand(Command);
+	}), FMath::Max(Seconds, 0.01f), false);
+}
+
+void UZCheatManager::ZOnClients(const FString& Command)
+{
+	if (Command.IsEmpty() || !CheckIsHost(TEXT("ZOnClients")))
+	{
+		return;
+	}
+
+	int32 NumClients = 0;
+	for (TActorIterator<AZSurvivalGamePlayerController> It(GetWorld()); It; ++It)
+	{
+		if (!It->IsLocalController())
+		{
+			It->ClientRunConsoleCommand(Command);
+			++NumClients;
+		}
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZOnClients: sent '%s' to %d client(s)"), *Command, NumClients);
 }

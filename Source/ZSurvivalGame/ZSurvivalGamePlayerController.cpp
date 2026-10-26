@@ -9,7 +9,10 @@
 #include "UI/ZSurvivalHUDWidget.h"
 #include "ZSurvivalGame.h"
 #include "ZCheatManager.h"
+#include "Crafting/ZCraftingStation.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+
+#define LOCTEXT_NAMESPACE "ZSurvivalPlayerController"
 
 AZSurvivalGamePlayerController::AZSurvivalGamePlayerController()
 {
@@ -84,8 +87,103 @@ void AZSurvivalGamePlayerController::SetupInputComponent()
 	}
 }
 
+void AZSurvivalGamePlayerController::ReceivedPlayer()
+{
+	Super::ReceivedPlayer();
+
+	BindToPlayerState();
+}
+
+void AZSurvivalGamePlayerController::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	BindToPlayerState();
+}
+
 bool AZSurvivalGamePlayerController::ShouldUseTouchControls() const
 {
 	// are we on a mobile platform? Should we force touch?
 	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
 }
+
+void AZSurvivalGamePlayerController::ClientOpenCraftingStation_Implementation(AZCraftingStation* Station)
+{
+	// stations only need to be nearby: combining items in the inventory uses them
+	if (Station)
+	{
+		ShowMessage(FText::Format(LOCTEXT("AtStation", "At the {0}: combine items here to use it."), Station->GetStationName()));
+	}
+}
+
+void AZSurvivalGamePlayerController::ShowMessage(const FText& Message)
+{
+	if (Message.IsEmpty())
+	{
+		return;
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("Message to '%s': %s"), *GetNameSafe(this), *Message.ToString());
+
+	Messages.Add({ Message, GetWorld()->GetRealTimeSeconds() });
+	if (Messages.Num() > MaxMessages)
+	{
+		Messages.RemoveAt(0, Messages.Num() - MaxMessages);
+	}
+}
+
+void AZSurvivalGamePlayerController::ClientShowMessage_Implementation(const FText& Message)
+{
+	ShowMessage(Message);
+}
+
+void AZSurvivalGamePlayerController::ClientRunConsoleCommand_Implementation(const FString& Command)
+{
+#if !UE_BUILD_SHIPPING
+	UE_LOG(LogZSurvivalGame, Log, TEXT("Running '%s' for the host"), *Command);
+	ConsoleCommand(Command);
+#endif
+}
+
+TArray<FText> AZSurvivalGamePlayerController::GetRecentMessages() const
+{
+	TArray<FText> Recent;
+	const double Now = GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.0;
+	for (const FPlayerMessage& Message : Messages)
+	{
+		if (Now - Message.Time <= MessageDuration)
+		{
+			Recent.Add(Message.Text);
+		}
+	}
+
+	return Recent;
+}
+
+void AZSurvivalGamePlayerController::BindToPlayerState()
+{
+	UZCraftingComponent* Crafting = IsLocalPlayerController() ? UZCraftingComponent::FindCraftingComponent(this) : nullptr;
+	if (Crafting == BoundCrafting.Get())
+	{
+		return;
+	}
+
+	if (UZCraftingComponent* OldCrafting = BoundCrafting.Get())
+	{
+		OldCrafting->OnCraftingResult.RemoveDynamic(this, &AZSurvivalGamePlayerController::HandleCraftingResult);
+	}
+
+	BoundCrafting = Crafting;
+
+	if (Crafting)
+	{
+		Crafting->OnCraftingResult.AddDynamic(this, &AZSurvivalGamePlayerController::HandleCraftingResult);
+	}
+}
+
+void AZSurvivalGamePlayerController::HandleCraftingResult(UZCraftingComponent* Crafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message)
+{
+	ShowMessage(Message);
+}
+
+#undef LOCTEXT_NAMESPACE

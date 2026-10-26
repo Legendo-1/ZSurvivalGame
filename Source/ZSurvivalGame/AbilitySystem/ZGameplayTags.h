@@ -33,9 +33,27 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Ammo);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Material);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Consumable);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Tool);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Salvage);
+
+	// Tools: what kind of tool an item is, so a recipe can ask for any tool of a kind (its quality is on the Tool fragment)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Tool_Screwdriver);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Tool_AmmoPress);
 
 	// Item stats: numbers stored per item instance
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat_MagazineAmmo);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat_Durability);
+
+	// Crafting stations: what a station is (on AZCraftingStation) and what a recipe needs nearby
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Crafting_Station_Workbench);
+
+	// Tradeskills: every tag under Tradeskill is a skill players level up by crafting (more can be added in Project Settings → Gameplay Tags)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Mechanics);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Electronics);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Chemistry);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Medicine);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Weaponsmithing);
 
 	// Gameplay cues: visuals and sounds everyone sees (made as GameplayCue Notify assets with the same tag)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Fire);
