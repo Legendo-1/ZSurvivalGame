@@ -82,7 +82,8 @@ Tie base defense directly to the expedition loop:
 * \[x\] Item data assets in C++ with fragments (weapon, consumable), an inventory on the PlayerState that only the server changes, reserve ammo, pickups, the interact key and zombie loot (see ITEMS.md).  
 * \[x\] Crafting by combining items (hidden recipes, Anarchy Online style) with tools of different quality that wear out, crafting stations, and tradeskills that are a hard requirement and level up by crafting (see CRAFTING.md).  
 * \[x\] Character progression, Remnant style: levels from kills give trait points (also from bosses and hidden Tomes of Knowledge), spent on traits that change stats (health, stamina, damage, recoil, reload, dodge, crafting) and can be reset (see PROGRESSION.md).  
-* \[ \] Implement weapon socket system reading attached ModData structs to alter fire modes and damage types.
+* \[x\] Weapon mod slots and upgrades: crafted mods (Barrel, Sight, Magazine) that change a weapon's stats, installed and taken off with a screwdriver; upgrade levels that each need more Weaponsmithing (see CRAFTING.md).  
+* \[ \] Mods that change fire modes and damage types (e.g. an Acid Core from an elite), and mods you can see on the weapon.
 
 ### **Phase 3: Loot, Harvest, & Crafting Loops**
 

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "GameplayTagContainer.h"
 #include "ZSurvivalGameTypes.h"
 #include "ZWeaponData.generated.h"
 
@@ -116,4 +117,18 @@ public:
 	/** Item taken from the inventory when reloading; empty = unlimited reserve ammo */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ammo")
 	TObjectPtr<UZItemDefinition> AmmoItem;
+
+	/** --- UPGRADES AND MODS --- */
+
+	/** The mod slots it has, e.g. Weapon.ModSlot.Barrel; one mod fits in each */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Upgrades", meta = (Categories = "Weapon.ModSlot"))
+	FGameplayTagContainer ModSlots;
+
+	/** How many times it can be upgraded */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Upgrades", meta = (ClampMin = "0"))
+	int32 MaxUpgradeLevel = 5;
+
+	/** Extra damage per upgrade level: 0.1 = +10% each */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Upgrades", meta = (ClampMin = "0"))
+	float DamagePerUpgradeLevel = 0.1f;
 };

@@ -94,7 +94,7 @@ AZPickup* AZPickup::SpawnPickup(UWorld* World, TSubclassOf<AZPickup> PickupClass
 	{
 		Pickup->ItemInstance = NewObject<UZItemInstance>(Pickup);
 		Pickup->ItemInstance->InitializeInstance(Stack.Item);
-		Pickup->ItemInstance->CopyStatsFrom(SourceInstance);
+		Pickup->ItemInstance->CopyStateFrom(SourceInstance);
 	}
 
 	Pickup->FinishSpawning(SpawnTransform);

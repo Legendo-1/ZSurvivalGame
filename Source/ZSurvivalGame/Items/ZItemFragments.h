@@ -3,7 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ZSurvivalGameTypes.h"
 #include "Items/ZItemDefinition.h"
+#include "Weapons/ZWeaponStats.h"
 #include "ZItemFragments.generated.h"
 
 class UGameplayEffect;
@@ -30,6 +32,40 @@ public:
 	virtual bool OnUse(UZItemInstance* Instance, APawn* User) const override;
 
 	virtual FText GetUseActionName() const override;
+
+#if WITH_EDITOR
+	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;
+#endif
+};
+
+/**
+ *  Makes the item a weapon mod: crafted with tradeskills and installed on a weapon by combining them (see CRAFTING.md)
+ *  A weapon holds one mod per slot; the mod changes the weapon's stats while it's installed
+ */
+UCLASS(meta = (DisplayName = "Weapon Mod"))
+class UZItemFragment_WeaponMod : public UZItemFragment
+{
+	GENERATED_BODY()
+
+public:
+
+	/** The slot it goes into, e.g. Weapon.ModSlot.Barrel (the weapon needs that slot) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon Mod", meta = (Categories = "Weapon.ModSlot"))
+	FGameplayTag Slot;
+
+	/** What it changes on the weapon */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon Mod")
+	TArray<FZWeaponStatModifier> Modifiers;
+
+	/** Only weapons of these types take it (empty: every weapon with the slot) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon Mod")
+	TArray<EZWeaponType> AllowedWeaponTypes;
+
+	/** True if it fits this weapon (it has the slot, and the type is allowed) */
+	bool FitsWeapon(const UZWeaponData* WeaponData) const;
+
+	/** "Recoil -25%", one line per modifier */
+	FText GetModifiersText() const;
 
 #if WITH_EDITOR
 	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;

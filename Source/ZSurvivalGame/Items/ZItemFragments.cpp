@@ -59,6 +59,43 @@ void UZItemFragment_Weapon::ValidateForItem(const UZItemDefinition* Item, FDataV
 }
 #endif
 
+bool UZItemFragment_WeaponMod::FitsWeapon(const UZWeaponData* WeaponData) const
+{
+	return WeaponData && Slot.IsValid() && WeaponData->ModSlots.HasTagExact(Slot)
+		&& (AllowedWeaponTypes.IsEmpty() || AllowedWeaponTypes.Contains(WeaponData->WeaponType));
+}
+
+FText UZItemFragment_WeaponMod::GetModifiersText() const
+{
+	TArray<FText> Lines;
+	for (const FZWeaponStatModifier& Modifier : Modifiers)
+	{
+		Lines.Add(UZWeaponStatsLibrary::DescribeModifier(Modifier));
+	}
+
+	return FText::Join(FText::FromString(TEXT("\n")), Lines);
+}
+
+#if WITH_EDITOR
+void UZItemFragment_WeaponMod::ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const
+{
+	if (!Slot.IsValid())
+	{
+		Context.AddError(LOCTEXT("ModNoSlot", "The Weapon Mod fragment has no Slot, so it can't be installed."));
+	}
+
+	if (Modifiers.IsEmpty())
+	{
+		Context.AddWarning(LOCTEXT("ModNoModifiers", "The Weapon Mod fragment has no Modifiers, so it changes nothing."));
+	}
+
+	if (!Item->ItemTags.HasTag(ZGameplayTags::Item_Type_WeaponMod))
+	{
+		Context.AddWarning(LOCTEXT("ModNoTypeTag", "Weapon mods need the Item.Type.WeaponMod tag, so recipes that install mods find them."));
+	}
+}
+#endif
+
 bool UZItemFragment_Consumable::OnUse(UZItemInstance* Instance, APawn* User) const
 {
 	UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(User);

@@ -35,9 +35,9 @@ public:
 	UFUNCTION(Exec)
 	void ZHurt(float Amount = 0.f);
 
-	/** Gives you items by their asset name, e.g. ZGiveItem ID_Ammo_Rifle 30 */
+	/** Gives you items by their asset name, e.g. ZGiveItem ID_Ammo_Rifle 30; ZGiveItem ID_Ammo_Rifle 30 all gives them to every player (host) */
 	UFUNCTION(Exec)
-	void ZGiveItem(const FString& ItemName, int32 Count = 1);
+	void ZGiveItem(const FString& ItemName, int32 Count = 1, const FString& Who = TEXT(""));
 
 	/** Writes your inventory to the Output Log (works in every window, shows that player's copy) */
 	UFUNCTION(Exec)
@@ -54,6 +54,10 @@ public:
 	/** Spawns a pickup like enemy loot, Distance cm in front of you (0 = at your feet), e.g. ZSpawnPickup ID_Cloth 3 200 */
 	UFUNCTION(Exec)
 	void ZSpawnPickup(const FString& ItemName, int32 Count = 1, float Distance = 200.f);
+
+	/** Writes the stats of the weapon in your hands to the Output Log: its upgrade level and mods, and what they and your traits make of it (as this window sees it) */
+	UFUNCTION(Exec)
+	void ZWeaponStats();
 
 	/** --- CRAFTING --- */
 

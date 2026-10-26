@@ -35,6 +35,7 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Consumable);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Tool);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Salvage);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_WeaponMod);
 
 	// Tools: what kind of tool an item is, so a recipe can ask for any tool of a kind (its quality is on the Tool fragment)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Tool_Screwdriver);
@@ -43,6 +44,12 @@ namespace ZGameplayTags
 	// Item stats: numbers stored per item instance
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat_MagazineAmmo);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat_Durability);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat_UpgradeLevel);
+
+	// Weapon mod slots: which slots a weapon has (its weapon data) and which one a mod goes into (its Weapon Mod fragment)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Weapon_ModSlot_Barrel);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Weapon_ModSlot_Sight);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Weapon_ModSlot_Magazine);
 
 	// Crafting stations: what a station is (on AZCraftingStation) and what a recipe needs nearby
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Crafting_Station_Workbench);

@@ -17,6 +17,7 @@
 #include "Crafting/ZCraftingRecipe.h"
 #include "Crafting/ZCraftingStation.h"
 #include "Crafting/ZCraftingSubsystem.h"
+#include "Crafting/ZRecipeOutcomes.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemInstance.h"
 #include "Progression/ZProgressionSettings.h"
@@ -33,6 +34,7 @@ namespace
 	{
 		switch (Result)
 		{
+		case EZCraftingResult::CannotApply:			return 5;
 		case EZCraftingResult::SkillTooLow:			return 4;
 		case EZCraftingResult::ToolNotGoodEnough:	return 3;
 		case EZCraftingResult::MissingItems:		return 2;
@@ -191,7 +193,15 @@ FText UZCraftingComponent::GetResultText(EZCraftingResult Result, const UZCrafti
 	switch (Result)
 	{
 	case EZCraftingResult::Success:
-		return Recipe ? FText::Format(LOCTEXT("Crafted", "Crafted {0}."), GetResultsText(*Recipe, 1)) : FText::GetEmpty();
+		if (!Recipe)
+		{
+			return FText::GetEmpty();
+		}
+
+		// a recipe that only changes an item (e.g. an upgrade) makes nothing to list
+		return Recipe->GetMainResult()
+			? FText::Format(LOCTEXT("Crafted", "Crafted {0}."), GetResultsText(*Recipe, 1))
+			: FText::Format(LOCTEXT("Done", "{0}: done."), Recipe->GetRecipeName());
 
 	case EZCraftingResult::NoMatch:
 		return LOCTEXT("NoMatch", "Nothing comes of combining these.");
@@ -219,6 +229,10 @@ FText UZCraftingComponent::GetResultText(EZCraftingResult Result, const UZCrafti
 
 		return LOCTEXT("SkillTooLowGeneric", "You aren't skilled enough for this yet.");
 	}
+
+	case EZCraftingResult::CannotApply:
+		// the outcome usually says why itself, e.g. "Your Rifle can't be upgraded any further."
+		return LOCTEXT("CannotApply", "That won't work on it.");
 
 	case EZCraftingResult::NeedsStation:
 		return FText::Format(LOCTEXT("NeedsStation", "This needs a {0} nearby."), Recipe ? AZCraftingStation::GetStationNameFromTag(Recipe->RequiredStation) : FText::GetEmpty());
@@ -373,13 +387,18 @@ void UZCraftingComponent::ServerCombineItems_Implementation(const TArray<UZItemI
 	const TArray<const UZItemInstance*> PreferredItems(ChosenItems);
 	EZCraftingResult Failure = EZCraftingResult::NoMatch;
 	UZCraftingRecipe* FailedRecipe = nullptr;
+	FText FailureReason;
 
 	for (UZCraftingRecipe* Recipe : Subsystem->FindRecipesForCombination(ChosenKinds))
 	{
-		const EZCraftingResult Result = CheckRecipe(*Recipe, PreferredItems);
+		FCraftPlan Plan;
+		FText Reason;
+		const EZCraftingResult Result = CheckRecipe(*Recipe, PreferredItems, Plan, Reason);
 		if (Result == EZCraftingResult::Success)
 		{
-			StartCrafting(Recipe, FMath::Clamp(Count, 1, MaxCraftsPerRequest), ChosenItems);
+			// a recipe that changes an item (an upgrade, a mod) does it once per combine, so each change gets its own message
+			const int32 MaxCount = Recipe->Outcomes.IsEmpty() ? MaxCraftsPerRequest : 1;
+			StartCrafting(Recipe, FMath::Clamp(Count, 1, MaxCount), ChosenItems);
 			return;
 		}
 
@@ -387,10 +406,11 @@ void UZCraftingComponent::ServerCombineItems_Implementation(const TArray<UZItemI
 		{
 			Failure = Result;
 			FailedRecipe = Recipe;
+			FailureReason = Reason;
 		}
 	}
 
-	SendResult(Failure, FailedRecipe, GetResultText(Failure, FailedRecipe));
+	SendResult(Failure, FailedRecipe, FailureReason.IsEmpty() ? GetResultText(Failure, FailedRecipe) : FailureReason);
 }
 
 void UZCraftingComponent::ServerCancelCrafting_Implementation()
@@ -429,7 +449,7 @@ void UZCraftingComponent::OnRep_SkillExperience()
 	OnTradeskillsChanged.Broadcast(this);
 }
 
-EZCraftingResult UZCraftingComponent::CheckRecipe(const UZCraftingRecipe& Recipe, TConstArrayView<const UZItemInstance*> PreferredItems) const
+EZCraftingResult UZCraftingComponent::CheckRecipe(const UZCraftingRecipe& Recipe, TConstArrayView<const UZItemInstance*> PreferredItems, FCraftPlan& OutPlan, FText& OutReason) const
 {
 	if (Recipe.RequiredStation.IsValid() && !FindNearbyStation(Recipe.RequiredStation))
 	{
@@ -453,8 +473,25 @@ EZCraftingResult UZCraftingComponent::CheckRecipe(const UZCraftingRecipe& Recipe
 		}
 	}
 
-	FCraftPlan Plan;
-	return BuildCraftPlan(Recipe, PreferredItems, Plan) ? EZCraftingResult::Success : EZCraftingResult::MissingItems;
+	if (!BuildCraftPlan(Recipe, PreferredItems, OutPlan))
+	{
+		return EZCraftingResult::MissingItems;
+	}
+
+	// last, whether it can happen to the target: e.g. a weapon can't go past its highest upgrade, and a mod has to fit
+	if (!Recipe.Outcomes.IsEmpty())
+	{
+		const FZRecipeOutcomeContext OutcomeContext = MakeOutcomeContext(OutPlan);
+		for (const UZRecipeOutcome* Outcome : Recipe.Outcomes)
+		{
+			if (Outcome && !Outcome->CanApply(OutcomeContext, OutReason))
+			{
+				return EZCraftingResult::CannotApply;
+			}
+		}
+	}
+
+	return EZCraftingResult::Success;
 }
 
 bool UZCraftingComponent::BuildCraftPlan(const UZCraftingRecipe& Recipe, TConstArrayView<const UZItemInstance*> PreferredItems, FCraftPlan& OutPlan) const
@@ -527,23 +564,51 @@ bool UZCraftingComponent::BuildCraftPlan(const UZCraftingRecipe& Recipe, TConstA
 		TArray<TPair<UZItemInstance*, int32>> Used;
 		bHasEverything &= Reserve(Input, Used);
 
-		if (!Input.IsTool())
+		switch (Input.Usage)
 		{
+		case EZRecipeInputUsage::Consumed:
 			OutPlan.ToRemove.Append(Used);
-		}
-		else if (Input.DurabilityCost > 0)
-		{
+			break;
+
+		case EZRecipeInputUsage::Tool:
 			for (const TPair<UZItemInstance*, int32>& UsedTool : Used)
 			{
-				if (UsedTool.Key->HasDurability())
+				if (Input.DurabilityCost > 0 && UsedTool.Key->HasDurability())
 				{
 					OutPlan.ToWear.Emplace(UsedTool.Key, Input.DurabilityCost);
 				}
 			}
+			break;
+
+		case EZRecipeInputUsage::Target:
+			// the outcomes change one item: the chosen one, if the player picked one
+			if (!OutPlan.Target && !Used.IsEmpty())
+			{
+				OutPlan.Target = Used[0].Key;
+			}
+			break;
 		}
 	}
 
 	return bHasEverything;
+}
+
+FZRecipeOutcomeContext UZCraftingComponent::MakeOutcomeContext(const FCraftPlan& Plan) const
+{
+	FZRecipeOutcomeContext Context;
+	Context.Crafting = this;
+	Context.Inventory = GetInventory();
+	Context.Target = Plan.Target;
+
+	for (const TPair<UZItemInstance*, int32>& Ingredient : Plan.ToRemove)
+	{
+		if (UZItemDefinition* Item = Ingredient.Key->GetItemDefinition())
+		{
+			Context.ConsumedItems.AddUnique(Item);
+		}
+	}
+
+	return Context;
 }
 
 void UZCraftingComponent::ApplyCraftPlan(const UZCraftingRecipe& Recipe, const FCraftPlan& Plan)
@@ -553,6 +618,10 @@ void UZCraftingComponent::ApplyCraftPlan(const UZCraftingRecipe& Recipe, const F
 	{
 		return;
 	}
+
+	// worked out while the ingredients are still there (e.g. which mod is being installed); the outcomes add their lines to the message
+	FZRecipeOutcomeContext OutcomeContext = MakeOutcomeContext(Plan);
+	OutcomeContext.Notes = &RequestNotes;
 
 	for (const TPair<UZItemInstance*, int32>& Ingredient : Plan.ToRemove)
 	{
@@ -568,8 +637,17 @@ void UZCraftingComponent::ApplyCraftPlan(const UZCraftingRecipe& Recipe, const F
 		}
 	}
 
-	// a lucky craft gives the results twice (the player's crafting yield chance, from traits)
-	const float YieldChance = UZAttributeSet::GetAttributeValue(GetOwner(), UZAttributeSet::GetCraftingYieldChanceAttribute(), 0.f);
+	// after the ingredients are gone, so e.g. a mod that comes off has room
+	for (const UZRecipeOutcome* Outcome : Recipe.Outcomes)
+	{
+		if (Outcome)
+		{
+			Outcome->Apply(OutcomeContext);
+		}
+	}
+
+	// a lucky craft gives the results twice (the player's crafting yield chance, from traits); a recipe that makes nothing can't be lucky
+	const float YieldChance = Recipe.GetMainResult() ? UZAttributeSet::GetAttributeValue(GetOwner(), UZAttributeSet::GetCraftingYieldChanceAttribute(), 0.f) : 0.f;
 	const int32 Times = YieldChance > 0.f && FMath::FRand() < YieldChance ? 2 : 1;
 	NumLuckyCrafts += Times - 1;
 
@@ -633,12 +711,13 @@ void UZCraftingComponent::StartCrafting(UZCraftingRecipe* Recipe, int32 Count, T
 	if (Recipe->CraftTime <= 0.f)
 	{
 		EZCraftingResult Result = EZCraftingResult::Success;
+		FText Reason;
 		for (int32 Index = 0; Index < Count && Result == EZCraftingResult::Success; ++Index)
 		{
-			Result = CraftOnce(Recipe);
+			Result = CraftOnce(Recipe, Reason);
 		}
 
-		FinishCrafting(Recipe, Result);
+		FinishCrafting(Recipe, Result, Reason);
 		return;
 	}
 
@@ -660,7 +739,8 @@ void UZCraftingComponent::StartNextCraft()
 void UZCraftingComponent::OnCraftTimerDone()
 {
 	UZCraftingRecipe* Recipe = CraftingProgress.Recipe;
-	const EZCraftingResult Result = CraftOnce(Recipe);
+	FText Reason;
+	const EZCraftingResult Result = CraftOnce(Recipe, Reason);
 
 	if (Result == EZCraftingResult::Success && --CraftingProgress.RemainingCount > 0)
 	{
@@ -668,10 +748,10 @@ void UZCraftingComponent::OnCraftTimerDone()
 		return;
 	}
 
-	FinishCrafting(Recipe, Result);
+	FinishCrafting(Recipe, Result, Reason);
 }
 
-EZCraftingResult UZCraftingComponent::CraftOnce(UZCraftingRecipe* Recipe)
+EZCraftingResult UZCraftingComponent::CraftOnce(UZCraftingRecipe* Recipe, FText& OutReason)
 {
 	if (!Recipe)
 	{
@@ -693,11 +773,11 @@ EZCraftingResult UZCraftingComponent::CraftOnce(UZCraftingRecipe* Recipe)
 		}
 	}
 
-	const EZCraftingResult Check = CheckRecipe(*Recipe, PreferredItems);
 	FCraftPlan Plan;
-	if (Check != EZCraftingResult::Success || !BuildCraftPlan(*Recipe, PreferredItems, Plan))
+	const EZCraftingResult Check = CheckRecipe(*Recipe, PreferredItems, Plan, OutReason);
+	if (Check != EZCraftingResult::Success)
 	{
-		return Check != EZCraftingResult::Success ? Check : EZCraftingResult::MissingItems;
+		return Check;
 	}
 
 	ApplyCraftPlan(*Recipe, Plan);
@@ -720,7 +800,7 @@ EZCraftingResult UZCraftingComponent::CraftOnce(UZCraftingRecipe* Recipe)
 	return EZCraftingResult::Success;
 }
 
-void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingResult LastResult)
+void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingResult LastResult, const FText& Reason)
 {
 	GetWorld()->GetTimerManager().ClearTimer(CraftTimer);
 
@@ -732,6 +812,7 @@ void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingRes
 
 	TArray<FText> MessageParts;
 	EZCraftingResult Result = LastResult;
+	const FText LastResultText = Reason.IsEmpty() ? GetResultText(LastResult, Recipe) : Reason;
 
 	if (NumCrafted > 0 && Recipe)
 	{
@@ -743,15 +824,22 @@ void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingRes
 			MessageParts.Add(LOCTEXT("NewDiscovery", "New discovery!"));
 		}
 
-		MessageParts.Add(FText::Format(LOCTEXT("CraftedResults", "Crafted {0}."), GetResultsText(*Recipe, NumCrafted + NumLuckyCrafts)));
-		if (NumLuckyCrafts > 0)
+		// a recipe that only changes an item (an upgrade, a mod) says what it did in its notes instead
+		if (Recipe->GetMainResult())
 		{
-			MessageParts.Add(LOCTEXT("LuckyCraft", "Lucky: you made extra."));
+			MessageParts.Add(FText::Format(LOCTEXT("CraftedResults", "Crafted {0}."), GetResultsText(*Recipe, NumCrafted + NumLuckyCrafts)));
+			if (NumLuckyCrafts > 0)
+			{
+				MessageParts.Add(LOCTEXT("LuckyCraft", "Lucky: you made extra."));
+			}
 		}
+
+		// what happened along the way: what the outcomes did, tools that broke, results that didn't fit
+		MessageParts.Append(RequestNotes);
 
 		if (LastResult != EZCraftingResult::Success)
 		{
-			MessageParts.Add(LastResult == EZCraftingResult::Cancelled ? LOCTEXT("Stopped", "Stopped.") : GetResultText(LastResult, Recipe));
+			MessageParts.Add(LastResult == EZCraftingResult::Cancelled ? LOCTEXT("Stopped", "Stopped.") : LastResultText);
 		}
 
 		// what the tradeskills got out of it
@@ -780,10 +868,8 @@ void UZCraftingComponent::FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingRes
 	}
 	else
 	{
-		MessageParts.Add(GetResultText(LastResult, Recipe));
+		MessageParts.Add(LastResultText);
 	}
-
-	MessageParts.Append(RequestNotes);
 
 	RequestItems.Reset();
 	RequestNotes.Reset();

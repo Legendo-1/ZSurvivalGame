@@ -10,7 +10,7 @@
 
 /**
  *  One item in an inventory (or a stack of a stackable item), made by the server from a UZItemDefinition
- *  Holds what's special about this one item as stats, e.g. a weapon's magazine ammo, later durability or attached mods
+ *  Holds what's special about this one item: stats (e.g. a weapon's magazine ammo, a tool's durability, an upgrade level) and the mods installed on it
  *  Replicates with the inventory that holds it, to the inventory's owner
  */
 UCLASS(BlueprintType)
@@ -53,8 +53,8 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Item")
 	void SetStatTagStack(FGameplayTag Tag, int32 Count);
 
-	/** Takes over another instance's stats, e.g. when a dropped weapon is picked up */
-	void CopyStatsFrom(const UZItemInstance* Other);
+	/** Takes over another instance's stats and mods, e.g. when a dropped weapon is picked up */
+	void CopyStateFrom(const UZItemInstance* Other);
 
 	/** True if the item has a Durability fragment */
 	UFUNCTION(BlueprintPure, Category = "Item|Durability")
@@ -76,7 +76,27 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Item|Durability")
 	bool IsBroken() const;
 
-	/** "ID_Rifle (Item.Stat.MagazineAmmo 30)", for logs */
+	/** --- WEAPON UPGRADES AND MODS --- */
+
+	/** How many times it was upgraded (Item.Stat.UpgradeLevel) */
+	UFUNCTION(BlueprintPure, Category = "Item|Weapon")
+	int32 GetUpgradeLevel() const;
+
+	/** The mods installed on it, one per slot */
+	UFUNCTION(BlueprintPure, Category = "Item|Weapon")
+	TArray<UZItemDefinition*> GetAttachedMods() const;
+
+	/** The mod in this slot, or null */
+	UFUNCTION(BlueprintPure, Category = "Item|Weapon")
+	UZItemDefinition* GetModInSlot(FGameplayTag Slot) const;
+
+	/** Server: installs a mod in its slot. Returns the mod that was in that slot before (to give back), or null */
+	UZItemDefinition* AttachMod(UZItemDefinition* Mod);
+
+	/** Server: takes every mod off and returns them */
+	TArray<UZItemDefinition*> DetachAllMods();
+
+	/** "ID_Rifle (Item.Stat.MagazineAmmo 30) [mods: ID_Mod_Compensator]", for logs */
 	FString GetDebugString() const;
 
 protected:
@@ -90,6 +110,9 @@ protected:
 	UFUNCTION()
 	void OnRep_StatTags();
 
+	UFUNCTION()
+	void OnRep_AttachedMods();
+
 private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_ItemDefinition)
@@ -97,4 +120,8 @@ private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_StatTags)
 	FZTagStackContainer StatTags;
+
+	/** Installed mods (a few at most, so a plain array) */
+	UPROPERTY(ReplicatedUsing = OnRep_AttachedMods)
+	TArray<TObjectPtr<UZItemDefinition>> AttachedMods;
 };

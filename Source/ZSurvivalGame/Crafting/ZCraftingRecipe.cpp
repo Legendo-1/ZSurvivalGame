@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Crafting/ZCraftingRecipe.h"
+#include "Crafting/ZRecipeOutcomes.h"
 #include "Items/ZItemFragments.h"
 
 #if WITH_EDITOR
@@ -24,6 +25,11 @@ FText UZCraftingRecipe::GetRecipeName() const
 
 	const UZItemDefinition* MainResult = GetMainResult();
 	return MainResult ? MainResult->GetItemName() : FText::FromName(GetFName());
+}
+
+const FZRecipeInput* UZCraftingRecipe::GetTargetInput() const
+{
+	return Inputs.FindByPredicate([](const FZRecipeInput& Input) { return Input.IsValid() && Input.IsTarget(); });
 }
 
 UZItemDefinition* UZCraftingRecipe::GetMainResult() const
@@ -109,6 +115,10 @@ FString UZCraftingRecipe::GetDebugString() const
 		{
 			Text += Input.MinToolQuality > 0 ? FString::Printf(TEXT(" (tool, quality %d+)"), Input.MinToolQuality) : FString(TEXT(" (tool)"));
 		}
+		else if (Input.IsTarget())
+		{
+			Text += TEXT(" (target)");
+		}
 
 		InputTexts.Add(Text);
 	}
@@ -119,6 +129,14 @@ FString UZCraftingRecipe::GetDebugString() const
 		if (Result.Item)
 		{
 			ResultTexts.Add(FString::Printf(TEXT("%s x%d"), *Result.Item->GetItemName().ToString(), Result.Count));
+		}
+	}
+
+	for (const UZRecipeOutcome* Outcome : Outcomes)
+	{
+		if (Outcome)
+		{
+			ResultTexts.Add(Outcome->GetDebugString());
 		}
 	}
 
@@ -142,9 +160,36 @@ EDataValidationResult UZCraftingRecipe::IsDataValid(FDataValidationContext& Cont
 {
 	EDataValidationResult Result = Super::IsDataValid(Context);
 
-	if (!GetMainResult())
+	if (!GetMainResult() && Outcomes.IsEmpty())
 	{
-		Context.AddError(LOCTEXT("NoResults", "The recipe makes nothing: add an item to Results."));
+		Context.AddError(LOCTEXT("NoResults", "The recipe does nothing: add an item to Results, or an Outcome."));
+	}
+
+	// outcomes change the Target input, so there has to be exactly one
+	int32 NumTargets = 0;
+	for (const FZRecipeInput& Input : Inputs)
+	{
+		NumTargets += Input.IsValid() && Input.IsTarget() ? 1 : 0;
+	}
+
+	if (!Outcomes.IsEmpty() && NumTargets != 1)
+	{
+		Context.AddError(LOCTEXT("OutcomesNeedTarget", "A recipe with Outcomes needs exactly one input with Usage Target (the item it changes)."));
+	}
+	else if (Outcomes.IsEmpty() && NumTargets > 0)
+	{
+		Context.AddWarning(LOCTEXT("TargetWithoutOutcomes", "An input is a Target, but the recipe has no Outcomes to change it, so it's just kept."));
+	}
+
+	for (const UZRecipeOutcome* Outcome : Outcomes)
+	{
+		if (!Outcome)
+		{
+			Context.AddWarning(LOCTEXT("EmptyOutcome", "The recipe has an empty entry in Outcomes."));
+			continue;
+		}
+
+		Outcome->ValidateForRecipe(this, Context);
 	}
 
 	if (GetNumInputs() == 0)
@@ -165,6 +210,10 @@ EDataValidationResult UZCraftingRecipe::IsDataValid(FDataValidationContext& Cont
 		else if (Input.MinToolQuality > 0 && Input.Item && Input.Item->GetToolQuality() < Input.MinToolQuality)
 		{
 			Context.AddError(FText::Format(LOCTEXT("ToolQualityTooHigh", "The input {0} asks for tool quality {1}, but that item's quality is lower, so the recipe can never be made."), Input.Item->GetItemName(), Input.MinToolQuality));
+		}
+		else if (Input.IsTarget() && Input.Count != 1)
+		{
+			Context.AddError(LOCTEXT("TargetCount", "A Target input's Count has to be 1: the outcomes change one item."));
 		}
 	}
 

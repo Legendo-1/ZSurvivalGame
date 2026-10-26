@@ -8,10 +8,13 @@
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "Net/UnrealNetwork.h"
+#include "ZSurvivalGame.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayTags.h"
+#include "Items/ZInventoryComponent.h"
 #include "Items/ZItemInstance.h"
 #include "Weapons/ZWeaponData.h"
+#include "Weapons/ZWeaponStats.h"
 
 AZWeapon::AZWeapon()
 {
@@ -41,6 +44,9 @@ void AZWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetime
 
 	DOREPLIFETIME(AZWeapon, WeaponData);
 	DOREPLIFETIME_CONDITION(AZWeapon, Ammo, COND_OwnerOnly);
+
+	// the owner works out the stats too (fire rate, spread, recoil, magazine), and those depend on the item's upgrades and mods
+	DOREPLIFETIME_CONDITION(AZWeapon, ItemInstance, COND_OwnerOnly);
 }
 
 void AZWeapon::InitWeapon(UZWeaponData* InWeaponData, UZItemInstance* InItemInstance)
@@ -48,8 +54,16 @@ void AZWeapon::InitWeapon(UZWeaponData* InWeaponData, UZItemInstance* InItemInst
 	WeaponData = InWeaponData;
 	ItemInstance = InItemInstance;
 
-	// the item remembers its magazine between being put away and taken out again
+	// mods can change the magazine while the weapon is in the hands
+	OwnerInventory = UZInventoryComponent::FindInventoryComponent(GetOwner());
+	if (OwnerInventory.IsValid())
+	{
+		OwnerInventory->OnInventoryChanged.AddUniqueDynamic(this, &AZWeapon::OnInventoryChanged);
+	}
+
+	// the item remembers its magazine between being put away and taken out again (a mod may have made the magazine smaller since)
 	Ammo = ItemInstance ? ItemInstance->GetStatTagStackCount(ZGameplayTags::Item_Stat_MagazineAmmo) : GetMagazineSize();
+	FitAmmoToMagazine();
 
 	ApplyWeaponData();
 }
@@ -69,7 +83,7 @@ UZItemDefinition* AZWeapon::GetAmmoItem() const
 
 int32 AZWeapon::GetMagazineSize() const
 {
-	return WeaponData ? WeaponData->MagazineSize : 0;
+	return FMath::RoundToInt32(GetItemStat(EZWeaponStat::MagazineSize));
 }
 
 bool AZWeapon::IsAutomatic() const
@@ -79,33 +93,51 @@ bool AZWeapon::IsAutomatic() const
 
 float AZWeapon::GetDamage() const
 {
-	return WeaponData ? WeaponData->Damage * GetOwnerAttribute(UZAttributeSet::GetDamageMultiplierAttribute()) : 0.f;
+	return GetItemStat(EZWeaponStat::Damage) * GetOwnerAttribute(UZAttributeSet::GetDamageMultiplierAttribute());
 }
 
 float AZWeapon::GetFireRate() const
 {
-	return WeaponData ? WeaponData->FireRate : 1.f;
+	return WeaponData ? GetItemStat(EZWeaponStat::FireRate) : 1.f;
 }
 
 float AZWeapon::GetSpread(bool bAiming) const
 {
-	return WeaponData ? (bAiming ? WeaponData->AimSpread : WeaponData->HipSpread) : 0.f;
+	// mods change hip and aimed spread alike
+	if (!WeaponData)
+	{
+		return 0.f;
+	}
+
+	return (bAiming ? WeaponData->AimSpread : WeaponData->HipSpread) * UZWeaponStatsLibrary::GetItemStatScale(WeaponData, ItemInstance, EZWeaponStat::Spread);
 }
 
 FVector2D AZWeapon::GetRecoil() const
 {
-	return WeaponData ? FVector2D(WeaponData->RecoilPitch, WeaponData->RecoilYaw) * GetOwnerAttribute(UZAttributeSet::GetRecoilMultiplierAttribute()) : FVector2D::ZeroVector;
+	if (!WeaponData)
+	{
+		return FVector2D::ZeroVector;
+	}
+
+	// mods and the holder's traits change the kick up and sideways alike
+	const float Scale = UZWeaponStatsLibrary::GetItemStatScale(WeaponData, ItemInstance, EZWeaponStat::Recoil) * GetOwnerAttribute(UZAttributeSet::GetRecoilMultiplierAttribute());
+	return FVector2D(WeaponData->RecoilPitch, WeaponData->RecoilYaw) * Scale;
 }
 
 float AZWeapon::GetRange() const
 {
-	return WeaponData ? WeaponData->Range : 0.f;
+	return GetItemStat(EZWeaponStat::Range);
 }
 
 float AZWeapon::GetReloadTime() const
 {
 	// the attribute set keeps the speed above 0
-	return WeaponData ? WeaponData->ReloadTime / GetOwnerAttribute(UZAttributeSet::GetReloadSpeedMultiplierAttribute()) : 0.f;
+	return GetItemStat(EZWeaponStat::ReloadTime) / GetOwnerAttribute(UZAttributeSet::GetReloadSpeedMultiplierAttribute());
+}
+
+float AZWeapon::GetItemStat(EZWeaponStat Stat) const
+{
+	return UZWeaponStatsLibrary::GetWeaponStat(WeaponData, ItemInstance, Stat);
 }
 
 float AZWeapon::GetOwnerAttribute(const FGameplayAttribute& Attribute, float Default) const
@@ -159,6 +191,45 @@ void AZWeapon::AddAmmo(int32 Rounds)
 {
 	// the server's count replicates to the owner; the owner's own count just shows it a moment earlier
 	Ammo = FMath::Clamp(Ammo + Rounds, 0, GetMagazineSize());
+}
+
+void AZWeapon::FitAmmoToMagazine()
+{
+	const int32 Extra = Ammo - GetMagazineSize();
+	if (!HasAuthority() || Extra <= 0)
+	{
+		return;
+	}
+
+	// the magazine first: giving the rounds back changes the inventory, which calls this again
+	Ammo -= Extra;
+
+	UZItemDefinition* AmmoItem = GetAmmoItem();
+	if (OwnerInventory.IsValid() && AmmoItem)
+	{
+		const int32 NoRoom = Extra - OwnerInventory->AddItem(AmmoItem, Extra);
+		if (NoRoom > 0)
+		{
+			OwnerInventory->DropOnGround(AmmoItem, NoRoom);
+		}
+	}
+
+	UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' magazine is smaller now: %d rounds back to the reserve"), *GetNameSafe(WeaponData), Extra);
+}
+
+void AZWeapon::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (OwnerInventory.IsValid())
+	{
+		OwnerInventory->OnInventoryChanged.RemoveDynamic(this, &AZWeapon::OnInventoryChanged);
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
+void AZWeapon::OnInventoryChanged(UZInventoryComponent* Inventory)
+{
+	FitAmmoToMagazine();
 }
 
 void AZWeapon::OnRep_Owner()

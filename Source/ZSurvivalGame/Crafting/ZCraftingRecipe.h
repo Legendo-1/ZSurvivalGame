@@ -9,6 +9,8 @@
 #include "Items/ZItemRequirement.h"
 #include "ZCraftingRecipe.generated.h"
 
+class UZRecipeOutcome;
+
 /** What crafting does with an input */
 UENUM(BlueprintType)
 enum class EZRecipeInputUsage : uint8
@@ -16,7 +18,9 @@ enum class EZRecipeInputUsage : uint8
 	/** Used up (an ingredient) */
 	Consumed,
 	/** Needed, but kept (a tool); it may lose durability */
-	Tool
+	Tool,
+	/** Kept, and changed by the recipe's Outcomes (e.g. the weapon being upgraded) */
+	Target
 };
 
 /** One of the items a recipe combines */
@@ -33,6 +37,10 @@ struct FZRecipeInput : public FZItemRequirement
 	int32 DurabilityCost = 0;
 
 	bool IsTool() const { return Usage == EZRecipeInputUsage::Tool; }
+
+	bool IsTarget() const { return Usage == EZRecipeInputUsage::Target; }
+
+	bool IsConsumed() const { return Usage == EZRecipeInputUsage::Consumed; }
 };
 
 /** A tradeskill level a recipe needs */
@@ -99,6 +107,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Recipe|Results")
 	TArray<FZItemStack> Results;
 
+	/** What it does to its Target input, e.g. upgrade a weapon or install a mod (a recipe needs Results, Outcomes or both). A recipe with Outcomes is made once per combine */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Instanced, Category = "Recipe|Results")
+	TArray<TObjectPtr<UZRecipeOutcome>> Outcomes;
+
 	/** Seconds one craft takes (0 = right away) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Recipe|Results", meta = (ClampMin = "0", Units = "s"))
 	float CraftTime = 0.f;
@@ -108,6 +120,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Recipe", meta = (MultiLine = "true"))
 	FString DeveloperNotes;
 #endif
+
+	/** The input marked Target, or null */
+	const FZRecipeInput* GetTargetInput() const;
 
 	/** Name for messages: Display Name, or the first result's name */
 	UFUNCTION(BlueprintPure, Category = "Recipe")

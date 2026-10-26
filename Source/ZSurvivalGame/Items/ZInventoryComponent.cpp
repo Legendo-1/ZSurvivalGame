@@ -400,7 +400,7 @@ UZItemInstance* UZInventoryComponent::AddNewStack(UZItemDefinition* Item, int32 
 	NewInstance->InitializeInstance(Item);
 	if (StatsSource)
 	{
-		NewInstance->CopyStatsFrom(StatsSource);
+		NewInstance->CopyStateFrom(StatsSource);
 	}
 
 	FZInventoryEntry& NewEntry = Inventory.Entries.AddDefaulted_GetRef();

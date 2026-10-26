@@ -2,7 +2,7 @@
 
 How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md.
 
-**Last updated:** 2026-10-26 (levels, trait points and traits on the PlayerState; enemies give every player experience; weapon stats include trait bonuses)
+**Last updated:** 2026-10-26 (weapon upgrades and mods change the weapon's stats; the weapon sends its item to its owner)
 
 ## The basic idea
 
@@ -77,6 +77,8 @@ Every ability is blocked while dead.
 - **Your weapon keys (1/2/3)** call `Set Weapon Type`. It takes out the inventory's weapon of that type. Without a matching weapon (e.g. Unarmed) only the animation set changes.
 - **The weapons are invisible for now:** there are no weapon meshes in the project yet. Set a Skeletal Mesh or Static Mesh in the data asset to show one. **Attach Socket** says where it goes on the character (default `weapon_r`, or `hand_r` if the mesh doesn't have it), **Attach Offset** lines it up, and **Muzzle Socket** marks where the shots start.
 - **Fire and reload animations** are optional: set **Fire Montage** / **Reload Montage** in the data asset.
+- **Upgrades and mods** (CRAFTING.md) change a weapon item's stats. The weapon in the hands works its stats out from its data, its item (upgrade level and mods) and the holder's traits. It sends its item to its owner only (`COND_OwnerOnly`), so the owner's machine predicts spread, recoil, the magazine and reload time with the same numbers as the server.
+- **When a magazine gets smaller** (e.g. an Extended Magazine comes off while the weapon is in the hands), the server moves the extra rounds back into the reserve ammo.
 
 **A new weapon:** right-click in `Content/Weapons` → **Miscellaneous → Data Asset** → **ZWeaponData** and fill it in. Then make an item with a **Weapon** fragment pointing to it (ITEMS.md → How to add things). Its **Weapon Type** decides which animation set it uses and which key equips it.
 
@@ -154,6 +156,8 @@ Until then, the shooter sees **debug lines**: white = shot, yellow dot = hit, re
 | Levels, trait points, tradeskill levels | **Project Settings → Game → Progression** |
 | Traits | `Content/Progression/Traits` (PROGRESSION.md) |
 | Weapon damage, fire rate, spread, ammo, reload time, recoil | The weapon's Data Asset in `Content/Weapons` |
+| Mod slots, max upgrade level, damage per upgrade | The weapon's Data Asset → **Upgrades** |
+| What a mod does | The mod item's **Weapon Mod** fragment (`Content/Items/Mods`) |
 | Max health and max stamina of players (100) | `UZAttributeSet` constructor in C++ |
 | Enemy health, team, speed, ranges, melee damage | `AZZombieCharacter` in C++, or a Blueprint child's Class Defaults |
 | Respawn delay (5 s) and dead body time (10 s) | BP_ThirdPersonGameMode → Class Defaults → **Respawn** |
@@ -190,7 +194,7 @@ Not decided in detail. This is the direction, so new systems fit what's already 
 - **Hit reactions:** enemies flinch or stagger when hit (an ability or GameplayCue triggered by damage).
 - **Downed and revive:** players go down first and teammates can revive them, before dying for real.
 - **Smarter AI:** AI perception (sight and hearing) instead of distance, monsters and human NPCs fighting each other, patrols and ranged attacks, possibly with a StateTree.
-- **Weapon mods and damage types** (acid, electric): GameplayEffects with tags (Blueprint children of `UZGameplayEffect_Damage`). Effects everyone sees are GameplayCues.
+- **Damage types** (acid, electric), e.g. from weapon mods: GameplayEffects with tags (Blueprint children of `UZGameplayEffect_Damage`). Effects everyone sees are GameplayCues.
 - **Armor weight tiers:** attributes changed by the armor's GameplayEffect, e.g. slower dodges for heavy armor.
 - **Inventory screen, harvesting, storage:** built on the item system (plans in ITEMS.md and CRAFTING.md).
 - **Spawn protection:** a few seconds without damage after respawning, so enemies at a Player Start can't kill a player again right away.

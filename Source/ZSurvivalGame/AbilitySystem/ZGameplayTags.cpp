@@ -28,12 +28,18 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Consumable, "Item.Type.Consumable", "Items used up from the inventory, e.g. bandages");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Tool, "Item.Type.Tool", "Tools that recipes need; kept when crafting");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Salvage, "Item.Type.Salvage", "Things found in the world that can be taken apart or combined");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_WeaponMod, "Item.Type.WeaponMod", "Mods that are installed on weapons");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Tool_Screwdriver, "Item.Tool.Screwdriver", "Counts as a screwdriver for recipes");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Tool_AmmoPress, "Item.Tool.AmmoPress", "Counts as an ammo press for recipes");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Stat_MagazineAmmo, "Item.Stat.MagazineAmmo", "Rounds in a weapon item's magazine");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Stat_Durability, "Item.Stat.Durability", "Durability left on an item with a Durability fragment");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Stat_UpgradeLevel, "Item.Stat.UpgradeLevel", "How many times a weapon item was upgraded");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_ModSlot_Barrel, "Weapon.ModSlot.Barrel", "Barrel mods: compensators, longer barrels");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_ModSlot_Sight, "Weapon.ModSlot.Sight", "Sights");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_ModSlot_Magazine, "Weapon.ModSlot.Magazine", "Magazines and loaders");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Crafting_Station_Workbench, "Crafting.Station.Workbench", "A workbench, e.g. in the hub");
 

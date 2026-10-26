@@ -13,6 +13,7 @@ void UZItemInstance::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 	DOREPLIFETIME(UZItemInstance, ItemDefinition);
 	DOREPLIFETIME(UZItemInstance, StatTags);
+	DOREPLIFETIME(UZItemInstance, AttachedMods);
 }
 
 void UZItemInstance::InitializeInstance(UZItemDefinition* InItemDefinition)
@@ -56,12 +57,68 @@ void UZItemInstance::SetStatTagStack(FGameplayTag Tag, int32 Count)
 	StatTags.SetStack(Tag, Count);
 }
 
-void UZItemInstance::CopyStatsFrom(const UZItemInstance* Other)
+void UZItemInstance::CopyStateFrom(const UZItemInstance* Other)
 {
 	if (Other)
 	{
 		StatTags.CopyFrom(Other->StatTags);
+		AttachedMods = Other->AttachedMods;
 	}
+}
+
+int32 UZItemInstance::GetUpgradeLevel() const
+{
+	return StatTags.GetStackCount(ZGameplayTags::Item_Stat_UpgradeLevel);
+}
+
+TArray<UZItemDefinition*> UZItemInstance::GetAttachedMods() const
+{
+	TArray<UZItemDefinition*> Mods;
+	for (UZItemDefinition* Mod : AttachedMods)
+	{
+		if (Mod)
+		{
+			Mods.Add(Mod);
+		}
+	}
+
+	return Mods;
+}
+
+UZItemDefinition* UZItemInstance::GetModInSlot(FGameplayTag Slot) const
+{
+	for (UZItemDefinition* Mod : AttachedMods)
+	{
+		const UZItemFragment_WeaponMod* ModFragment = Mod ? Mod->FindFragment<UZItemFragment_WeaponMod>() : nullptr;
+		if (ModFragment && ModFragment->Slot == Slot)
+		{
+			return Mod;
+		}
+	}
+
+	return nullptr;
+}
+
+UZItemDefinition* UZItemInstance::AttachMod(UZItemDefinition* Mod)
+{
+	const UZItemFragment_WeaponMod* ModFragment = Mod ? Mod->FindFragment<UZItemFragment_WeaponMod>() : nullptr;
+	if (!ModFragment)
+	{
+		return nullptr;
+	}
+
+	// one mod per slot: the old one comes off
+	UZItemDefinition* OldMod = GetModInSlot(ModFragment->Slot);
+	AttachedMods.Remove(OldMod);
+	AttachedMods.Add(Mod);
+	return OldMod;
+}
+
+TArray<UZItemDefinition*> UZItemInstance::DetachAllMods()
+{
+	TArray<UZItemDefinition*> Removed = GetAttachedMods();
+	AttachedMods.Reset();
+	return Removed;
 }
 
 bool UZItemInstance::HasDurability() const
@@ -110,6 +167,11 @@ void UZItemInstance::OnRep_StatTags()
 	NotifyInventory();
 }
 
+void UZItemInstance::OnRep_AttachedMods()
+{
+	NotifyInventory();
+}
+
 FString UZItemInstance::GetDebugString() const
 {
 	FString Result = GetNameSafe(ItemDefinition);
@@ -123,6 +185,17 @@ FString UZItemInstance::GetDebugString() const
 	if (Stats.Num() > 0)
 	{
 		Result += FString::Printf(TEXT(" (%s)"), *FString::Join(Stats, TEXT(", ")));
+	}
+
+	TArray<FString> Mods;
+	for (const UZItemDefinition* Mod : AttachedMods)
+	{
+		Mods.Add(GetNameSafe(Mod));
+	}
+
+	if (Mods.Num() > 0)
+	{
+		Result += FString::Printf(TEXT(" [mods: %s]"), *FString::Join(Mods, TEXT(", ")));
 	}
 
 	return Result;

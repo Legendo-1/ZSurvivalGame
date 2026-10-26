@@ -11,6 +11,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "ZSurvivalGame.h"
+#include "ZSurvivalGameCharacter.h"
 #include "ZSurvivalGamePlayerController.h"
 #include "AI/ZAICharacter.h"
 #include "AI/ZZombieCharacter.h"
@@ -27,6 +28,8 @@
 #include "Progression/ZProgressionComponent.h"
 #include "Progression/ZProgressionSubsystem.h"
 #include "Progression/ZTraitDefinition.h"
+#include "Weapons/ZWeapon.h"
+#include "Weapons/ZWeaponData.h"
 
 bool UZCheatManager::CheckIsHost(const TCHAR* CommandName) const
 {
@@ -180,17 +183,22 @@ TArray<APlayerState*> UZCheatManager::GetTargetPlayers(const FString& Who) const
 	return Players;
 }
 
-void UZCheatManager::ZGiveItem(const FString& ItemName, int32 Count)
+void UZCheatManager::ZGiveItem(const FString& ItemName, int32 Count, const FString& Who)
 {
-	UZInventoryComponent* Inventory = GetMyInventory();
 	UZItemDefinition* Item = FindItem(ItemName);
-	if (!Inventory || !Item || !CheckIsHost(TEXT("ZGiveItem")))
+	if (!Item || !CheckIsHost(TEXT("ZGiveItem")))
 	{
 		return;
 	}
 
-	const int32 NumAdded = Inventory->AddItem(Item, FMath::Max(Count, 1));
-	UE_LOG(LogZSurvivalGame, Log, TEXT("ZGiveItem: added %s x%d"), *ItemName, NumAdded);
+	for (const APlayerState* Player : GetTargetPlayers(Who))
+	{
+		if (UZInventoryComponent* Inventory = UZInventoryComponent::FindInventoryComponent(Player))
+		{
+			const int32 NumAdded = Inventory->AddItem(Item, FMath::Max(Count, 1));
+			UE_LOG(LogZSurvivalGame, Log, TEXT("ZGiveItem: added %s x%d for '%s'"), *ItemName, NumAdded, *GetNameSafe(Player));
+		}
+	}
 }
 
 void UZCheatManager::ZShowInventory()
@@ -416,6 +424,34 @@ void UZCheatManager::ZSpawnWorkbench(const FString& Who)
 		const AActor* Workbench = GetWorld()->SpawnActor<AActor>(WorkbenchClass, SpawnLocation, FRotator(0.f, Pawn->GetActorRotation().Yaw, 0.f), SpawnParams);
 		UE_LOG(LogZSurvivalGame, Log, TEXT("ZSpawnWorkbench: %s for '%s'"), Workbench ? TEXT("spawned") : TEXT("failed"), *GetNameSafe(Player));
 	}
+}
+
+void UZCheatManager::ZWeaponStats()
+{
+	const APlayerController* PlayerController = GetOuterAPlayerController();
+	const AZSurvivalGameCharacter* Character = PlayerController ? Cast<AZSurvivalGameCharacter>(PlayerController->GetPawn()) : nullptr;
+	const AZWeapon* Weapon = Character ? Character->GetEquippedWeapon() : nullptr;
+	if (!Weapon || !Weapon->GetWeaponData())
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZWeaponStats: no weapon in your hands"));
+		return;
+	}
+
+	// on a client the item comes with the weapon, to its owner only
+	const UZItemInstance* Item = Weapon->GetItemInstance();
+	TArray<FString> Mods;
+	if (Item)
+	{
+		for (const UZItemDefinition* Mod : Item->GetAttachedMods())
+		{
+			Mods.Add(Mod->GetName());
+		}
+	}
+
+	const FVector2D Recoil = Weapon->GetRecoil();
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZWeaponStats: %s +%d [mods: %s]: damage %.2f, fire rate %.2f/s, spread %.2f (aiming %.2f), recoil %.3f up %.3f sideways, range %.0f, magazine %d/%d, reload %.2f s"),
+		*GetNameSafe(Weapon->GetWeaponData()), Item ? Item->GetUpgradeLevel() : 0, Mods.Num() > 0 ? *FString::Join(Mods, TEXT(", ")) : (Item ? TEXT("none") : TEXT("no item here")),
+		Weapon->GetDamage(), Weapon->GetFireRate(), Weapon->GetSpread(false), Weapon->GetSpread(true), Recoil.X, Recoil.Y, Weapon->GetRange(), Weapon->GetAmmo(), Weapon->GetMagazineSize(), Weapon->GetReloadTime());
 }
 
 void UZCheatManager::ZSetDurability(const FString& ItemName, int32 Durability)

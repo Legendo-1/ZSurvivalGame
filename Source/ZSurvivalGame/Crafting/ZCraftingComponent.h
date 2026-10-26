@@ -15,6 +15,7 @@ class UZCraftingRecipe;
 class UZInventoryComponent;
 class UZItemInstance;
 struct FZRecipeInput;
+struct FZRecipeOutcomeContext;
 
 /** Whether a craft happened, and if not, why */
 UENUM(BlueprintType)
@@ -29,6 +30,8 @@ enum class EZCraftingResult : uint8
 	ToolNotGoodEnough,
 	/** A tradeskill is too low */
 	SkillTooLow,
+	/** Everything's there, but it can't be done to the target item, e.g. the weapon is fully upgraded or the mod doesn't fit */
+	CannotApply,
 	/** A crafting station has to be nearby */
 	NeedsStation,
 	/** Already crafting something */
@@ -274,20 +277,27 @@ protected:
 
 private:
 
-	/** Which item instances one craft takes and wears down */
+	/** What one craft uses: the stacks it takes, the tools it wears down and the item its outcomes change */
 	struct FCraftPlan
 	{
 		TArray<TPair<UZItemInstance*, int32>> ToRemove;
 		TArray<TPair<UZItemInstance*, int32>> ToWear;
+		UZItemInstance* Target = nullptr;
 	};
 
-	/** Everything but the items: station, tradeskills, tools good enough */
-	EZCraftingResult CheckRecipe(const UZCraftingRecipe& Recipe, TConstArrayView<const UZItemInstance*> PreferredItems) const;
+	/**
+	 *  Everything a craft needs: the station, the tradeskills, good enough tools, the items, and that its outcomes can happen
+	 *  OutPlan gets the stacks it would use. OutReason gets the message for a failure that brings its own (e.g. a fully upgraded weapon)
+	 */
+	EZCraftingResult CheckRecipe(const UZCraftingRecipe& Recipe, TConstArrayView<const UZItemInstance*> PreferredItems, FCraftPlan& OutPlan, FText& OutReason) const;
 
 	/** Picks the stacks one craft uses, the chosen items first. Returns false if something is missing */
 	bool BuildCraftPlan(const UZCraftingRecipe& Recipe, TConstArrayView<const UZItemInstance*> PreferredItems, FCraftPlan& OutPlan) const;
 
-	/** Server: takes the ingredients, wears the tools and gives the results */
+	/** What the recipe's outcomes work with for this plan */
+	FZRecipeOutcomeContext MakeOutcomeContext(const FCraftPlan& Plan) const;
+
+	/** Server: takes the ingredients, wears the tools, changes the target and gives the results */
 	void ApplyCraftPlan(const UZCraftingRecipe& Recipe, const FCraftPlan& Plan);
 
 	/** Server: tradeskill experience for one craft (and the bonus for a first discovery) */
@@ -302,11 +312,11 @@ private:
 	/** Server: the current craft's time is up */
 	void OnCraftTimerDone();
 
-	/** Server: checks everything again and crafts the recipe once */
-	EZCraftingResult CraftOnce(UZCraftingRecipe* Recipe);
+	/** Server: checks everything again and crafts the recipe once. OutReason: see CheckRecipe */
+	EZCraftingResult CraftOnce(UZCraftingRecipe* Recipe, FText& OutReason);
 
-	/** Server: stops crafting and tells the owner what was made */
-	void FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingResult LastResult);
+	/** Server: stops crafting and tells the owner what was made. Reason, if set, says why it stopped instead of the usual text for LastResult */
+	void FinishCrafting(UZCraftingRecipe* Recipe, EZCraftingResult LastResult, const FText& Reason = FText::GetEmpty());
 
 	/** Server: tells the owner how a combine went (and logs it) */
 	void SendResult(EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message);

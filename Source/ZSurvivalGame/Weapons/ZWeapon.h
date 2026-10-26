@@ -8,8 +8,10 @@
 
 class ACharacter;
 struct FGameplayAttribute;
+enum class EZWeaponStat : uint8;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class UZInventoryComponent;
 class UZItemDefinition;
 class UZItemInstance;
 class UZWeaponData;
@@ -46,7 +48,7 @@ public:
 
 	UZWeaponData* GetWeaponData() const { return WeaponData; }
 
-	/** The inventory item this weapon comes from (server only) */
+	/** The inventory item this weapon comes from (the server, and the owner's machine) */
 	UZItemInstance* GetItemInstance() const { return ItemInstance; }
 
 	/** Item used as reserve ammo, or null for unlimited reserve */
@@ -59,7 +61,7 @@ public:
 
 	bool IsAutomatic() const;
 
-	/** --- STATS: the weapon data, with the bonuses of the character holding it (traits) --- */
+	/** --- STATS: the weapon data, changed by the item's upgrade level and mods and by the traits of the character holding it --- */
 
 	/** Damage per bullet */
 	float GetDamage() const;
@@ -82,6 +84,9 @@ public:
 	/** An attribute of the character holding it, e.g. their damage multiplier; Default if there's none */
 	float GetOwnerAttribute(const FGameplayAttribute& Attribute, float Default = 1.f) const;
 
+	/** A stat of the weapon item: the data with its upgrade level and mods (no traits) */
+	float GetItemStat(EZWeaponStat Stat) const;
+
 	/** Where shots and muzzle flashes start: the muzzle socket, or the weapon's location if there's none */
 	FVector GetMuzzleLocation() const;
 
@@ -97,10 +102,19 @@ public:
 	/** Loads rounds into the magazine (up to its size): on the server, and on the owning player's machine so it can keep shooting before the server's count arrives */
 	void AddAmmo(int32 Rounds);
 
+	/** Server: if the magazine holds more than it can now (e.g. an extended magazine came off), the extra rounds go back to the reserve */
+	void FitAmmoToMagazine();
+
 protected:
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/** Clients: attach once the owner is known */
 	virtual void OnRep_Owner() override;
+
+	/** Server: the owner's inventory changed, maybe this weapon's item (e.g. a mod came off) */
+	UFUNCTION()
+	void OnInventoryChanged(UZInventoryComponent* Inventory);
 
 	UFUNCTION()
 	void OnRep_WeaponData();
@@ -114,8 +128,8 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_WeaponData)
 	TObjectPtr<UZWeaponData> WeaponData;
 
-	/** The item this weapon comes from (server only) */
-	UPROPERTY()
+	/** The item this weapon comes from; only the owner needs it (its upgrades and mods change the stats) */
+	UPROPERTY(Replicated)
 	TObjectPtr<UZItemInstance> ItemInstance;
 
 	/** Rounds left in the magazine; only the owning player needs it */
@@ -124,4 +138,7 @@ protected:
 
 	/** When this machine last fired */
 	double LastFireTime = -1000.0;
+
+	/** Server: the inventory holding the weapon's item, whose changes it listens to */
+	TWeakObjectPtr<UZInventoryComponent> OwnerInventory;
 };
