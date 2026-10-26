@@ -29,6 +29,7 @@ public:
 	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, Stamina);
 	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, MaxStamina);
 	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, IncomingDamage);
+	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, IncomingHealing);
 
 	/** Broadcast on the server when Health reaches 0 */
 	FZOutOfHealthDelegate OnOutOfHealth;
@@ -44,7 +45,7 @@ public:
 	/** Lowers Health/Stamina when their max drops, and reports running out of health */
 	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 
-	/** Turns IncomingDamage from gameplay effects into lost Health */
+	/** Turns IncomingDamage and IncomingHealing from gameplay effects into Health changes */
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 
 protected:
@@ -84,4 +85,8 @@ private:
 	/** Damage about to be taken. Not replicated: the server turns it into a Health change right away */
 	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Meta", meta = (AllowPrivateAccess = "true"))
 	FGameplayAttributeData IncomingDamage;
+
+	/** Healing about to be received. Not replicated: the server turns it into a Health change right away */
+	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Meta", meta = (AllowPrivateAccess = "true"))
+	FGameplayAttributeData IncomingHealing;
 };

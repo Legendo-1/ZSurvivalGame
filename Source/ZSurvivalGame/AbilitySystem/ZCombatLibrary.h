@@ -35,4 +35,8 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Survival|Combat", meta = (DefaultToSelf = "Source"))
 	static bool ApplyDamage(AActor* Source, AActor* Target, float Damage, const FHitResult& Hit);
+
+	/** Server only: heals Target (through UZGameplayEffect_Heal). Returns true if it had health to heal; the dead aren't healed */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Survival|Combat", meta = (DefaultToSelf = "Source"))
+	static bool ApplyHealing(AActor* Source, AActor* Target, float Amount);
 };

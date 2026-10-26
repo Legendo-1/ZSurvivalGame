@@ -4,6 +4,7 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "Components/CapsuleComponent.h"
+#include "Engine/AssetManager.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
@@ -11,6 +12,10 @@
 #include "AI/ZAICharacter.h"
 #include "AI/ZZombieCharacter.h"
 #include "AbilitySystem/ZAttributeSet.h"
+#include "Items/ZInventoryComponent.h"
+#include "Items/ZItemDefinition.h"
+#include "Items/ZItemInstance.h"
+#include "Items/ZPickup.h"
 
 bool UZCheatManager::CheckIsHost(const TCHAR* CommandName) const
 {
@@ -93,4 +98,115 @@ void UZCheatManager::ZHeal()
 
 	ASC->SetNumericAttributeBase(UZAttributeSet::GetHealthAttribute(), ASC->GetNumericAttribute(UZAttributeSet::GetMaxHealthAttribute()));
 	ASC->SetNumericAttributeBase(UZAttributeSet::GetStaminaAttribute(), ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute()));
+}
+
+void UZCheatManager::ZHurt(float Amount)
+{
+	APlayerController* PlayerController = GetOuterAPlayerController();
+	UAbilitySystemComponent* ASC = PlayerController ? UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(PlayerController->GetPawn()) : nullptr;
+	if (!ASC || !CheckIsHost(TEXT("ZHurt")))
+	{
+		return;
+	}
+
+	const FGameplayAttribute HealthAttribute = UZAttributeSet::GetHealthAttribute();
+	if (Amount > 0.f)
+	{
+		ASC->SetNumericAttributeBase(HealthAttribute, ASC->GetNumericAttributeBase(HealthAttribute) - Amount);
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZHurt: health is %.0f"), ASC->GetNumericAttribute(HealthAttribute));
+}
+
+UZItemDefinition* UZCheatManager::FindItem(const FString& ItemName) const
+{
+	UAssetManager& AssetManager = UAssetManager::Get();
+	const FSoftObjectPath ItemPath = AssetManager.GetPrimaryAssetPath(FPrimaryAssetId(UZItemDefinition::GetItemAssetType(), FName(*ItemName)));
+	if (UZItemDefinition* Item = Cast<UZItemDefinition>(ItemPath.TryLoad()))
+	{
+		return Item;
+	}
+
+	// not found: list the ones there are
+	TArray<FPrimaryAssetId> ItemIds;
+	AssetManager.GetPrimaryAssetIdList(UZItemDefinition::GetItemAssetType(), ItemIds);
+
+	TArray<FString> ItemNames;
+	for (const FPrimaryAssetId& ItemId : ItemIds)
+	{
+		ItemNames.Add(ItemId.PrimaryAssetName.ToString());
+	}
+
+	ItemNames.Sort();
+	UE_LOG(LogZSurvivalGame, Warning, TEXT("No item named '%s'. Items: %s"), *ItemName, *FString::Join(ItemNames, TEXT(", ")));
+	return nullptr;
+}
+
+UZInventoryComponent* UZCheatManager::GetMyInventory() const
+{
+	return UZInventoryComponent::FindInventoryComponent(GetOuterAPlayerController());
+}
+
+void UZCheatManager::ZGiveItem(const FString& ItemName, int32 Count)
+{
+	UZInventoryComponent* Inventory = GetMyInventory();
+	UZItemDefinition* Item = FindItem(ItemName);
+	if (!Inventory || !Item || !CheckIsHost(TEXT("ZGiveItem")))
+	{
+		return;
+	}
+
+	const int32 NumAdded = Inventory->AddItem(Item, FMath::Max(Count, 1));
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZGiveItem: added %s x%d"), *ItemName, NumAdded);
+}
+
+void UZCheatManager::ZShowInventory()
+{
+	const UZInventoryComponent* Inventory = GetMyInventory();
+	UE_LOG(LogZSurvivalGame, Log, TEXT("Inventory: %s"), Inventory ? *Inventory->GetDebugString() : TEXT("(none yet)"));
+}
+
+void UZCheatManager::ZDropItem(const FString& ItemName, int32 Count)
+{
+	// dropping is a request to the server, so this works in every window
+	UZInventoryComponent* Inventory = GetMyInventory();
+	const UZItemDefinition* Item = FindItem(ItemName);
+	UZItemInstance* Instance = Inventory && Item ? Inventory->FindFirstInstance(Item) : nullptr;
+	if (!Instance)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZDropItem: you have no %s"), *ItemName);
+		return;
+	}
+
+	Inventory->DropItem(Instance, FMath::Max(Count, 1));
+}
+
+void UZCheatManager::ZUseItem(const FString& ItemName)
+{
+	// using is a request to the server, so this works in every window
+	UZInventoryComponent* Inventory = GetMyInventory();
+	const UZItemDefinition* Item = FindItem(ItemName);
+	UZItemInstance* Instance = Inventory && Item ? Inventory->FindFirstInstance(Item) : nullptr;
+	if (!Instance)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZUseItem: you have no %s"), *ItemName);
+		return;
+	}
+
+	Inventory->UseItem(Instance);
+}
+
+void UZCheatManager::ZSpawnPickup(const FString& ItemName, int32 Count, float Distance)
+{
+	const APlayerController* PlayerController = GetOuterAPlayerController();
+	const APawn* Pawn = PlayerController ? PlayerController->GetPawn() : nullptr;
+	UZItemDefinition* Item = FindItem(ItemName);
+	if (!Pawn || !Item || !CheckIsHost(TEXT("ZSpawnPickup")))
+	{
+		return;
+	}
+
+	const FVector Location = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * FMath::Max(Distance, 0.f);
+	const bool bSpawned = AZPickup::SpawnPickup(GetWorld(), nullptr, FZItemStack(Item, FMath::Max(Count, 1)), Location) != nullptr;
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSpawnPickup: %s"), bSpawned ? TEXT("spawned") : TEXT("failed"));
 }

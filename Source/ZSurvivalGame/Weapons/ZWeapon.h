@@ -9,11 +9,13 @@
 class ACharacter;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class UZItemDefinition;
+class UZItemInstance;
 class UZWeaponData;
 
 /**
- *  A weapon the character carries, spawned by the server from a UZWeaponData
- *  Every machine attaches it to its owner's hand; the server keeps the ammo
+ *  The weapon in a character's hands, spawned by the server when a weapon item is equipped and removed when it's put away
+ *  Every machine attaches it to its owner's hand; the server keeps the ammo, and writes it back to the item when the weapon is put away
  */
 UCLASS()
 class AZWeapon : public AActor
@@ -35,10 +37,19 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	/** Server: sets the weapon's data and fills the magazine */
-	void InitWeapon(UZWeaponData* InWeaponData);
+	/** Server: sets the weapon's data and loads the magazine from its item (full if there's no item) */
+	void InitWeapon(UZWeaponData* InWeaponData, UZItemInstance* InItemInstance);
+
+	/** Server: stores the magazine ammo on the item, so it's kept when the weapon is put away or dropped */
+	void SaveAmmoToItem();
 
 	UZWeaponData* GetWeaponData() const { return WeaponData; }
+
+	/** The inventory item this weapon comes from (server only) */
+	UZItemInstance* GetItemInstance() const { return ItemInstance; }
+
+	/** Item used as reserve ammo, or null for unlimited reserve */
+	UZItemDefinition* GetAmmoItem() const;
 
 	/** Rounds left in the magazine (only up to date on the server and the owning player's machine) */
 	int32 GetAmmo() const { return Ammo; }
@@ -59,11 +70,8 @@ public:
 	/** Server: uses one round */
 	void ConsumeAmmo();
 
-	/** Fills the magazine: on the server, and on the owning player's machine so it can keep shooting before the server's count arrives */
-	void Refill();
-
-	/** Shows the weapon in the hand, or hides it while holstered (server; replicates) */
-	void SetEquipped(bool bEquipped);
+	/** Loads rounds into the magazine (up to its size): on the server, and on the owning player's machine so it can keep shooting before the server's count arrives */
+	void AddAmmo(int32 Rounds);
 
 protected:
 
@@ -81,6 +89,10 @@ protected:
 
 	UPROPERTY(ReplicatedUsing = OnRep_WeaponData)
 	TObjectPtr<UZWeaponData> WeaponData;
+
+	/** The item this weapon comes from (server only) */
+	UPROPERTY()
+	TObjectPtr<UZItemInstance> ItemInstance;
 
 	/** Rounds left in the magazine; only the owning player needs it */
 	UPROPERTY(Replicated)

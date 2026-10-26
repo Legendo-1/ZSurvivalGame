@@ -23,6 +23,12 @@ public:
 	/** Server: respawns the player at a Player Start after RespawnDelay seconds */
 	void RequestRespawn(AController* Controller);
 
+	/** A free Player Start, or else any Player Start even if it's crowded (the default would fall back to the world origin) */
+	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
+
+	/** Spawns the player's character, moved to a free spot nearby if the start is crowded (the default gives up) */
+	virtual APawn* SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayer, const FTransform& SpawnTransform) override;
+
 protected:
 
 	/** Seconds between dying and respawning */

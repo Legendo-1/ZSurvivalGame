@@ -8,6 +8,7 @@
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "AbilitySystem/ZGameplayEffect_Damage.h"
+#include "AbilitySystem/ZGameplayEffect_Heal.h"
 #include "AbilitySystem/ZGameplayTags.h"
 
 FGenericTeamId UZCombatLibrary::GetTeam(const AActor* Actor)
@@ -93,5 +94,30 @@ bool UZCombatLibrary::ApplyDamage(AActor* Source, AActor* Target, float Damage, 
 	CueParams.PhysicalMaterial = Hit.PhysMaterial.Get();
 	TargetASC->ExecuteGameplayCue(ZGameplayTags::GameplayCue_Character_Hit, CueParams);
 
+	return true;
+}
+
+bool UZCombatLibrary::ApplyHealing(AActor* Source, AActor* Target, float Amount)
+{
+	UAbilitySystemComponent* TargetASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Target);
+	if (!Source || !Source->HasAuthority() || !TargetASC || Amount <= 0.f || IsDead(Target))
+	{
+		return false;
+	}
+
+	UAbilitySystemComponent* SourceASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Source);
+	UAbilitySystemComponent* EffectASC = SourceASC ? SourceASC : TargetASC;
+
+	FGameplayEffectContextHandle Context = EffectASC->MakeEffectContext();
+	Context.AddInstigator(Source, Source);
+
+	const FGameplayEffectSpecHandle Spec = EffectASC->MakeOutgoingSpec(UZGameplayEffect_Heal::StaticClass(), 1.f, Context);
+	if (!Spec.IsValid())
+	{
+		return false;
+	}
+
+	Spec.Data->SetSetByCallerMagnitude(ZGameplayTags::SetByCaller_Healing, Amount);
+	EffectASC->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), TargetASC);
 	return true;
 }

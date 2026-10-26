@@ -3,6 +3,7 @@
 #include "ZSurvivalGamePlayerState.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystem/ZAttributeSet.h"
+#include "Items/ZInventoryComponent.h"
 
 AZSurvivalGamePlayerState::AZSurvivalGamePlayerState()
 {
@@ -13,6 +14,8 @@ AZSurvivalGamePlayerState::AZSurvivalGamePlayerState()
 
 	// created as a subobject of the ability system's owner, so the ability system finds and replicates it
 	AttributeSet = CreateDefaultSubobject<UZAttributeSet>(TEXT("AttributeSet"));
+
+	Inventory = CreateDefaultSubobject<UZInventoryComponent>(TEXT("Inventory"));
 
 	// the PlayerState default (1 update per second) is too slow for abilities and attributes
 	SetNetUpdateFrequency(100.f);

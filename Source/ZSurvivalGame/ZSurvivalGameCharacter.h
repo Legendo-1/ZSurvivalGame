@@ -8,6 +8,7 @@
 #include "GenericTeamAgentInterface.h"
 #include "Logging/LogMacros.h"
 #include "ZSurvivalGameTypes.h"
+#include "Items/ZItemDefinition.h"
 #include "ZSurvivalGameCharacter.generated.h"
 
 class USpringArmComponent;
@@ -16,7 +17,9 @@ class UInputAction;
 class UAbilitySystemComponent;
 class UZGameplayAbility;
 class UZCharacterMovementComponent;
-class UZWeaponData;
+class UZInteractionComponent;
+class UZInventoryComponent;
+class UZItemInstance;
 class AZWeapon;
 struct FInputActionValue;
 struct FGameplayAttribute;
@@ -40,6 +43,10 @@ class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterfac
 	/** Follow camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FollowCamera;
+
+	/** Finds and uses interactables (pickups, later doors, crafting stations, ...) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZInteractionComponent> InteractionComponent;
 
 protected:
 
@@ -78,6 +85,10 @@ protected:
 	/** Reload Input Action */
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* ReloadAction;
+
+	/** Interact Input Action (hold for interactions that take time) */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* InteractAction;
 
 	/** --- ABILITIES --- */
 
@@ -133,23 +144,23 @@ protected:
 	/** Boom length when not aiming, cached from the CameraBoom on BeginPlay */
 	float DefaultArmLength = 250.f;
 
-	/** --- WEAPON --- */
+	/** --- INVENTORY & WEAPON --- */
 
-	/** Weapons the character spawns with (one Data Asset each); the 1/2/3 keys switch between them by weapon type */
-	UPROPERTY(EditDefaultsOnly, Category = "Survival|Weapon")
-	TArray<TObjectPtr<UZWeaponData>> StartingWeapons;
+	/** Items a player gets the first time they spawn (kept in their inventory on the PlayerState, also after dying) */
+	UPROPERTY(EditDefaultsOnly, Category = "Survival|Inventory")
+	TArray<FZItemStack> StartingItems;
 
 	/** Current weapon animation set; follows the equipped weapon (set with SetWeaponType) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = "Survival|Weapon")
 	EZWeaponType CurrentWeaponType = EZWeaponType::Unarmed;
 
-	/** Weapons the character carries (spawned by the server); only the owning player needs the list */
+	/** The weapon in the hands (spawned by the server from the equipped item), or null when unarmed */
 	UPROPERTY(Replicated)
-	TArray<TObjectPtr<AZWeapon>> Weapons;
-
-	/** The weapon in the hands, or null when unarmed */
-	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)
 	TObjectPtr<AZWeapon> EquippedWeapon;
+
+	/** The inventory item in the hands; only the owning player needs it */
+	UPROPERTY(Replicated)
+	TObjectPtr<UZItemInstance> EquippedItem;
 
 	/** True while the fire button is held, for automatic weapons (owning player's machine) */
 	bool bFireHeld = false;
@@ -186,16 +197,16 @@ protected:
 
 	virtual void Tick(float DeltaTime) override;
 
-	/** Server: removes the weapons with the character */
+	/** Server: puts the weapon away with the character */
 	virtual void Destroyed() override;
 
 	/** Reduces health when damaged (e.g. via UGameplayStatics::ApplyDamage) */
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
-	/** Server: sets up the ability system, gives the default abilities and the starting weapons */
+	/** Server: sets up the ability system, gives the default abilities and starting items, and takes out the weapon */
 	virtual void PossessedBy(AController* NewController) override;
 
-	/** Server: lets go of the PlayerState's ability system (e.g. the dead body after a respawn) */
+	/** Server: lets go of the PlayerState's ability system and inventory (e.g. the dead body after a respawn) */
 	virtual void UnPossessed() override;
 
 	/** Client: sets up the ability system once the PlayerState has arrived */
@@ -222,23 +233,27 @@ protected:
 	/** Server: drains stamina while sprinting and regenerates it otherwise */
 	void UpdateStamina(float DeltaTime);
 
-	/** Server: spawns the StartingWeapons and equips the one matching CurrentWeaponType */
-	void SpawnStartingWeapons();
+	/** Server: gives the StartingItems, once per player */
+	void GiveStartingItems();
 
-	/** Server: puts the weapon of this type in the hands (or none, e.g. for Unarmed) */
+	/** Server: takes out the inventory's weapon of this type (or puts the weapon away, e.g. for Unarmed) */
 	void EquipWeaponOfType(EZWeaponType WeaponType);
 
-	/** The carried weapon of this type, or null */
-	AZWeapon* FindWeaponOfType(EZWeaponType WeaponType) const;
+	/** Server: puts this weapon item in the hands */
+	void EquipWeaponItem(UZItemInstance* Item);
 
-	/** Server: removes all carried weapons */
-	void DestroyWeapons();
+	/** Server: puts the weapon in the hands away (its ammo stays on the item) */
+	void UnequipWeapon();
 
-	/** Shows the equipped weapon and hides the others */
-	void UpdateWeaponVisibility();
+	/** The first weapon item of this type in the inventory, or null */
+	UZItemInstance* FindWeaponItemOfType(EZWeaponType WeaponType) const;
 
-	UFUNCTION()
-	void OnRep_EquippedWeapon();
+	/** Server: an item is leaving the inventory; put it away first if it's in the hands */
+	void OnInventoryItemRemoving(UZInventoryComponent* Inventory, UZItemInstance* Item);
+
+	/** Asks the server to put this item in the hands */
+	UFUNCTION(Server, Reliable)
+	void ServerEquipItem(UZItemInstance* Item);
 
 	/** Sends an ability input press or release to the ability system */
 	void PressAbilityInput(EZAbilityInputID InputID);
@@ -307,17 +322,49 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoReload();
 
+	/** Interact pressed: uses what the player looks at (held for interactions that take time) */
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoInteractStart();
+
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoInteractEnd();
+
 	/** Caps movement speed, e.g. Jog or Walk for the duration of a weapon swap or reload; None removes the cap. Call it on the owning player's machine (or in a predicted ability); it reaches the server with the next move */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	void SetSpeedLimit(EZSpeedLimit NewLimit);
 
-	/** Switches to the carried weapon of this type (or just the animation set if there's none), right away for this player and through the server for everyone */
+	/** Switches to the inventory's weapon of this type (or just the animation set if there's none), right away for this player and through the server for everyone */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
 	void SetWeaponType(EZWeaponType NewWeaponType);
+
+	/** Puts this inventory item in the hands (e.g. from an inventory screen); only weapons for now */
+	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
+	void EquipItem(UZItemInstance* Item);
 
 	/** The weapon in the hands, or null when unarmed */
 	UFUNCTION(BlueprintPure, Category = "Survival|Weapon")
 	AZWeapon* GetEquippedWeapon() const { return EquippedWeapon; }
+
+	/** The inventory item in the hands (server and owning player), or null */
+	UFUNCTION(BlueprintPure, Category = "Survival|Weapon")
+	UZItemInstance* GetEquippedItem() const { return EquippedItem; }
+
+	/** Reserve ammo for the weapon in the hands (in the inventory); -1 if it has unlimited reserve or there's no weapon */
+	UFUNCTION(BlueprintPure, Category = "Survival|Weapon")
+	int32 GetReserveAmmo() const;
+
+	/** True if the weapon in the hands isn't full and there's ammo to load */
+	bool CanReloadEquippedWeapon() const;
+
+	/** The player's inventory (on their PlayerState), or null before it has arrived */
+	UFUNCTION(BlueprintPure, Category = "Survival|Inventory")
+	UZInventoryComponent* GetInventory() const;
+
+	/** Finds and uses interactables */
+	UZInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
+
+	/** The Interact Input Action (e.g. so the HUD can show its key) */
+	const UInputAction* GetInteractAction() const { return InteractAction; }
 
 	/** Health as 0..1, for UI bars */
 	UFUNCTION(BlueprintPure, Category = "Survival|Stats")

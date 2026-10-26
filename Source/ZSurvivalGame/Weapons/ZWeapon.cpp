@@ -8,6 +8,8 @@
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "Net/UnrealNetwork.h"
+#include "AbilitySystem/ZGameplayTags.h"
+#include "Items/ZItemInstance.h"
 #include "Weapons/ZWeaponData.h"
 
 AZWeapon::AZWeapon()
@@ -40,11 +42,28 @@ void AZWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetime
 	DOREPLIFETIME_CONDITION(AZWeapon, Ammo, COND_OwnerOnly);
 }
 
-void AZWeapon::InitWeapon(UZWeaponData* InWeaponData)
+void AZWeapon::InitWeapon(UZWeaponData* InWeaponData, UZItemInstance* InItemInstance)
 {
 	WeaponData = InWeaponData;
-	Refill();
+	ItemInstance = InItemInstance;
+
+	// the item remembers its magazine between being put away and taken out again
+	Ammo = ItemInstance ? ItemInstance->GetStatTagStackCount(ZGameplayTags::Item_Stat_MagazineAmmo) : GetMagazineSize();
+
 	ApplyWeaponData();
+}
+
+void AZWeapon::SaveAmmoToItem()
+{
+	if (HasAuthority() && ItemInstance)
+	{
+		ItemInstance->SetStatTagStack(ZGameplayTags::Item_Stat_MagazineAmmo, Ammo);
+	}
+}
+
+UZItemDefinition* AZWeapon::GetAmmoItem() const
+{
+	return WeaponData ? WeaponData->AmmoItem.Get() : nullptr;
 }
 
 int32 AZWeapon::GetMagazineSize() const
@@ -98,15 +117,10 @@ void AZWeapon::ConsumeAmmo()
 	}
 }
 
-void AZWeapon::Refill()
+void AZWeapon::AddAmmo(int32 Rounds)
 {
-	// the server's count replicates to the owner; the owner's own refill just shows it a moment earlier
-	Ammo = GetMagazineSize();
-}
-
-void AZWeapon::SetEquipped(bool bEquipped)
-{
-	SetActorHiddenInGame(!bEquipped);
+	// the server's count replicates to the owner; the owner's own count just shows it a moment earlier
+	Ammo = FMath::Clamp(Ammo + Rounds, 0, GetMagazineSize());
 }
 
 void AZWeapon::OnRep_Owner()

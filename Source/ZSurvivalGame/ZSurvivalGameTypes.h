@@ -9,6 +9,9 @@
 /** Trace channel for weapon shots (set up in DefaultEngine.ini). Characters ignore it with their capsule and block it with their mesh, so hits know the bone */
 inline constexpr ECollisionChannel ZTraceChannel_Weapon = ECC_GameTraceChannel1;
 
+/** Trace channel for finding interactables (set up in DefaultEngine.ini). Ignored by everything except collisions of interactable things, which block it */
+inline constexpr ECollisionChannel ZTraceChannel_Interaction = ECC_GameTraceChannel2;
+
 /** Which weapon animation set the character uses */
 UENUM(BlueprintType)
 enum class EZWeaponType : uint8

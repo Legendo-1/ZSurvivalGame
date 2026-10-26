@@ -7,6 +7,7 @@
 #include "AbilitySystem/ZGameplayTags.h"
 #include "ZSurvivalGame.h"
 #include "ZSurvivalGameCharacter.h"
+#include "Items/ZInventoryComponent.h"
 #include "Weapons/ZWeapon.h"
 #include "Weapons/ZWeaponData.h"
 
@@ -24,9 +25,9 @@ bool UZGameplayAbility_Reload::CanActivateAbility(const FGameplayAbilitySpecHand
 		return false;
 	}
 
+	// not full, and ammo in the inventory to load (or unlimited reserve)
 	const AZSurvivalGameCharacter* Character = GetZCharacter(ActorInfo);
-	const AZWeapon* Weapon = Character ? Character->GetEquippedWeapon() : nullptr;
-	return Weapon && Weapon->GetWeaponData() && Weapon->GetAmmo() < Weapon->GetMagazineSize();
+	return Character && Character->CanReloadEquippedWeapon();
 }
 
 void UZGameplayAbility_Reload::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -57,12 +58,24 @@ void UZGameplayAbility_Reload::ActivateAbility(const FGameplayAbilitySpecHandle 
 
 void UZGameplayAbility_Reload::OnReloadFinished()
 {
-	// both the player's machine and the server fill the magazine; the server's count is the one that counts
 	const AZSurvivalGameCharacter* Character = GetZCharacter(CurrentActorInfo);
 	if (AZWeapon* Weapon = Character ? Character->GetEquippedWeapon() : nullptr)
 	{
-		Weapon->Refill();
-		UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' reloaded, ammo: %d"), *GetNameSafe(Character), Weapon->GetAmmo());
+		// load what's missing, as far as the reserve ammo in the inventory goes (-1 = unlimited reserve)
+		const int32 Missing = Weapon->GetMagazineSize() - Weapon->GetAmmo();
+		const int32 ReserveAmmo = Character->GetReserveAmmo();
+		const int32 Loaded = ReserveAmmo < 0 ? Missing : FMath::Min(Missing, ReserveAmmo);
+
+		// only the server takes the ammo from the inventory; both the player's machine and the server load the magazine,
+		// so the player can keep shooting before the server's count arrives
+		UZInventoryComponent* Inventory = Character->GetInventory();
+		if (Loaded > 0 && ReserveAmmo >= 0 && Inventory && CurrentActorInfo->IsNetAuthority())
+		{
+			Inventory->RemoveItem(Weapon->GetAmmoItem(), Loaded);
+		}
+
+		Weapon->AddAmmo(Loaded);
+		UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' reloaded %d, ammo: %d, reserve: %d"), *GetNameSafe(Character), Loaded, Weapon->GetAmmo(), Character->GetReserveAmmo());
 	}
 
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);

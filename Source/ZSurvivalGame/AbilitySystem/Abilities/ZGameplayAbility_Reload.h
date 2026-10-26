@@ -7,7 +7,7 @@
 #include "ZGameplayAbility_Reload.generated.h"
 
 /**
- *  Reloads the equipped weapon: takes the weapon's reload time, then the server fills the magazine
+ *  Reloads the equipped weapon: takes the weapon's reload time, then loads the magazine from the weapon's ammo item in the inventory
  *  Limits the speed to jogging meanwhile; firing is blocked, dodging or switching weapons cancels it
  */
 UCLASS()

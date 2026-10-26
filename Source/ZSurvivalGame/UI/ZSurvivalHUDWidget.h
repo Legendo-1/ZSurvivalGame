@@ -11,9 +11,8 @@ class UTextBlock;
 class UWidget;
 
 /**
- *  Player HUD showing health and stamina bars, and the ammo while a weapon is in the hands
- *  The Widget Blueprint must contain Progress Bars named HealthBar and StaminaBar;
- *  a Text named AmmoText and a widget named Crosshair are optional
+ *  Player HUD showing health and stamina bars, the ammo while a weapon is in the hands, and what the interact key would do
+ *  The Widget Blueprint must contain Progress Bars named HealthBar and StaminaBar; the other widgets are optional (see MULTIPLAYER.md)
  */
 UCLASS(abstract)
 class UZSurvivalHUDWidget : public UUserWidget
@@ -30,9 +29,17 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UProgressBar* StaminaBar;
 
-	/** "Ammo / Magazine size" while a weapon is in the hands (optional) */
+	/** "Magazine / reserve ammo" while a weapon is in the hands (optional) */
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* AmmoText;
+
+	/** "[E] Pick up Rifle Ammo x15" while looking at something to interact with (optional) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	UTextBlock* InteractionText;
+
+	/** Fills while holding the interact key on an interaction that takes time (optional) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	UProgressBar* InteractionProgress;
 
 	/** Shown while a weapon is in the hands (optional, e.g. an Image in the middle of the screen) */
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -48,4 +55,7 @@ protected:
 
 	/** Updates the bars from the owning player's character every frame */
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+	/** Name of the key mapped to Interact, e.g. "E" */
+	FText GetInteractKeyName() const;
 };

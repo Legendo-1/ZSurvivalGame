@@ -25,6 +25,10 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_Dodge.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Fire.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Reload.h"
+#include "Interaction/ZInteractionComponent.h"
+#include "Items/ZInventoryComponent.h"
+#include "Items/ZItemFragments.h"
+#include "Items/ZItemInstance.h"
 #include "Weapons/ZWeapon.h"
 #include "Weapons/ZWeaponData.h"
 
@@ -72,6 +76,8 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter(const FObjectInitializer& Objec
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
 
+	InteractionComponent = CreateDefaultSubobject<UZInteractionComponent>(TEXT("Interaction"));
+
 	// The player's abilities, given to the PlayerState's ability system in PossessedBy
 	DefaultAbilities.Add(UZGameplayAbility_Sprint::StaticClass());
 	DefaultAbilities.Add(UZGameplayAbility_Aim::StaticClass());
@@ -93,9 +99,9 @@ void AZSurvivalGameCharacter::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 	// the owner already knows whether it's aiming
 	DOREPLIFETIME_CONDITION(AZSurvivalGameCharacter, bIsAiming, COND_SkipOwner);
 
-	// only the owner needs the list of carried weapons; everyone sees the one in the hands
-	DOREPLIFETIME_CONDITION(AZSurvivalGameCharacter, Weapons, COND_OwnerOnly);
+	// everyone sees the weapon in the hands; only the owner needs to know which inventory item it is
 	DOREPLIFETIME(AZSurvivalGameCharacter, EquippedWeapon);
+	DOREPLIFETIME_CONDITION(AZSurvivalGameCharacter, EquippedItem, COND_OwnerOnly);
 
 	DOREPLIFETIME(AZSurvivalGameCharacter, bIsDead);
 }
@@ -131,7 +137,14 @@ void AZSurvivalGameCharacter::Tick(float DeltaTime)
 		// automatic weapons keep firing while the button is held (the Fire ability keeps the fire rate), and reload when empty
 		if (bFireHeld && EquippedWeapon && EquippedWeapon->IsAutomatic())
 		{
-			PressAbilityInput(EquippedWeapon->GetAmmo() > 0 ? EZAbilityInputID::Fire : EZAbilityInputID::Reload);
+			if (EquippedWeapon->GetAmmo() > 0)
+			{
+				PressAbilityInput(EZAbilityInputID::Fire);
+			}
+			else if (CanReloadEquippedWeapon())
+			{
+				PressAbilityInput(EZAbilityInputID::Reload);
+			}
 		}
 	}
 
@@ -148,7 +161,7 @@ void AZSurvivalGameCharacter::Destroyed()
 {
 	if (HasAuthority())
 	{
-		DestroyWeapons();
+		UnequipWeapon();
 	}
 
 	Super::Destroyed();
@@ -213,15 +226,26 @@ void AZSurvivalGameCharacter::PossessedBy(AController* NewController)
 	// the server sets up the ability system here; clients do it in OnRep_PlayerState
 	InitAbilitySystem();
 	GiveDefaultAbilities();
-	SpawnStartingWeapons();
+	GiveStartingItems();
+
+	// put the weapon away when its item leaves the inventory (e.g. dropped)
+	if (UZInventoryComponent* Inventory = GetInventory())
+	{
+		Inventory->OnItemRemoving.RemoveAll(this);
+		Inventory->OnItemRemoving.AddUObject(this, &AZSurvivalGameCharacter::OnInventoryItemRemoving);
+	}
+
+	// take out the weapon for the starting animation set (e.g. set in Class Defaults)
+	EquipWeaponOfType(CurrentWeaponType);
 }
 
 void AZSurvivalGameCharacter::UnPossessed()
 {
-	// this body no longer listens to the player's health (e.g. it died and the player respawned)
+	// this body no longer listens to the player's health and inventory (e.g. it died and the player respawned)
 	if (AZSurvivalGamePlayerState* ZPlayerState = GetPlayerState<AZSurvivalGamePlayerState>())
 	{
 		ZPlayerState->GetAttributeSet()->OnOutOfHealth.RemoveAll(this);
+		ZPlayerState->GetInventory()->OnItemRemoving.RemoveAll(this);
 	}
 
 	Super::UnPossessed();
@@ -318,7 +342,8 @@ void AZSurvivalGameCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 		ASC->AddLooseGameplayTag(ZGameplayTags::State_Dead, 1, EGameplayTagReplicationState::TagOnly);
 	}
 
-	DestroyWeapons();
+	// the items stay in the inventory (TODO: decide whether dying drops some of them)
+	UnequipWeapon();
 	CurrentWeaponType = EZWeaponType::Unarmed;
 
 	PlayDeath();
@@ -340,6 +365,9 @@ void AZSurvivalGameCharacter::PlayDeath()
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
 	GetMesh()->SetSimulatePhysics(true);
+
+	// the Ragdoll profile blocks every channel it doesn't name: let shots pass through the body so it can't shield the living
+	GetMesh()->SetCollisionResponseToChannel(ZTraceChannel_Weapon, ECR_Ignore);
 }
 
 void AZSurvivalGameCharacter::OnRep_IsDead()
@@ -350,97 +378,148 @@ void AZSurvivalGameCharacter::OnRep_IsDead()
 	}
 }
 
-void AZSurvivalGameCharacter::SpawnStartingWeapons()
+void AZSurvivalGameCharacter::GiveStartingItems()
 {
-	// only once: a respawned player gets a new character, and with it new weapons
-	if (!HasAuthority() || Weapons.Num() > 0)
+	AZSurvivalGamePlayerState* ZPlayerState = GetPlayerState<AZSurvivalGamePlayerState>();
+	if (!HasAuthority() || !ZPlayerState || ZPlayerState->bReceivedStartingItems)
 	{
 		return;
 	}
 
-	for (UZWeaponData* WeaponData : StartingWeapons)
+	// only once per player: after a respawn the inventory still has everything
+	ZPlayerState->bReceivedStartingItems = true;
+
+	for (const FZItemStack& Stack : StartingItems)
 	{
-		if (!WeaponData)
-		{
-			continue;
-		}
-
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Owner = this;
-		SpawnParams.Instigator = this;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-		if (AZWeapon* Weapon = GetWorld()->SpawnActor<AZWeapon>(AZWeapon::StaticClass(), GetActorTransform(), SpawnParams))
-		{
-			Weapon->InitWeapon(WeaponData);
-			Weapons.Add(Weapon);
-		}
+		ZPlayerState->GetInventory()->AddItem(Stack.Item, Stack.Count);
 	}
-
-	EquipWeaponOfType(CurrentWeaponType);
 }
 
-AZWeapon* AZSurvivalGameCharacter::FindWeaponOfType(EZWeaponType WeaponType) const
+UZInventoryComponent* AZSurvivalGameCharacter::GetInventory() const
 {
-	if (WeaponType == EZWeaponType::Unarmed)
+	const AZSurvivalGamePlayerState* ZPlayerState = GetPlayerState<AZSurvivalGamePlayerState>();
+	return ZPlayerState ? ZPlayerState->GetInventory() : nullptr;
+}
+
+UZItemInstance* AZSurvivalGameCharacter::FindWeaponItemOfType(EZWeaponType WeaponType) const
+{
+	const UZInventoryComponent* Inventory = GetInventory();
+	if (!Inventory || WeaponType == EZWeaponType::Unarmed)
 	{
 		return nullptr;
 	}
 
-	for (AZWeapon* Weapon : Weapons)
+	return Inventory->FindFirstInstanceMatching([WeaponType](const UZItemInstance* Item)
 	{
-		if (Weapon && Weapon->GetWeaponData() && Weapon->GetWeaponData()->WeaponType == WeaponType)
-		{
-			return Weapon;
-		}
-	}
-
-	return nullptr;
+		const UZItemFragment_Weapon* WeaponFragment = Item->FindFragment<UZItemFragment_Weapon>();
+		return WeaponFragment && WeaponFragment->WeaponData && WeaponFragment->WeaponData->WeaponType == WeaponType;
+	});
 }
 
 void AZSurvivalGameCharacter::EquipWeaponOfType(EZWeaponType WeaponType)
 {
-	AZWeapon* NewWeapon = FindWeaponOfType(WeaponType);
-	if (NewWeapon != EquippedWeapon)
+	if (UZItemInstance* WeaponItem = FindWeaponItemOfType(WeaponType))
 	{
-		CancelWeaponAbilities();
+		EquipWeaponItem(WeaponItem);
+	}
+	else
+	{
+		// no weapon of this type: only the animation set changes
+		UnequipWeapon();
 	}
 
-	EquippedWeapon = NewWeapon;
 	CurrentWeaponType = WeaponType;
-
-	UpdateWeaponVisibility();
 }
 
-void AZSurvivalGameCharacter::DestroyWeapons()
+void AZSurvivalGameCharacter::EquipWeaponItem(UZItemInstance* Item)
 {
-	for (AZWeapon* Weapon : Weapons)
+	const UZItemFragment_Weapon* WeaponFragment = Item ? Item->FindFragment<UZItemFragment_Weapon>() : nullptr;
+	if (!HasAuthority() || !WeaponFragment || !WeaponFragment->WeaponData || Item == EquippedItem)
 	{
-		if (Weapon)
-		{
-			Weapon->Destroy();
-		}
+		return;
 	}
 
-	Weapons.Empty();
+	UnequipWeapon();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = this;
+	SpawnParams.Instigator = this;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	if (AZWeapon* Weapon = GetWorld()->SpawnActor<AZWeapon>(AZWeapon::StaticClass(), GetActorTransform(), SpawnParams))
+	{
+		Weapon->InitWeapon(WeaponFragment->WeaponData, Item);
+		EquippedWeapon = Weapon;
+		EquippedItem = Item;
+		CurrentWeaponType = WeaponFragment->WeaponData->WeaponType;
+	}
+}
+
+void AZSurvivalGameCharacter::UnequipWeapon()
+{
+	if (!HasAuthority() || (!EquippedWeapon && !EquippedItem))
+	{
+		return;
+	}
+
+	// stop shooting or reloading it
+	CancelWeaponAbilities();
+
+	// the item keeps the magazine for next time
+	if (EquippedWeapon)
+	{
+		EquippedWeapon->SaveAmmoToItem();
+		EquippedWeapon->Destroy();
+	}
+
 	EquippedWeapon = nullptr;
+	EquippedItem = nullptr;
 }
 
-void AZSurvivalGameCharacter::UpdateWeaponVisibility()
+void AZSurvivalGameCharacter::OnInventoryItemRemoving(UZInventoryComponent* Inventory, UZItemInstance* Item)
 {
-	// holstered weapons are hidden (the server's choice replicates; clients only update their own copies early)
-	for (AZWeapon* Weapon : Weapons)
+	if (Item && Item == EquippedItem)
 	{
-		if (Weapon)
-		{
-			Weapon->SetEquipped(Weapon == EquippedWeapon);
-		}
+		UnequipWeapon();
+		CurrentWeaponType = EZWeaponType::Unarmed;
 	}
 }
 
-void AZSurvivalGameCharacter::OnRep_EquippedWeapon()
+void AZSurvivalGameCharacter::EquipItem(UZItemInstance* Item)
 {
-	UpdateWeaponVisibility();
+	if (!bIsDead)
+	{
+		ServerEquipItem(Item);
+	}
+}
+
+void AZSurvivalGameCharacter::ServerEquipItem_Implementation(UZItemInstance* Item)
+{
+	// only items from this player's own inventory
+	const UZInventoryComponent* Inventory = GetInventory();
+	if (!bIsDead && Inventory && Inventory->GetStackCount(Item) > 0)
+	{
+		EquipWeaponItem(Item);
+	}
+}
+
+int32 AZSurvivalGameCharacter::GetReserveAmmo() const
+{
+	const UZItemDefinition* AmmoItem = EquippedWeapon ? EquippedWeapon->GetAmmoItem() : nullptr;
+	const UZInventoryComponent* Inventory = GetInventory();
+	return AmmoItem && Inventory ? Inventory->GetItemCount(AmmoItem) : -1;
+}
+
+bool AZSurvivalGameCharacter::CanReloadEquippedWeapon() const
+{
+	if (!EquippedWeapon || EquippedWeapon->GetAmmo() >= EquippedWeapon->GetMagazineSize())
+	{
+		return false;
+	}
+
+	// -1 = unlimited reserve
+	const int32 ReserveAmmo = GetReserveAmmo();
+	return ReserveAmmo != 0;
 }
 
 void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -488,6 +567,13 @@ void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		if (ReloadAction)
 		{
 			EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &AZSurvivalGameCharacter::DoReload);
+		}
+
+		// Interacting
+		if (InteractAction)
+		{
+			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AZSurvivalGameCharacter::DoInteractStart);
+			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Completed, this, &AZSurvivalGameCharacter::DoInteractEnd);
 		}
 	}
 	else
@@ -589,10 +675,14 @@ void AZSurvivalGameCharacter::DoFireStart()
 {
 	bFireHeld = true;
 
-	// empty magazine: reload instead
+	// empty magazine: reload instead (if there's ammo for it)
 	if (EquippedWeapon && EquippedWeapon->GetAmmo() <= 0)
 	{
-		DoReload();
+		if (CanReloadEquippedWeapon())
+		{
+			DoReload();
+		}
+
 		return;
 	}
 
@@ -611,6 +701,19 @@ void AZSurvivalGameCharacter::DoReload()
 	// a reload is a single press; the Reload ability checks there's something to reload
 	PressAbilityInput(EZAbilityInputID::Reload);
 	ReleaseAbilityInput(EZAbilityInputID::Reload);
+}
+
+void AZSurvivalGameCharacter::DoInteractStart()
+{
+	if (!bIsDead)
+	{
+		InteractionComponent->StartInteraction();
+	}
+}
+
+void AZSurvivalGameCharacter::DoInteractEnd()
+{
+	InteractionComponent->StopInteraction();
 }
 
 void AZSurvivalGameCharacter::PressAbilityInput(EZAbilityInputID InputID)
@@ -674,7 +777,7 @@ void AZSurvivalGameCharacter::SetWeaponType(EZWeaponType NewWeaponType)
 		CancelWeaponAbilities();
 	}
 
-	// switch right away for this player; the server switches it for everyone
+	// the animation set changes right away for this player; the server swaps the weapon for everyone
 	CurrentWeaponType = NewWeaponType;
 
 	if (HasAuthority())
@@ -683,7 +786,6 @@ void AZSurvivalGameCharacter::SetWeaponType(EZWeaponType NewWeaponType)
 	}
 	else
 	{
-		EquippedWeapon = FindWeaponOfType(NewWeaponType);
 		ServerSetWeaponType(NewWeaponType);
 	}
 }

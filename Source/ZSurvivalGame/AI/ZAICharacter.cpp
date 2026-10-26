@@ -12,6 +12,8 @@
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_MeleeAttack.h"
+#include "Items/ZLootTable.h"
+#include "Items/ZPickup.h"
 
 AZAICharacter::AZAICharacter()
 {
@@ -150,6 +152,12 @@ void AZAICharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	AbilitySystemComponent->AddLooseGameplayTag(ZGameplayTags::State_Dead, 1, EGameplayTagReplicationState::TagOnly);
 
 	PlayDeath();
+
+	if (LootTable)
+	{
+		LootTable->SpawnLoot(GetWorld(), GetActorLocation(), LootPickupClass, LootLifeSpan);
+	}
+
 	BP_OnDied(DamageInstigator);
 
 	// stop the AI and remove the body after a while
@@ -165,6 +173,9 @@ void AZAICharacter::PlayDeath()
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
 	GetMesh()->SetSimulatePhysics(true);
+
+	// the Ragdoll profile blocks every channel it doesn't name: let shots pass through the body so it can't shield the living
+	GetMesh()->SetCollisionResponseToChannel(ZTraceChannel_Weapon, ECR_Ignore);
 }
 
 void AZAICharacter::OnRep_IsDead()

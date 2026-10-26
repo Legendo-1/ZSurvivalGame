@@ -10,10 +10,12 @@
 class USkeletalMesh;
 class UStaticMesh;
 class UAnimMontage;
+class UZItemDefinition;
 
 /**
  *  A weapon's stats and looks. Make one Data Asset per weapon:
  *  right-click in the Content Browser → Miscellaneous → Data Asset → ZWeaponData
+ *  The player carries it as an item whose Weapon fragment points to this
  */
 UCLASS(BlueprintType)
 class UZWeaponData : public UPrimaryDataAsset
@@ -110,4 +112,8 @@ public:
 	/** Seconds to reload */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ammo", meta = (ClampMin = "0"))
 	float ReloadTime = 2.f;
+
+	/** Item taken from the inventory when reloading; empty = unlimited reserve ammo */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ammo")
+	TObjectPtr<UZItemDefinition> AmmoItem;
 };

@@ -7,6 +7,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Items/ZLootTable.h"
 
 AZZombieCharacter::AZZombieCharacter()
 {
@@ -14,6 +15,7 @@ AZZombieCharacter::AZZombieCharacter()
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> ZombieMesh(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"));
 	static ConstructorHelpers::FClassFinder<UAnimInstance> ZombieAnimation(TEXT("/Game/Variant_Combat/Anims/ABP_Manny_Combat"));
 	static ConstructorHelpers::FObjectFinder<UAnimMontage> ZombieAttack(TEXT("/Game/Variant_Combat/Anims/AM_ComboAttack.AM_ComboAttack"));
+	static ConstructorHelpers::FObjectFinder<UZLootTable> ZombieLoot(TEXT("/Game/Items/LootTables/LT_Zombie.LT_Zombie"));
 
 	if (ZombieMesh.Succeeded())
 	{
@@ -28,6 +30,11 @@ AZZombieCharacter::AZZombieCharacter()
 	if (ZombieAttack.Succeeded())
 	{
 		AttackMontage = ZombieAttack.Object;
+	}
+
+	if (ZombieLoot.Succeeded())
+	{
+		LootTable = ZombieLoot.Object;
 	}
 
 	// line the mannequin up with the capsule

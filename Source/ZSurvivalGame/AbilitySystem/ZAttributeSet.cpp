@@ -11,6 +11,7 @@ UZAttributeSet::UZAttributeSet()
 	InitStamina(100.f);
 	InitMaxStamina(100.f);
 	InitIncomingDamage(0.f);
+	InitIncomingHealing(0.f);
 }
 
 void UZAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -81,6 +82,18 @@ void UZAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackD
 			CurrentDamageInstigator = Data.EffectSpec.GetContext().GetInstigator();
 			SetHealth(GetHealth() - DamageTaken);
 			CurrentDamageInstigator = nullptr;
+		}
+	}
+
+	// healing effects add to IncomingHealing; turn it into health (the dead stay dead)
+	if (Data.EvaluatedData.Attribute == GetIncomingHealingAttribute())
+	{
+		const float HealingReceived = GetIncomingHealing();
+		SetIncomingHealing(0.f);
+
+		if (HealingReceived > 0.f && GetHealth() > 0.f)
+		{
+			SetHealth(GetHealth() + HealingReceived);
 		}
 	}
 }

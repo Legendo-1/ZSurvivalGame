@@ -77,10 +77,11 @@ Tie base defense directly to the expedition loop:
   * Pistol aim strafe animations and aim offset.  
   * Weapon meshes, shot effects and sounds (GameplayCues), fire and reload animations.
 
-### **Phase 2: Item & Mod Data Architecture (UP NEXT)**
+### **Phase 2: Item & Mod Data Architecture (IN PROGRESS)**
 
-* Build ItemData struct / UDataAsset system in C++ for Inventory, Weapons, and Crafting Recipes.  
-* Implement weapon socket system reading attached ModData structs to alter fire modes and damage types.
+* \[x\] Item data assets in C++ with fragments (weapon, consumable), an inventory on the PlayerState that only the server changes, reserve ammo, pickups, the interact key and zombie loot (see ITEMS.md).  
+* \[ \] Crafting recipe data assets.  
+* \[ \] Implement weapon socket system reading attached ModData structs to alter fire modes and damage types.
 
 ### **Phase 3: Loot, Harvest, & Crafting Loops**
 

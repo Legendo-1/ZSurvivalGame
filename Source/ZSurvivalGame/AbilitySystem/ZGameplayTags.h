@@ -26,6 +26,16 @@ namespace ZGameplayTags
 
 	// Set by caller: values filled in by code when a gameplay effect is applied
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_Damage);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_Healing);
+
+	// Item types: on item definitions (ItemTags), for sorting, filtering and rules
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Weapon);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Ammo);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Material);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Consumable);
+
+	// Item stats: numbers stored per item instance
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat_MagazineAmmo);
 
 	// Gameplay cues: visuals and sounds everyone sees (made as GameplayCue Notify assets with the same tag)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Fire);

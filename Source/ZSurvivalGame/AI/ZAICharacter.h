@@ -9,10 +9,12 @@
 #include "ZSurvivalGameTypes.h"
 #include "ZAICharacter.generated.h"
 
+class AZPickup;
 class UAbilitySystemComponent;
 class UAnimMontage;
 class UGameplayAbility;
 class UZAttributeSet;
+class UZLootTable;
 
 /**
  *  Base class for every AI character: zombies, other monsters and human NPCs
@@ -128,6 +130,20 @@ protected:
 	/** Attack animation (optional) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee")
 	TObjectPtr<UAnimMontage> AttackMontage;
+
+	/** --- LOOT --- */
+
+	/** What it drops when it dies (rolled on the server) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Loot")
+	TObjectPtr<UZLootTable> LootTable;
+
+	/** Pickup spawned for each drop (AZPickup if empty) */
+	UPROPERTY(EditAnywhere, Category = "AI|Loot")
+	TSubclassOf<AZPickup> LootPickupClass;
+
+	/** Seconds the loot lies on the ground before it disappears; 0 = stays */
+	UPROPERTY(EditAnywhere, Category = "AI|Loot", meta = (ClampMin = "0"))
+	float LootLifeSpan = 120.f;
 
 	/** --- ABILITIES --- */
 
