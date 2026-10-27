@@ -28,6 +28,9 @@ public:
 
 	virtual void OnInstanceCreated(UZItemInstance* Instance) const override;
 
+	/** Keeps the mods that fit (the others go back to the inventory) and no more rounds than the magazine holds */
+	virtual void OnInstanceLoaded(UZItemInstance* Instance) const override;
+
 	/** Puts the weapon in the user's hands */
 	virtual bool OnUse(UZItemInstance* Instance, APawn* User) const override;
 
@@ -130,6 +133,9 @@ public:
 	bool bBreaksWhenEmpty = true;
 
 	virtual void OnInstanceCreated(UZItemInstance* Instance) const override;
+
+	/** Durability between 0 and the max */
+	virtual void OnInstanceLoaded(UZItemInstance* Instance) const override;
 
 	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
 

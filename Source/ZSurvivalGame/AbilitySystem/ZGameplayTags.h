@@ -41,7 +41,8 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Tool_Screwdriver);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Tool_AmmoPress);
 
-	// Item stats: numbers stored per item instance
+	// Item stats: numbers stored per item instance (all under Item.Stat, so saves only take those)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat_MagazineAmmo);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat_Durability);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Stat_UpgradeLevel);
@@ -61,6 +62,9 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Chemistry);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Medicine);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Tradeskill_Weaponsmithing);
+
+	// World progress: what's been done in the host's world, saved with the host's game (add children in Project Settings → Gameplay Tags, e.g. WorldProgress.Boss.StoneGolem)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(WorldProgress);
 
 	// Trait categories: group traits on the character screen
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Trait_Category_Survival);

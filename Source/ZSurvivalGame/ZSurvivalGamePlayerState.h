@@ -11,6 +11,7 @@ class UAbilitySystemComponent;
 class UZAttributeSet;
 class UZCraftingComponent;
 class UZInventoryComponent;
+class UZItemInstance;
 class UZProgressionComponent;
 
 /**
@@ -48,6 +49,8 @@ public:
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	UZAttributeSet* GetAttributeSet() const { return AttributeSet; }
 
 	UZInventoryComponent* GetInventory() const { return Inventory; }
@@ -56,6 +59,10 @@ public:
 
 	UZProgressionComponent* GetProgression() const { return Progression; }
 
-	/** Server: true once the player got their starting items (so a respawn doesn't give them again) */
+	/** True once the player got their starting items (so a respawn doesn't give them again). Saved with the character; the player's own machine gets it too, for saving there */
+	UPROPERTY(Replicated)
 	bool bReceivedStartingItems = false;
+
+	/** Server: the weapon item to take out when the character next spawns, e.g. the one in the hands when the game was saved */
+	TWeakObjectPtr<UZItemInstance> PendingEquipItem;
 };

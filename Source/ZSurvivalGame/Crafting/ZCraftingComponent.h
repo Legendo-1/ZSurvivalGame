@@ -215,6 +215,9 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Crafting|Tradeskills")
 	void SetSkillLevel(FGameplayTag Skill, int32 Level);
 
+	/** Experience in every tradeskill the player has some in */
+	const TMap<FGameplayTag, int32>& GetAllSkillExperience() const { return SkillExperience.GetAllStacks(); }
+
 	/** --- DISCOVERIES --- */
 
 	/** True if the player has made this recipe before */
@@ -231,6 +234,18 @@ public:
 	/** Server: forgets every discovery (e.g. for testing) */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Crafting|Discoveries")
 	void ForgetDiscoveries();
+
+	/** The recipes the player has found */
+	UFUNCTION(BlueprintPure, Category = "Crafting|Discoveries")
+	TArray<UZCraftingRecipe*> GetDiscoveredRecipes() const;
+
+	/** --- SAVING --- */
+
+	/**
+	 *  Server: puts back a saved character's tradeskills and discoveries, within the game's rules
+	 *  (only tags under Tradeskill, experience up to the highest level). OutFixes gets a line for each change
+	 */
+	void RestoreCrafting(const TArray<TPair<FGameplayTag, int32>>& InSkillExperience, const TArray<UZCraftingRecipe*>& InDiscoveries, TArray<FString>& OutFixes);
 
 	/** --- EVENTS (the server, and the owner's machine) --- */
 

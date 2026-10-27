@@ -28,7 +28,8 @@ public class ZSurvivalGame : ModuleRules
 			"SlateCore"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		// EngineSettings: the game's default level (for continuing a save made before the level was saved in it)
+		PrivateDependencyModuleNames.AddRange(new string[] { "EngineSettings" });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"ZSurvivalGame",

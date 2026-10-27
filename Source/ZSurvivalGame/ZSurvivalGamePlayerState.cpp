@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "ZSurvivalGamePlayerState.h"
+#include "Net/UnrealNetwork.h"
 #include "AbilitySystem/ZAbilitySystemComponent.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "Crafting/ZCraftingComponent.h"
@@ -28,4 +29,12 @@ AZSurvivalGamePlayerState::AZSurvivalGamePlayerState()
 UAbilitySystemComponent* AZSurvivalGamePlayerState::GetAbilitySystemComponent() const
 {
 	return AbilitySystemComponent;
+}
+
+void AZSurvivalGamePlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	// a joined player saves their character on their own machine when they leave (UZPlayerSaveComponent)
+	DOREPLIFETIME_CONDITION(AZSurvivalGamePlayerState, bReceivedStartingItems, COND_OwnerOnly);
 }

@@ -56,6 +56,15 @@ public:
 	/** Takes over another instance's stats and mods, e.g. when a dropped weapon is picked up */
 	void CopyStateFrom(const UZItemInstance* Other);
 
+	/** Every stat it has (stats at 0 aren't stored) */
+	const TMap<FGameplayTag, int32>& GetStats() const { return StatTags.GetAllStacks(); }
+
+	/**
+	 *  Server: gives an item from a save its stats and mods, replacing what it started with, then lets its fragments
+	 *  put numbers outside their limits back in (OnInstanceLoaded). Stats that aren't Item.Stat tags are left out
+	 */
+	void RestoreState(const TMap<FGameplayTag, int32>& Stats, const TArray<UZItemDefinition*>& Mods);
+
 	/** True if the item has a Durability fragment */
 	UFUNCTION(BlueprintPure, Category = "Item|Durability")
 	bool HasDurability() const;

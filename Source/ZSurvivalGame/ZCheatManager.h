@@ -122,6 +122,40 @@ public:
 	UFUNCTION(Exec)
 	void ZResetTraits();
 
+	/** --- SAVING (see SAVING.md) --- */
+
+	/** Saves now, like a menu's Save button (host: every player and the world; a joined player: their own character) */
+	UFUNCTION(Exec)
+	void ZSave();
+
+	/** Writes the save slots on this PC to the Output Log: character, level, time played, when it was saved */
+	UFUNCTION(Exec)
+	void ZSaveSlots();
+
+	/** Writes what the slot in use holds to the Output Log (as last saved on this PC): the character and the world */
+	UFUNCTION(Exec)
+	void ZSaveInfo();
+
+	/** Makes a new character in a new slot and starts a game with it (the game running now is saved first), e.g. ZNewCharacter Alex */
+	UFUNCTION(Exec)
+	void ZNewCharacter(const FString& CharacterName = TEXT(""));
+
+	/** Continues a save slot: opens its level as the host (the game running now is saved first), e.g. ZLoadSlot Slot2 */
+	UFUNCTION(Exec)
+	void ZLoadSlot(const FString& SlotName);
+
+	/** Deletes a save slot for good (not the one in use), e.g. ZDeleteSlot Slot2 */
+	UFUNCTION(Exec)
+	void ZDeleteSlot(const FString& SlotName);
+
+	/** Marks something as done in the world, saved with the host's game, e.g. ZWorldProgress WorldProgress.Boss.StoneGolem (host); on its own it lists what's done */
+	UFUNCTION(Exec)
+	void ZWorldProgress(const FString& Tag = TEXT(""));
+
+	/** For testing the host's checks: breaks the game's rules in the slot in use (huge numbers, items that don't exist, ...) and writes it. The next game with it shows what the host fixed */
+	UFUNCTION(Exec)
+	void ZBreakSave();
+
 	/** --- SOUND --- */
 
 	/** Makes the floor under you sound like a surface until the game ends, e.g. ZFloorSurface Metal (in this window only); ZFloorSurface on its own says what it is now */

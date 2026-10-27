@@ -65,6 +65,7 @@ void UZProgressionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 	DOREPLIFETIME_CONDITION(UZProgressionComponent, Experience, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UZProgressionComponent, BonusTraitPoints, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UZProgressionComponent, TraitRanks, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UZProgressionComponent, RestoreCount, COND_OwnerOnly);
 }
 
 void UZProgressionComponent::BeginPlay()
@@ -73,6 +74,14 @@ void UZProgressionComponent::BeginPlay()
 
 	SeenLevel = GetLevel();
 	SeenBonusTraitPoints = BonusTraitPoints;
+}
+
+void UZProgressionComponent::PostRepNotifies()
+{
+	Super::PostRepNotifies();
+
+	// after the OnReps, which checked it: the numbers that came with a restore count as seen now
+	SeenRestoreCount = RestoreCount;
 }
 
 int32 UZProgressionComponent::GetLevel() const
@@ -205,6 +214,89 @@ TArray<UZTraitDefinition*> UZProgressionComponent::GetAllTraits() const
 	return Subsystem ? Subsystem->GetAllTraits() : TArray<UZTraitDefinition*>();
 }
 
+TArray<TPair<UZTraitDefinition*, int32>> UZProgressionComponent::GetTraitRanks() const
+{
+	TArray<TPair<UZTraitDefinition*, int32>> Ranks;
+	for (const FZTraitRank& Entry : TraitRanks.Entries)
+	{
+		if (Entry.Trait && Entry.Rank > 0)
+		{
+			Ranks.Emplace(Entry.Trait, Entry.Rank);
+		}
+	}
+
+	return Ranks;
+}
+
+void UZProgressionComponent::RestoreProgress(int32 InExperience, int32 InBonusTraitPoints, const TArray<TPair<UZTraitDefinition*, int32>>& InTraitRanks, TArray<FString>& OutFixes)
+{
+	if (!GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	const UZProgressionSettings* Settings = UZProgressionSettings::Get();
+	const int32 MaxExperience = Settings->GetCharacterExperienceForLevel(Settings->MaxCharacterLevel);
+	Experience = FMath::Clamp(InExperience, 0, MaxExperience);
+	if (Experience != InExperience)
+	{
+		OutFixes.Add(FString::Printf(TEXT("experience %d is outside 0..%d (the highest level)"), InExperience, MaxExperience));
+	}
+
+	// with a limit on trait points, bonus points over it are lost, as when they're earned (and a sane top either way, so sums can't overflow)
+	const int32 PointsFromLevels = (GetLevel() - 1) * Settings->TraitPointsPerLevel;
+	const int32 MaxBonusPoints = Settings->MaxTraitPoints > 0 ? FMath::Max(Settings->MaxTraitPoints - PointsFromLevels, 0) : 100000;
+	BonusTraitPoints = FMath::Clamp(InBonusTraitPoints, 0, MaxBonusPoints);
+	if (BonusTraitPoints != InBonusTraitPoints)
+	{
+		OutFixes.Add(FString::Printf(TEXT("bonus trait points %d are outside 0..%d"), InBonusTraitPoints, MaxBonusPoints));
+	}
+
+	TraitRanks.Entries.Reset();
+	for (const TPair<UZTraitDefinition*, int32>& Saved : InTraitRanks)
+	{
+		UZTraitDefinition* Trait = Saved.Key;
+		if (!Trait)
+		{
+			continue;
+		}
+
+		const int32 Rank = FMath::Clamp(Saved.Value, 0, Trait->MaxRank);
+		if (Rank != Saved.Value)
+		{
+			OutFixes.Add(FString::Printf(TEXT("'%s' rank %d is outside 0..%d"), *GetNameSafe(Trait), Saved.Value, Trait->MaxRank));
+		}
+
+		if (Rank <= 0)
+		{
+			continue;
+		}
+
+		if (GetTraitRank(Trait) > 0)
+		{
+			OutFixes.Add(FString::Printf(TEXT("'%s' is in the save twice (the first one counts)"), *GetNameSafe(Trait)));
+			continue;
+		}
+
+		FZTraitRank& Entry = TraitRanks.Entries.AddDefaulted_GetRef();
+		Entry.Trait = Trait;
+		Entry.Rank = Rank;
+	}
+
+	// more spent than earned: the player chooses again
+	if (GetSpentTraitPoints() > GetEarnedTraitPoints())
+	{
+		OutFixes.Add(FString::Printf(TEXT("the traits cost %d points but the character has %d, so they were reset (the points can be spent again)"), GetSpentTraitPoints(), GetEarnedTraitPoints()));
+		TraitRanks.Entries.Reset();
+	}
+
+	TraitRanks.MarkArrayDirty();
+	++RestoreCount;
+
+	ApplyTraitEffects();
+	OnProgressionChanged.Broadcast(this);
+}
+
 void UZProgressionComponent::ServerRaiseTrait_Implementation(UZTraitDefinition* Trait)
 {
 	if (!CanRaiseTrait(Trait))
@@ -244,8 +336,9 @@ void UZProgressionComponent::ServerResetTraits_Implementation()
 
 void UZProgressionComponent::OnRep_Experience()
 {
+	// a saved character's experience arriving isn't a level-up
 	const int32 Level = GetLevel();
-	if (SeenLevel != INDEX_NONE && Level > SeenLevel)
+	if (SeenLevel != INDEX_NONE && Level > SeenLevel && RestoreCount == SeenRestoreCount)
 	{
 		OnLevelUp.Broadcast(this, Level);
 	}
@@ -256,7 +349,7 @@ void UZProgressionComponent::OnRep_Experience()
 
 void UZProgressionComponent::OnRep_BonusTraitPoints()
 {
-	if (SeenBonusTraitPoints != INDEX_NONE && BonusTraitPoints > SeenBonusTraitPoints)
+	if (SeenBonusTraitPoints != INDEX_NONE && BonusTraitPoints > SeenBonusTraitPoints && RestoreCount == SeenRestoreCount)
 	{
 		OnBonusTraitPoints.Broadcast(this, BonusTraitPoints - SeenBonusTraitPoints);
 	}

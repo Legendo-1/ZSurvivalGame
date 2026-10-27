@@ -6,8 +6,12 @@
 #include "GameFramework/GameModeBase.h"
 #include "ZSurvivalGameGameMode.generated.h"
 
+class AZSurvivalGameState;
+class UZPlayerSaveComponent;
+
 /**
  *  Simple GameMode for a third person game
+ *  Each player brings their character from the save on their own PC and spawns once it's in the game; the world comes from the host's save (see SAVING.md)
  *  Respawns players a few seconds after they die
  */
 UCLASS(abstract)
@@ -19,6 +23,15 @@ public:
 
 	/** Constructor */
 	AZSurvivalGameGameMode();
+
+	/** Puts the world progress from the host's save into the game state */
+	virtual void InitGameState() override;
+
+	/** Gets the player's character into the game first: the host's own from this PC's save right away, a joining player's when it arrives from theirs */
+	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
+
+	/** Not before the player's character is in the game */
+	virtual bool PlayerCanRestart_Implementation(APlayerController* Player) override;
 
 	/** Server: respawns the player at a Player Start after RespawnDelay seconds */
 	void RequestRespawn(AController* Controller);
@@ -41,6 +54,13 @@ protected:
 
 	/** Gives the player a new character */
 	void Respawn(TWeakObjectPtr<AController> Controller);
+
+	/** A player's character is in the game: they spawn */
+	void HandlePlayerCharacterReady(UZPlayerSaveComponent* PlayerSave);
+
+	/** Something was done in the world: the host's save (which holds the world) is written soon */
+	UFUNCTION()
+	void HandleWorldProgressChanged(AZSurvivalGameState* ChangedGameState);
 };
 
 

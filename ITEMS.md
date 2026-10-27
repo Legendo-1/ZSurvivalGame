@@ -2,7 +2,7 @@
 
 How items, the inventory, pickups, loot and interacting work, and how to add new ones. Crafting has its own guide: CRAFTING.md. The inventory screen: UI.md.
 
-**Last updated:** 2026-10-26 (pickup and use sounds per item, see AUDIO.md)
+**Last updated:** 2026-10-27 (the inventory is saved with the character, see SAVING.md)
 
 ## The pieces
 
@@ -103,5 +103,6 @@ A wrong item name lists all the items there are. Numbers can be left out in the 
 - **Harvesting:** trees and scrap as interactables that take time and give items.
 - **Storage chests:** an inventory component on a chest, sent to the players using it.
 - **Weapon durability:** a Durability fragment on weapons, worn down by shooting (tools already have durability, and weapons already have upgrades and mods).
-- **Saving:** inventories saved by item ID (the Asset Manager already knows every item).
 - **What dying costs:** for now you keep everything.
+
+The inventory is saved with the character, every item with its stats and mods (SAVING.md). Items are saved by their asset name, so renaming one needs a redirect (SAVING.md → Renaming or removing things saves use). A new fragment with its own stats should keep them within its limits when an item loads from a save: its `OnInstanceLoaded`.

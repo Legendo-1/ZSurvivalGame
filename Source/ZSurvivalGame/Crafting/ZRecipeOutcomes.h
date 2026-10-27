@@ -105,8 +105,6 @@ public:
 	virtual void ValidateForRecipe(const UZCraftingRecipe* Recipe, FDataValidationContext& Context) const override;
 #endif
 
-protected:
-
 	/** The highest level for this target (0 if it can't be upgraded) */
 	int32 GetMaxLevel(const UZItemInstance* Target) const;
 };

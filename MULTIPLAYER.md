@@ -1,8 +1,8 @@
 # Multiplayer & abilities
 
-How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md.
+How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
 
-**Last updated:** 2026-10-26 (footsteps; enemies walk by accelerating, so their walk animation plays)
+**Last updated:** 2026-10-27 (players bring their saved character into the game; the world is the host's)
 
 ## The basic idea
 
@@ -22,6 +22,8 @@ How the player's actions, weapons, enemies, health and death work in multiplayer
 | A crafting station | **Station actor** (`AZCraftingStation`, BP_Workbench) | Placed in a level; recipes that need it only work nearby (the server checks the distance) |
 | Enemies' health and attacks | **The enemy itself** (`AZAICharacter`) | Enemies have no PlayerState, so their ability system is on the character |
 | Enemy decisions | **AI controller** (`AZAIController`) | Only exists on the server |
+| What's been done in the world (bosses, shortcuts) | **GameState** (`AZSurvivalGameState`) | Everyone sees it; it's saved with the host's game |
+| Bringing your character in and saving it | **Player Save** component on the PlayerController (`UZPlayerSaveComponent`), and `UZSaveSubsystem` for the files on your PC | The PlayerController only exists on the server and your own machine, the two that need it |
 
 ## What happens when you press a key
 
@@ -107,6 +109,16 @@ The code sends an event (a GameplayCue tag) to every player for shots, impacts, 
 
 Until then, the shooter sees **debug lines**: white = shot, yellow dot = hit, red dot = damage dealt (red only on the host, since only the server deals damage). Turn them off in the console with `Z.Weapon.DrawDebug 0`.
 
+## Joining with your character (saving)
+
+Remnant style: each player's character is saved on their own PC, and the world on the host's (SAVING.md has the details).
+1. **Joining:** your machine sends the character from your save to the host. The host checks it against the game's rules, puts it on your PlayerState (inventory, level, traits, tradeskills, recipes), and only then spawns your character, with the weapon you had in your hands. The host's own character comes from the host's PC the same way, without the network.
+2. **Playing:** a few seconds after something changes (10 by default), the host builds your character from the game and sends it back; your machine writes it into your save. The host writes its own save, which also holds the world.
+3. **Leaving:** when you leave or the host ends the game, the host can't send anything any more, so your machine writes your character one last time from its copy of what the host sent (only if the host loaded your character from that save).
+4. **The world** (what's been done in it, e.g. a boss beaten) is the host's. It's on the GameState, so everyone sees it, and only the host's save keeps it.
+
+The host checks every character when it joins, so a save can't bring anything past the game's rules into a game. Each saved character has an ID, and a save only goes into the slot it came from.
+
 ## HUD and inventory screen
 
 The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are explained in UI.md.
@@ -166,7 +178,9 @@ The **Server** window is the host. The **Client** window is the second player.
 | `Z.Weapon.DrawDebug 0` / `1` | Hides / shows the shot debug lines |
 | `log LogZSurvivalGame Verbose` | Writes every shot, reload, pickup and inventory change to the Output Log |
 
-The item commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZUseItem`, `ZSpawnPickup`) are in ITEMS.md, the crafting commands (`ZCombine`, `ZSkills`, ...) in CRAFTING.md, the progression commands (`ZTraits`, `ZRaiseTrait`, ...) in PROGRESSION.md.
+The item commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZUseItem`, `ZSpawnPickup`) are in ITEMS.md, the crafting commands (`ZCombine`, `ZSkills`, ...) in CRAFTING.md, the progression commands (`ZTraits`, `ZRaiseTrait`, ...) in PROGRESSION.md, the save commands (`ZSave`, `ZSaveSlots`, `ZNewCharacter`, ...) in SAVING.md.
+
+**Saves while testing:** each Play continues your saved character, and the Client window keeps its own (in `Saved/SaveGames/PIE1`). For a new character every Play: Project Settings → Game → Saving → untick **Use Saves In Editor**.
 
 **Automated test runs:** `-ExecCmds` runs every command at once at startup, before a client has joined. `ZDelay 5 <command>` runs a command later, and `ZOnClients <command>` (host) runs it on every client, e.g. `ZDelay 12 ZOnClients ZSkills`.
 

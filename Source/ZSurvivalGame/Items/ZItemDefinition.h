@@ -27,6 +27,12 @@ public:
 	/** Server: a new instance of the item was made, e.g. to set its starting stats */
 	virtual void OnInstanceCreated(UZItemInstance* Instance) const {}
 
+	/**
+	 *  Server: an instance came from a save, whose numbers could be from an older version of the item or edited by hand.
+	 *  Each fragment puts its own stats back within its limits (e.g. durability up to the max)
+	 */
+	virtual void OnInstanceLoaded(UZItemInstance* Instance) const {}
+
 	/** Server: the item is used from the inventory. Returns true if it did something */
 	virtual bool OnUse(UZItemInstance* Instance, APawn* User) const { return false; }
 

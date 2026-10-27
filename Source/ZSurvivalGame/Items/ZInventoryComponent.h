@@ -136,6 +136,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetNumStacks() const { return Inventory.Entries.Num(); }
 
+	/** True when every stack's item is here: on the owner's machine an item can arrive a moment after the list, e.g. right after joining */
+	bool HaveAllItemsArrived() const;
+
 	/** Most stacks it can hold; 0 = no limit */
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetMaxSlots() const { return MaxSlots; }
@@ -156,6 +159,9 @@ public:
 
 	/** Adds one item that keeps the stats of another instance (e.g. a dropped weapon and its ammo). Returns the new instance, or null if it didn't fit */
 	UZItemInstance* AddItemCopy(const UZItemInstance* Source);
+
+	/** Adds a stack of its own (not topped up into others), e.g. to put back a saved inventory as it was. Returns its instance, or null if there's no free slot */
+	UZItemInstance* AddStack(UZItemDefinition* Item, int32 Count);
 
 	/** Takes items, from the last stacks first. Returns how many were taken */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Inventory")

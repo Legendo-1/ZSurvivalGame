@@ -33,6 +33,7 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Tool_Screwdriver, "Item.Tool.Screwdriver", "Counts as a screwdriver for recipes");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Tool_AmmoPress, "Item.Tool.AmmoPress", "Counts as an ammo press for recipes");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Stat, "Item.Stat", "Parent of every number stored per item instance");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Stat_MagazineAmmo, "Item.Stat.MagazineAmmo", "Rounds in a weapon item's magazine");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Stat_Durability, "Item.Stat.Durability", "Durability left on an item with a Durability fragment");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Stat_UpgradeLevel, "Item.Stat.UpgradeLevel", "How many times a weapon item was upgraded");
@@ -49,6 +50,8 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tradeskill_Chemistry, "Tradeskill.Chemistry", "Gunpowder, acids and other chemicals");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tradeskill_Medicine, "Tradeskill.Medicine", "Bandages, medkits and other healing");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tradeskill_Weaponsmithing, "Tradeskill.Weaponsmithing", "Weapon upgrades and weapon mods");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(WorldProgress, "WorldProgress", "Parent of everything done in the host's world, saved with it: bosses beaten, shortcuts opened (e.g. WorldProgress.Boss.StoneGolem)");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Trait_Category_Survival, "Trait.Category.Survival", "Health, stamina and moving around");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Trait_Category_Combat, "Trait.Category.Combat", "Damage, recoil and reloading");

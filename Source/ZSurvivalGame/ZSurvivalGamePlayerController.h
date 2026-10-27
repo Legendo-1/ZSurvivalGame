@@ -14,17 +14,23 @@ class UInputMappingContext;
 class USoundBase;
 class UUserWidget;
 class UZInventoryScreenWidget;
+class UZPlayerSaveComponent;
 class UZSurvivalHUDWidget;
 struct FKey;
 
 /**
  *  Basic PlayerController class for a third person game
  *  Manages input mappings, the HUD, the inventory screen and short messages to the player (e.g. what crafting made, level-ups)
+ *  Its Player Save component brings the player's character from the save on their own PC into the game, and saves it (see SAVING.md)
  */
 UCLASS(abstract)
 class AZSurvivalGamePlayerController : public APlayerController
 {
 	GENERATED_BODY()
+
+	/** Brings the player's character from their save into the game, and saves it again */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Save", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZPlayerSaveComponent> PlayerSave;
 
 protected:
 
@@ -104,6 +110,8 @@ public:
 
 	/** Constructor */
 	AZSurvivalGamePlayerController();
+
+	UZPlayerSaveComponent* GetPlayerSave() const { return PlayerSave; }
 
 	/** Server → this player: they used a crafting station, so the inventory screen opens to combine items there */
 	UFUNCTION(Client, Reliable)

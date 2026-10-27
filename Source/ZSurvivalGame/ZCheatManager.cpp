@@ -13,6 +13,7 @@
 #include "ZSurvivalGame.h"
 #include "ZSurvivalGameCharacter.h"
 #include "ZSurvivalGamePlayerController.h"
+#include "ZSurvivalGameState.h"
 #include "AI/ZAICharacter.h"
 #include "AI/ZZombieCharacter.h"
 #include "AbilitySystem/ZAttributeSet.h"
@@ -30,6 +31,9 @@
 #include "Progression/ZProgressionComponent.h"
 #include "Progression/ZProgressionSubsystem.h"
 #include "Progression/ZTraitDefinition.h"
+#include "SaveGame/ZSaveGame.h"
+#include "SaveGame/ZSaveStorage.h"
+#include "SaveGame/ZSaveSubsystem.h"
 #include "UI/ZCharacterPanelWidget.h"
 #include "UI/ZInventoryScreenWidget.h"
 #include "UI/ZTraitRowWidget.h"
@@ -701,6 +705,202 @@ void UZCheatManager::ZResetTraits()
 	{
 		Progression->ResetTraits();
 	}
+}
+
+void UZCheatManager::ZSave()
+{
+	if (UZSaveSubsystem* Saves = UZSaveSubsystem::Get(GetWorld()))
+	{
+		Saves->SaveNow();
+	}
+}
+
+void UZCheatManager::ZSaveSlots()
+{
+	UZSaveSubsystem* Saves = UZSaveSubsystem::Get(GetWorld());
+	if (!Saves)
+	{
+		return;
+	}
+
+	const TArray<FZSaveSlotInfo> Slots = Saves->GetSaveSlots();
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSaveSlots: %d slot(s) in %s"), Slots.Num(), *Saves->GetStorage()->Describe());
+	for (const FZSaveSlotInfo& Slot : Slots)
+	{
+		UE_LOG(LogZSurvivalGame, Log, TEXT("  %s: '%s', level %d, played %dh %02dm, saved %s%s%s"), *Slot.SlotName, *Slot.CharacterName, Slot.Level,
+			static_cast<int32>(Slot.PlayTime.GetTotalHours()), Slot.PlayTime.GetMinutes(), *Slot.LastSaved.ToString(TEXT("%Y-%m-%d %H:%M:%S")),
+			Slot.bIsActive ? TEXT(" (in use)") : TEXT(""), Slot.bCanLoad ? TEXT("") : TEXT(" (can't be loaded)"));
+	}
+}
+
+void UZCheatManager::ZSaveInfo()
+{
+	UZSaveSubsystem* Saves = UZSaveSubsystem::Get(GetWorld());
+	if (!Saves)
+	{
+		return;
+	}
+
+	const FZSaveSlotInfo Slot = Saves->GetActiveSlotInfo();
+	const FZCharacterSaveData& Character = Saves->GetActiveCharacter();
+	const FZWorldSaveData& World = Saves->GetActiveWorld();
+
+	TArray<FString> Items;
+	for (const FZSavedItem& Item : Character.Inventory)
+	{
+		TArray<FString> Details;
+		for (const FZSavedItemStat& Stat : Item.Stats)
+		{
+			Details.Add(FString::Printf(TEXT("%s %d"), *Stat.Tag.ToString(), Stat.Value));
+		}
+
+		for (const FPrimaryAssetId& Mod : Item.Mods)
+		{
+			Details.Add(FString::Printf(TEXT("mod %s"), *Mod.PrimaryAssetName.ToString()));
+		}
+
+		Items.Add(FString::Printf(TEXT("%s x%d%s%s"), *Item.Item.PrimaryAssetName.ToString(), Item.Count,
+			Details.Num() > 0 ? *FString::Printf(TEXT(" (%s)"), *FString::Join(Details, TEXT(", "))) : TEXT(""), Item.bEquipped ? TEXT(" [in hands]") : TEXT("")));
+	}
+
+	TArray<FString> Traits;
+	for (const FZSavedTraitRank& Trait : Character.Traits)
+	{
+		Traits.Add(FString::Printf(TEXT("%s %d"), *Trait.Trait.PrimaryAssetName.ToString(), Trait.Rank));
+	}
+
+	TArray<FString> Skills;
+	for (const FZSavedTradeskill& Skill : Character.Tradeskills)
+	{
+		Skills.Add(FString::Printf(TEXT("%s %d xp"), *Skill.Skill.ToString(), Skill.Experience));
+	}
+
+	TArray<FString> Recipes;
+	for (const FPrimaryAssetId& Recipe : Character.DiscoveredRecipes)
+	{
+		Recipes.Add(Recipe.PrimaryAssetName.ToString());
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSaveInfo: slot '%s', character '%s' (%s): level %d, %d xp, %d bonus trait points, starting items %s"),
+		*Slot.SlotName, *Character.CharacterName, *Character.CharacterId.ToString(), Slot.Level, Character.Experience, Character.BonusTraitPoints,
+		Character.bReceivedStartingItems ? TEXT("received") : TEXT("not yet"));
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSaveInfo: items: %s"), Items.Num() > 0 ? *FString::Join(Items, TEXT(", ")) : TEXT("none"));
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSaveInfo: traits: %s; tradeskills: %s; recipes: %s"), Traits.Num() > 0 ? *FString::Join(Traits, TEXT(", ")) : TEXT("none"),
+		Skills.Num() > 0 ? *FString::Join(Skills, TEXT(", ")) : TEXT("none"), Recipes.Num() > 0 ? *FString::Join(Recipes, TEXT(", ")) : TEXT("none"));
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSaveInfo: world: %s in %s"), World.Progress.IsEmpty() ? TEXT("no progress") : *World.Progress.ToStringSimple(),
+		World.MapName.IsEmpty() ? TEXT("(the default level)") : *World.MapName);
+}
+
+void UZCheatManager::ZNewCharacter(const FString& CharacterName)
+{
+	UZSaveSubsystem* Saves = UZSaveSubsystem::Get(GetWorld());
+	const FString SlotName = Saves ? Saves->CreateSlot(CharacterName) : FString();
+	if (!SlotName.IsEmpty())
+	{
+		Saves->LoadSlot(SlotName);
+	}
+}
+
+void UZCheatManager::ZLoadSlot(const FString& SlotName)
+{
+	if (UZSaveSubsystem* Saves = UZSaveSubsystem::Get(GetWorld()))
+	{
+		Saves->LoadSlot(SlotName);
+	}
+}
+
+void UZCheatManager::ZDeleteSlot(const FString& SlotName)
+{
+	if (UZSaveSubsystem* Saves = UZSaveSubsystem::Get(GetWorld()))
+	{
+		Saves->DeleteSlot(SlotName);
+	}
+}
+
+void UZCheatManager::ZWorldProgress(const FString& Tag)
+{
+	AZSurvivalGameState* GameState = GetWorld()->GetGameState<AZSurvivalGameState>();
+	if (!GameState)
+	{
+		return;
+	}
+
+	if (Tag.IsEmpty())
+	{
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZWorldProgress: %s"), GameState->GetWorldProgress().IsEmpty() ? TEXT("nothing done yet") : *GameState->GetWorldProgress().ToStringSimple());
+		return;
+	}
+
+	const FGameplayTag Progress = FGameplayTag::RequestGameplayTag(FName(*Tag), false);
+	if (!Progress.MatchesTag(ZGameplayTags::WorldProgress))
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZWorldProgress: '%s' isn't a WorldProgress tag (add it in Project Settings > Gameplay Tags, under WorldProgress)"), *Tag);
+		return;
+	}
+
+	if (CheckIsHost(TEXT("ZWorldProgress")))
+	{
+		GameState->AddWorldProgress(Progress);
+	}
+}
+
+void UZCheatManager::ZBreakSave()
+{
+#if !UE_BUILD_SHIPPING
+	UZSaveSubsystem* Saves = UZSaveSubsystem::Get(GetWorld());
+	UZSaveGame* Save = Saves && Saves->IsSavingEnabled() ? Saves->GetActiveSaveForTesting() : nullptr;
+	if (!Save)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZBreakSave: saving is off"));
+		return;
+	}
+
+	FZCharacterSaveData& Character = Save->Character;
+	Character.Experience = 2000000000;
+	Character.BonusTraitPoints = -5;
+
+	// a trait far past its highest rank, listed twice
+	FZSavedTraitRank Trait;
+	Trait.Trait = FPrimaryAssetId(TEXT("Trait:TR_Vigor"));
+	Trait.Rank = 99;
+	Character.Traits.Add(Trait);
+	Character.Traits.Add(Trait);
+
+	// a tradeskill that isn't one, and one past the highest level
+	FZSavedTradeskill& NotASkill = Character.Tradeskills.AddDefaulted_GetRef();
+	NotASkill.Skill = ZGameplayTags::Item_Stat_Durability;
+	NotASkill.Experience = 5;
+	FZSavedTradeskill& TooMuch = Character.Tradeskills.AddDefaulted_GetRef();
+	TooMuch.Skill = ZGameplayTags::Tradeskill_Electronics;
+	TooMuch.Experience = 2000000000;
+
+	// an item that doesn't exist, a stack bigger than stacks get, and a rifle with an impossible magazine, upgrade and mod
+	FZSavedItem& Missing = Character.Inventory.AddDefaulted_GetRef();
+	Missing.Item = FPrimaryAssetId(TEXT("Item:ID_DoesNotExist"));
+	FZSavedItem& Ammo = Character.Inventory.AddDefaulted_GetRef();
+	Ammo.Item = FPrimaryAssetId(TEXT("Item:ID_Ammo_Rifle"));
+	Ammo.Count = 1000000;
+	FZSavedItem& Rifle = Character.Inventory.AddDefaulted_GetRef();
+	Rifle.Item = FPrimaryAssetId(TEXT("Item:ID_Rifle"));
+	Rifle.Count = 5;
+	Rifle.Mods.Add(FPrimaryAssetId(TEXT("Item:ID_DoesNotExist")));
+	FZSavedItemStat& Magazine = Rifle.Stats.AddDefaulted_GetRef();
+	Magazine.Tag = ZGameplayTags::Item_Stat_MagazineAmmo;
+	Magazine.Value = 9999;
+	FZSavedItemStat& Upgrade = Rifle.Stats.AddDefaulted_GetRef();
+	Upgrade.Tag = ZGameplayTags::Item_Stat_UpgradeLevel;
+	Upgrade.Value = 99;
+	FZSavedItemStat& NotAStat = Rifle.Stats.AddDefaulted_GetRef();
+	NotAStat.Tag = ZGameplayTags::Ability_Sprint;
+	NotAStat.Value = 1;
+
+	Character.DiscoveredRecipes.Add(FPrimaryAssetId(TEXT("Recipe:RC_DoesNotExist")));
+
+	if (Saves->WriteActiveSaveForTesting())
+	{
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZBreakSave: the slot in use now breaks the game's rules; the next game with it shows what the host fixed"));
+	}
+#endif
 }
 
 void UZCheatManager::ZFloorSurface(const FString& SurfaceName)

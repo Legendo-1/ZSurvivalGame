@@ -18,6 +18,7 @@
 #include "ZCheatManager.h"
 #include "Crafting/ZCraftingStation.h"
 #include "Progression/ZProgressionSettings.h"
+#include "SaveGame/ZPlayerSaveComponent.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 #define LOCTEXT_NAMESPACE "ZSurvivalPlayerController"
@@ -29,6 +30,8 @@ AZSurvivalGamePlayerController::AZSurvivalGamePlayerController()
 
 	// the built-in look until a Widget Blueprint is set
 	InventoryScreenClass = UZInventoryScreenWidget::StaticClass();
+
+	PlayerSave = CreateDefaultSubobject<UZPlayerSaveComponent>(TEXT("PlayerSave"));
 }
 
 void AZSurvivalGamePlayerController::BeginPlay()

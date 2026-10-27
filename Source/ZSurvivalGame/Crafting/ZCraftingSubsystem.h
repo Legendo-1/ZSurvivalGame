@@ -3,11 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "ZCraftingSubsystem.generated.h"
 
 class UZCraftingRecipe;
 class UZItemDefinition;
+class UZItemInstance;
 
 /**
  *  Knows every crafting recipe in the project: the Asset Manager finds them (primary asset type "Recipe"), and they're loaded the first time they're needed
@@ -44,6 +46,9 @@ public:
 
 	/** Recipes whose inputs are exactly these kinds of items (counts and tool quality aside), the ones with the most inputs first */
 	TArray<UZCraftingRecipe*> FindRecipesForCombination(TConstArrayView<const UZItemDefinition*> Items) const;
+
+	/** The highest any upgrade recipe can raise this stat on this item, e.g. a weapon's upgrade level (0 if none can) */
+	int32 GetHighestUpgradeLevel(const UZItemInstance* Target, FGameplayTag Stat) const;
 
 private:
 

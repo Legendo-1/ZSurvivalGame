@@ -8,6 +8,7 @@
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZCombatLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
+#include "Items/ZInventoryComponent.h"
 #include "Items/ZItemInstance.h"
 #include "Progression/ZProgressionComponent.h"
 #include "Weapons/ZWeaponData.h"
@@ -49,6 +50,30 @@ void UZItemFragment_Weapon::OnInstanceCreated(UZItemInstance* Instance) const
 	{
 		Instance->SetStatTagStack(ZGameplayTags::Item_Stat_MagazineAmmo, WeaponData->MagazineSize);
 	}
+}
+
+void UZItemFragment_Weapon::OnInstanceLoaded(UZItemInstance* Instance) const
+{
+	if (!WeaponData)
+	{
+		return;
+	}
+
+	// mods that fit, one per slot; any others go back to the inventory
+	UZInventoryComponent* Inventory = UZInventoryComponent::FindInventoryComponent(Instance->GetTypedOuter<AActor>());
+	for (UZItemDefinition* Mod : Instance->DetachAllMods())
+	{
+		const UZItemFragment_WeaponMod* ModFragment = Mod->FindFragment<UZItemFragment_WeaponMod>();
+		UZItemDefinition* LeftOver = ModFragment && ModFragment->FitsWeapon(WeaponData) ? Instance->AttachMod(Mod) : Mod;
+		if (LeftOver && Inventory)
+		{
+			Inventory->AddItem(LeftOver, 1);
+		}
+	}
+
+	// no more rounds than the magazine holds with these mods (extra rounds would go to the reserve when it's taken out)
+	const int32 MagazineSize = FMath::RoundToInt32(UZWeaponStatsLibrary::GetWeaponStat(WeaponData, Instance, EZWeaponStat::MagazineSize));
+	Instance->SetStatTagStack(ZGameplayTags::Item_Stat_MagazineAmmo, FMath::Clamp(Instance->GetStatTagStackCount(ZGameplayTags::Item_Stat_MagazineAmmo), 0, MagazineSize));
 }
 
 bool UZItemFragment_Weapon::OnUse(UZItemInstance* Instance, APawn* User) const
@@ -221,6 +246,11 @@ void UZItemFragment_Consumable::GetDescriptionLines(const UZItemInstance* Instan
 void UZItemFragment_Durability::OnInstanceCreated(UZItemInstance* Instance) const
 {
 	Instance->SetStatTagStack(ZGameplayTags::Item_Stat_Durability, MaxDurability);
+}
+
+void UZItemFragment_Durability::OnInstanceLoaded(UZItemInstance* Instance) const
+{
+	Instance->SetStatTagStack(ZGameplayTags::Item_Stat_Durability, FMath::Clamp(Instance->GetDurability(), 0, MaxDurability));
 }
 
 void UZItemFragment_Durability::GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const

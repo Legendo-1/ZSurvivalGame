@@ -128,6 +128,11 @@ TArray<FZInventoryItem> UZInventoryComponent::GetItems() const
 	return Items;
 }
 
+bool UZInventoryComponent::HaveAllItemsArrived() const
+{
+	return !Inventory.Entries.ContainsByPredicate([](const FZInventoryEntry& Entry) { return !Entry.Instance || !Entry.Instance->GetItemDefinition(); });
+}
+
 int32 UZInventoryComponent::GetStackCount(const UZItemInstance* Instance) const
 {
 	const int32 Index = FindEntryIndex(Instance);
@@ -246,6 +251,18 @@ UZItemInstance* UZInventoryComponent::AddItemCopy(const UZItemInstance* Source)
 	}
 
 	UZItemInstance* NewInstance = AddNewStack(Source->GetItemDefinition(), 1, Source);
+	BroadcastChanged();
+	return NewInstance;
+}
+
+UZItemInstance* UZInventoryComponent::AddStack(UZItemDefinition* Item, int32 Count)
+{
+	if (!GetOwner()->HasAuthority() || !Item || Count <= 0 || !HasFreeSlot())
+	{
+		return nullptr;
+	}
+
+	UZItemInstance* NewInstance = AddNewStack(Item, FMath::Min(Count, Item->MaxStackSize));
 	BroadcastChanged();
 	return NewInstance;
 }

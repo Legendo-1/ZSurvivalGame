@@ -2,7 +2,7 @@
 
 How crafting works: combining items, tools, crafting stations and tradeskills, weapon upgrades and mods, and how to add new recipes.
 
-**Last updated:** 2026-10-26 (crafting sounds per recipe, see AUDIO.md)
+**Last updated:** 2026-10-27 (tradeskills and recipes found are saved with the character, see SAVING.md)
 
 ## How players craft
 
@@ -26,7 +26,7 @@ What players are told when it doesn't work. It never names the recipe, only what
 
 ## Tradeskills
 
-- **Mechanics, Electronics, Chemistry, Medicine and Weaponsmithing.** Each player has their own; they're kept when dying (not saved between game sessions yet).
+- **Mechanics, Electronics, Chemistry, Medicine and Weaponsmithing.** Each player has their own; they're kept when dying and saved with the character, like the recipes found (SAVING.md).
 - **A recipe can need tradeskill levels, and that's a hard limit:** below it, it can't be made at all.
 - **Crafting is how they go up.** Every craft gives experience in the recipe's tradeskills. Easy recipes teach less and less: 25 levels above a recipe it teaches nothing ("There's nothing more to learn from making this."). So players have to move on to harder recipes to keep improving.
 - **Levels:** reaching level L takes 10 × L^1.5 experience in total (level 10 = 316, level 25 = 1250, level 100 = 10000). Change the numbers in **Project Settings → Game → Progression**.

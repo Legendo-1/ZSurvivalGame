@@ -357,6 +357,63 @@ void UZCraftingComponent::ForgetDiscoveries()
 	}
 }
 
+TArray<UZCraftingRecipe*> UZCraftingComponent::GetDiscoveredRecipes() const
+{
+	TArray<UZCraftingRecipe*> Recipes;
+	for (const FZDiscoveredRecipe& Entry : Discoveries.Entries)
+	{
+		if (Entry.Recipe)
+		{
+			Recipes.Add(Entry.Recipe);
+		}
+	}
+
+	return Recipes;
+}
+
+void UZCraftingComponent::RestoreCrafting(const TArray<TPair<FGameplayTag, int32>>& InSkillExperience, const TArray<UZCraftingRecipe*>& InDiscoveries, TArray<FString>& OutFixes)
+{
+	if (!GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	const UZProgressionSettings* Settings = UZProgressionSettings::Get();
+	const int32 MaxExperience = Settings->GetTradeskillExperienceForLevel(Settings->MaxTradeskillLevel);
+
+	FZTagStackContainer Skills;
+	for (const TPair<FGameplayTag, int32>& Saved : InSkillExperience)
+	{
+		if (!Saved.Key.MatchesTag(ZGameplayTags::Tradeskill) || Saved.Key == ZGameplayTags::Tradeskill.GetTag())
+		{
+			OutFixes.Add(FString::Printf(TEXT("'%s' isn't a tradeskill"), *Saved.Key.ToString()));
+			continue;
+		}
+
+		const int32 Experience = FMath::Clamp(Saved.Value, 0, MaxExperience);
+		if (Experience != Saved.Value)
+		{
+			OutFixes.Add(FString::Printf(TEXT("%s experience %d is outside 0..%d (the highest level)"), *Saved.Key.ToString(), Saved.Value, MaxExperience));
+		}
+
+		Skills.SetStack(Saved.Key, Experience);
+	}
+
+	SkillExperience.CopyFrom(Skills);
+
+	Discoveries.Entries.Reset();
+	for (UZCraftingRecipe* Recipe : InDiscoveries)
+	{
+		if (Recipe && !HasDiscovered(Recipe))
+		{
+			Discoveries.Entries.AddDefaulted_GetRef().Recipe = Recipe;
+		}
+	}
+
+	Discoveries.MarkArrayDirty();
+	OnTradeskillsChanged.Broadcast(this);
+}
+
 void UZCraftingComponent::ServerCombineItems_Implementation(const TArray<UZItemInstance*>& Items, int32 Count)
 {
 	if (!CanCraftNow() || IsCrafting())

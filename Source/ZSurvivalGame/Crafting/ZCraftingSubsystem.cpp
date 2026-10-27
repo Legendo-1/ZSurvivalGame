@@ -6,6 +6,7 @@
 #include "ZSurvivalGame.h"
 #include "Core/ZPrimaryAssetUtils.h"
 #include "Crafting/ZCraftingRecipe.h"
+#include "Crafting/ZRecipeOutcomes.h"
 
 UZCraftingSubsystem* UZCraftingSubsystem::Get(const UObject* WorldContextObject)
 {
@@ -86,6 +87,24 @@ TArray<UZCraftingRecipe*> UZCraftingSubsystem::FindRecipesForCombination(TConstA
 	// the most specific recipe first; the rest stays in name order
 	Result.StableSort([](const UZCraftingRecipe& A, const UZCraftingRecipe& B) { return A.GetNumInputs() > B.GetNumInputs(); });
 	return Result;
+}
+
+int32 UZCraftingSubsystem::GetHighestUpgradeLevel(const UZItemInstance* Target, FGameplayTag Stat) const
+{
+	int32 Highest = 0;
+	for (const UZCraftingRecipe* Recipe : GetRecipes())
+	{
+		for (const UZRecipeOutcome* Outcome : Recipe->Outcomes)
+		{
+			const UZRecipeOutcome_UpgradeTarget* Upgrade = Cast<UZRecipeOutcome_UpgradeTarget>(Outcome);
+			if (Upgrade && Upgrade->Stat == Stat)
+			{
+				Highest = FMath::Max(Highest, Upgrade->GetMaxLevel(Target));
+			}
+		}
+	}
+
+	return Highest;
 }
 
 void UZCraftingSubsystem::LoadRecipes()

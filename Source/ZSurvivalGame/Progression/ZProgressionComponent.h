@@ -94,6 +94,9 @@ public:
 	/** Owner's machine: remembers the current level and points, so later changes can be told apart from what arrived at the start */
 	virtual void BeginPlay() override;
 
+	/** Owner's machine: after a replication update, remembers whether saved progress was put back in it */
+	virtual void PostRepNotifies() override;
+
 	/** --- LEVEL (the server, and the owner's copy on their machine) --- */
 
 	UFUNCTION(BlueprintPure, Category = "Progression")
@@ -127,6 +130,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Progression")
 	void AddTraitPoints(int32 Points);
 
+	/** Points from bosses and items (points from levels come from the experience) */
+	UFUNCTION(BlueprintPure, Category = "Progression")
+	int32 GetBonusTraitPoints() const { return BonusTraitPoints; }
+
 	/** --- TRAITS --- */
 
 	UFUNCTION(BlueprintPure, Category = "Progression")
@@ -151,6 +158,20 @@ public:
 	/** Every trait in the game */
 	UFUNCTION(BlueprintPure, Category = "Progression")
 	TArray<UZTraitDefinition*> GetAllTraits() const;
+
+	/** The traits with ranks in them, and how many */
+	TArray<TPair<UZTraitDefinition*, int32>> GetTraitRanks() const;
+
+	/** --- SAVING --- */
+
+	/**
+	 *  Server: puts back a saved character's progress, within the game's rules: experience up to the highest level, ranks up to each trait's max,
+	 *  and traits that cost more points than the character has are reset (the points can be spent again). OutFixes gets a line for each change
+	 */
+	void RestoreProgress(int32 InExperience, int32 InBonusTraitPoints, const TArray<TPair<UZTraitDefinition*, int32>>& InTraitRanks, TArray<FString>& OutFixes);
+
+	/** True once a saved character's progress was put on this player: on the server, and on the owner's machine once it arrived (with the rest of the character) */
+	bool WasRestored() const { return RestoreCount > 0; }
 
 	/** --- EVENTS (the server, and the owner's machine) --- */
 
@@ -205,10 +226,15 @@ private:
 	UPROPERTY(Replicated)
 	FZTraitRankList TraitRanks;
 
+	/** Goes up each time saved progress is put back, so the owner's machine doesn't take the numbers arriving with it for level-ups */
+	UPROPERTY(Replicated)
+	uint8 RestoreCount = 0;
+
 	/** Server: the effect holding the traits' bonuses */
 	FActiveGameplayEffectHandle TraitEffectHandle;
 
 	/** Owner's machine: what it saw last, to notice level-ups and new points */
 	int32 SeenLevel = INDEX_NONE;
 	int32 SeenBonusTraitPoints = INDEX_NONE;
+	uint8 SeenRestoreCount = 0;
 };

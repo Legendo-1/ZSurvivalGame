@@ -66,6 +66,39 @@ void UZItemInstance::CopyStateFrom(const UZItemInstance* Other)
 	}
 }
 
+void UZItemInstance::RestoreState(const TMap<FGameplayTag, int32>& Stats, const TArray<UZItemDefinition*>& Mods)
+{
+	// exactly the saved stats: one the save doesn't have is 0 (e.g. a used-up tool), not what a new item starts with
+	FZTagStackContainer SavedStats;
+	for (const TPair<FGameplayTag, int32>& Stat : Stats)
+	{
+		if (Stat.Key.MatchesTag(ZGameplayTags::Item_Stat))
+		{
+			SavedStats.SetStack(Stat.Key, Stat.Value);
+		}
+	}
+
+	StatTags.CopyFrom(SavedStats);
+
+	// only mods, one per slot (whether they fit the item is up to its fragments)
+	AttachedMods.Reset();
+	for (UZItemDefinition* Mod : Mods)
+	{
+		AttachMod(Mod);
+	}
+
+	if (ItemDefinition)
+	{
+		for (const UZItemFragment* Fragment : ItemDefinition->Fragments)
+		{
+			if (Fragment)
+			{
+				Fragment->OnInstanceLoaded(this);
+			}
+		}
+	}
+}
+
 int32 UZItemInstance::GetUpgradeLevel() const
 {
 	return StatTags.GetStackCount(ZGameplayTags::Item_Stat_UpgradeLevel);

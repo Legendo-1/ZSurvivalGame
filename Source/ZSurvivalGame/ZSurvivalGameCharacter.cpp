@@ -239,8 +239,22 @@ void AZSurvivalGameCharacter::PossessedBy(AController* NewController)
 		Inventory->OnItemRemoving.AddUObject(this, &AZSurvivalGameCharacter::OnInventoryItemRemoving);
 	}
 
-	// take out the weapon for the starting animation set (e.g. set in Class Defaults)
-	EquipWeaponOfType(CurrentWeaponType);
+	// take out the weapon that was in the hands when the game was saved, or else the one for the starting animation set (e.g. set in Class Defaults)
+	AZSurvivalGamePlayerState* ZPlayerState = GetPlayerState<AZSurvivalGamePlayerState>();
+	UZItemInstance* SavedWeapon = ZPlayerState ? ZPlayerState->PendingEquipItem.Get() : nullptr;
+	if (ZPlayerState)
+	{
+		ZPlayerState->PendingEquipItem.Reset();
+	}
+
+	if (SavedWeapon && GetInventory() && GetInventory()->GetStackCount(SavedWeapon) > 0)
+	{
+		EquipWeaponItem(SavedWeapon);
+	}
+	else
+	{
+		EquipWeaponOfType(CurrentWeaponType);
+	}
 }
 
 void AZSurvivalGameCharacter::UnPossessed()

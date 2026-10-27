@@ -2,7 +2,7 @@
 
 How character levels, trait points and traits work, and how to add new traits.
 
-**Last updated:** 2026-10-26 (a level-up sound and effect, see AUDIO.md)
+**Last updated:** 2026-10-27 (levels and traits are saved with the character, see SAVING.md)
 
 ## The idea
 
@@ -84,7 +84,7 @@ Right-click the asset → **Asset Actions → Validate Assets** checks that the 
 - **The server** decides experience and trait points, raises and resets traits (the player's machine only asks) and puts on the effect.
 - **The player's machine** gets its own level, points and traits. The stats come as attributes, so recoil, reload time and dodge distance are the same on both machines.
 - **Each player has their own.** Kills give every player experience.
-- **Not saved yet:** progression is lost when the game closes.
+- **Saved with the character** on the player's own PC: experience, bonus trait points and traits (SAVING.md). Loading a character doesn't show level-up messages; the host checks the traits don't cost more points than the character has.
 
 ## Console commands
 
