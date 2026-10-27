@@ -2,7 +2,7 @@
 
 How the character's animations are connected, from the mouse button to the pose you see.
 
-**Last updated:** 2026-10-26 (Footstep notifies in the walk, jog and sprint animations)
+**Last updated:** 2026-10-27 (fire, reload and take-out montages on the upper body)
 
 The chain has three layers, each passing data to the next.
 
@@ -36,7 +36,8 @@ Event Blueprint Update Animation
 It's read **from left to right**, and each node changes the pose a little:
 
 ```
-Locomotion (state machine) → Main States (+ jumping/falling) → Slot → AO_Rifle → Control Rig → Output Pose
+Locomotion (state machine) → Main States (+ jumping/falling) → LocomotionPose (cached)
+  → Layered blend per bone (the UpperBody slot from spine_01 up) → Slot (DefaultSlot) → aim offsets → Control Rig → Output Pose
 ```
 
 ### Locomotion: what are the legs doing?
@@ -54,7 +55,9 @@ Inside the blend space, Direction and Speed pick which walk to play: forward, si
 
 ### Slot
 
-Where montages play: the weapon's Fire, Reload and Equip Montage (set in its Data Asset, see AUDIO.md). Right now it's the whole body, so a reload would stop the legs. "Montages on the upper body" below changes that.
+Where montages play: the weapon's Fire, Reload and Equip Montage (set in its Data Asset, see AUDIO.md). They play in the **UpperBody** slot, on the upper body only, so the legs keep walking while the arms fire, reload or take a weapon out ("Montages on the upper body" below). **DefaultSlot** stays for whole-body montages later (a dodge roll, a death).
+
+The montages are `AM_Rifle_Fire`, `AM_Rifle_Reload`, `AM_Rifle_Equip` and the same for the pistol, next to their animations in `Anims/Rifle` and `Anims/Pistol`. The reload montages have the reload sounds as Play Sound notifies (AUDIO.md).
 
 ### AO_Rifle: up/down aim
 
@@ -72,7 +75,7 @@ Foot IK places the feet on the ground. It comes last so it always gets the final
 
 So the legs keep walking (and the feet keep their blend space) while the arms reload, take out a weapon or fire. Do this once in ABP_Manny:
 
-1. **Make the slot:** open ABP_Manny → **Window → Anim Slot Manager** → **Add Slot** → name it `UpperBody` (in DefaultGroup) → **Save**.
+1. **The slot:** open ABP_Manny → **Window → Anim Slot Manager**. **UpperBody** is already there (the mannequin's skeleton came with it). Only if it's missing: **Add Slot** → name it `UpperBody` (in DefaultGroup) → **Save**.
 2. **Keep a copy of the walking pose:** in the AnimGraph, right-click empty space → search **New Save cached pose** → name it `LocomotionPose`. Connect **Main States**' output into it (instead of into the Slot).
 3. Right-click → search **Use cached pose 'LocomotionPose'**. Do it **twice**, so there are two of these nodes.
 4. Right-click → **Layered blend per bone**. Connect:

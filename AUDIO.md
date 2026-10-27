@@ -2,7 +2,7 @@
 
 How to give the game its sounds, particles and character animations: shots, reloads, deaths, taking out a weapon, crafting, footsteps and the rest, so they work for every player.
 
-**Last updated:** 2026-10-26 (footsteps that match the surface and the gait: walk, jog, sprint, starts, stops, jumps and landings)
+**Last updated:** 2026-10-27 (the pistol's own shot, take-out sounds, reload sounds in the reload montages)
 
 ## Who does what
 
@@ -207,7 +207,7 @@ Blueprints can call **Execute Cue** too, e.g. a door Blueprint when it opens (on
 
 ## Plan: what isn't made yet
 
-- **Most sounds and effects:** only the shot has one so far (`GCN_Weapon_Fire`). `Content/Audio/FreeWeaponSFX` also has reload and take-out sounds, and a handgun shot for the pistol's own `GameplayCue.Weapon.Fire.Pistol`.
+- **Most sounds and effects:** made so far are the shots (`GCN_Weapon_Fire` for every gun, `GCN_Weapon_Fire_Pistol` with a shot from `Content/MW_Pistol_SK`), taking out the rifle and the pistol (`GCN_Weapon_Equip_Rifle` / `_Pistol`), and the reloads (Play Sound notifies in `AM_Rifle_Reload` and `AM_Pistol_Reload`, so the Reload events have no GCN). Shots use the attenuation `ATT_Gunshot`, reloads and taking out `ATT_WeaponHandling` (both in `Content/Audio`; open one to see or change how far it's heard). Still to make: impacts, hits, deaths, level-ups, pickups, used items and crafting.
 - **Footstep effects:** dust, splashes or snow puffs per surface, next to the sounds in DA_Footsteps.
 - **Enemies hearing footsteps:** sprinting louder than walking, for AI that listens (see MULTIPLAYER.md → Smarter AI).
 - **Music and ambience:** ambient sounds in the levels, music that changes in fights.
