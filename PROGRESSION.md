@@ -2,7 +2,7 @@
 
 How character levels, trait points and traits work, and how to add new traits.
 
-**Last updated:** 2026-10-28 (the Armor stat; equipment changes the same stats as traits)
+**Last updated:** 2026-10-28 (a higher max health leaves a gap to heal; the Armor stat)
 
 ## The idea
 
@@ -49,7 +49,7 @@ All go up to rank 10. The bonus is per rank.
 - **Traits are Data Assets** (`ZTraitDefinition`) in `Content/Progression/Traits`. The game finds them by itself (Asset Manager).
 - **Each trait has Modifiers:** a stat (an attribute) and how much one rank adds.
 - **All of a player's trait bonuses are one gameplay effect** on their ability system, put on by the server whenever their traits change. Equipment has its own effect the same way, so traits and equipment add up.
-- **When max health or max stamina goes up, the current value goes up by the same share** (full health stays full).
+- **When max health or max stamina goes up** (a Vigor rank, putting on a necklace), **your current health stays the same**: heal the gap yourself, e.g. with a bandage. **When it goes down** (taking the necklace off), your health only drops if it's above the new max, down to the new max. You start full when your character spawns, respawns or a saved game loads.
 
 The stats traits can change (armor and jewelry change the same ones while they're worn, see ITEMS.md → Equipment). They're attributes in `ZAttributeSet`, and 1 means normal:
 

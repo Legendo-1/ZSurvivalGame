@@ -6,6 +6,7 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
+#include "Misc/ScopeExit.h"
 #include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
 #include "AbilitySystem/ZAttributeSet.h"
@@ -366,11 +367,16 @@ void UZProgressionComponent::ApplyTraitEffects()
 		return;
 	}
 
-	if (TraitEffectHandle.IsValid())
+	// the old effect comes off after the new one is on, so a max that stays the same never dips for a moment (which would cut health down)
+	const FActiveGameplayEffectHandle OldEffectHandle = TraitEffectHandle;
+	TraitEffectHandle.Invalidate();
+	ON_SCOPE_EXIT
 	{
-		ASC->RemoveActiveGameplayEffect(TraitEffectHandle);
-		TraitEffectHandle.Invalidate();
-	}
+		if (OldEffectHandle.IsValid())
+		{
+			ASC->RemoveActiveGameplayEffect(OldEffectHandle);
+		}
+	};
 
 	// every trait's bonus per attribute, added up
 	TMap<FName, float> Bonuses;

@@ -105,14 +105,14 @@ void UZAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, fl
 		return;
 	}
 
-	// a changed max keeps the same share of the current value (e.g. a trait adding max health heals that part too)
-	if (Attribute == GetMaxHealthAttribute() && OldValue > 0.f && GetHealth() > 0.f)
+	// a higher max leaves the current value as it is (the gap is healed like any other), a lower one cuts it down to the new max (e.g. taking off a necklace)
+	if (Attribute == GetMaxHealthAttribute() && GetHealth() > NewValue)
 	{
-		SetHealth(FMath::Min(GetHealth() * NewValue / OldValue, NewValue));
+		SetHealth(NewValue);
 	}
-	else if (Attribute == GetMaxStaminaAttribute() && OldValue > 0.f)
+	else if (Attribute == GetMaxStaminaAttribute() && GetStamina() > NewValue)
 	{
-		SetStamina(FMath::Min(GetStamina() * NewValue / OldValue, NewValue));
+		SetStamina(NewValue);
 	}
 
 	if (Attribute == GetHealthAttribute() && OldValue > 0.f && NewValue <= 0.f)

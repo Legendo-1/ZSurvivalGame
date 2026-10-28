@@ -6,6 +6,7 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
+#include "Misc/ScopeExit.h"
 #include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
 #include "AbilitySystem/ZAttributeSet.h"
@@ -387,11 +388,16 @@ void UZEquipmentComponent::ApplyEquipmentEffects()
 		return;
 	}
 
-	if (EquipmentEffectHandle.IsValid())
+	// the old effect comes off after the new one is on, so a max that stays the same never dips for a moment (which would cut health down)
+	const FActiveGameplayEffectHandle OldEffectHandle = EquipmentEffectHandle;
+	EquipmentEffectHandle.Invalidate();
+	ON_SCOPE_EXIT
 	{
-		ASC->RemoveActiveGameplayEffect(EquipmentEffectHandle);
-		EquipmentEffectHandle.Invalidate();
-	}
+		if (OldEffectHandle.IsValid())
+		{
+			ASC->RemoveActiveGameplayEffect(OldEffectHandle);
+		}
+	};
 
 	// every equipped item's bonus per attribute, added up
 	TMap<FName, float> Bonuses;

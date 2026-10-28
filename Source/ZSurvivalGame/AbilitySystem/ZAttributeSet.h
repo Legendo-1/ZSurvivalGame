@@ -63,7 +63,7 @@ public:
 	/** Keeps the base values in range */
 	virtual void PreAttributeBaseChange(const FGameplayAttribute& Attribute, float& NewValue) const override;
 
-	/** Keeps the same share of Health/Stamina when their max changes, and reports running out of health */
+	/** Keeps Health/Stamina within a lower max (a higher max leaves a gap to heal), and reports running out of health */
 	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 
 	/** Turns IncomingDamage and IncomingHealing from gameplay effects into Health changes */

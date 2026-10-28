@@ -325,9 +325,11 @@ void AZSurvivalGameCharacter::InitAbilitySystem()
 		if (ASC->HasMatchingGameplayTag(ZGameplayTags::State_Dead))
 		{
 			ASC->RemoveLooseGameplayTag(ZGameplayTags::State_Dead, 1, EGameplayTagReplicationState::TagOnly);
-			ASC->SetNumericAttributeBase(UZAttributeSet::GetHealthAttribute(), ASC->GetNumericAttribute(UZAttributeSet::GetMaxHealthAttribute()));
-			ASC->SetNumericAttributeBase(UZAttributeSet::GetStaminaAttribute(), ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute()));
 		}
+
+		// a new body starts full, also when a saved character came in whose traits and equipment raised the max (a higher max leaves a gap otherwise)
+		ASC->SetNumericAttributeBase(UZAttributeSet::GetHealthAttribute(), ASC->GetNumericAttribute(UZAttributeSet::GetMaxHealthAttribute()));
+		ASC->SetNumericAttributeBase(UZAttributeSet::GetStaminaAttribute(), ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute()));
 	}
 }
 
