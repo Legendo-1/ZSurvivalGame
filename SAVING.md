@@ -126,7 +126,7 @@ This design stays for release: it's how co-op games like Remnant 2 and Valheim s
 
 **As the game grows:**
 - **Checkpoints:** where the player continues (for now, a Player Start).
-- **More of the world:** doors and shortcuts opened, chests looted, the hub's barricades. Simple "it happened" things are world progress tags already; objects with their own state (e.g. a barricade's health) need saveable objects added to the world save.
+- **More of the world:** doors and shortcuts opened, chests looted. Simple "it happened" things are world progress tags already; objects with their own state (e.g. what's left in a storage chest) need saveable objects added to the world save.
 
 **Decisions for later:**
 - **Co-op with strangers (public matchmaking):** a player can edit their own save and bring a maxed character (within the rules) into a stranger's game, as in Remnant 2 or Elden Ring. Options: friends-only games by default, or light protection against editing saves (stops casual editing, not determined cheaters).

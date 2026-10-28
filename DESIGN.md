@@ -6,7 +6,7 @@ To maintain rapid iteration speed and clean performance without procedural gener
 
                ┌───────────────────────────┐  
                │    THE HUB (Safehouse)    │  
-               │ Base Upgrades & Crafting  │  
+               │    Crafting & Upgrades    │  
                └─────────────┬─────────────┘  
                              │ (Fast Travel / Gate)  
         ┌────────────────────┼────────────────────┐  
@@ -21,8 +21,9 @@ To maintain rapid iteration speed and clean performance without procedural gener
 │  Boss Arena  │ ──► Unique Part Drop ──► Return to Hub  
 └──────────────┘
 
-* **The Hub (Base):** A single static level (e.g., a fortified high-rise, subway depot, or police precinct) where players craft gear, cook food, process raw materials, and upgrade base defense traps.  
+* **The Hub (Safehouse):** A single static level (e.g., a high-rise, subway depot, or police precinct) where players craft gear, cook food, process raw materials and upgrade their weapons. It's a safe place between expeditions, not a base to defend.  
 * **Hand-Crafted Zones:** Linear-to-branching static maps focusing heavily on loop-back shortcuts (e.g., kicking down a ladder, unlocking a one-way security door) for world connectivity without massive open-world terrain overhead.
+* **Not in the game:** base building and base defense (sieges, barricades, noise/heat, turrets). Decided 2026-10-28.  
 
 ## **2\. Core Mechanics Breakdown**
 
@@ -32,7 +33,7 @@ Split the item economy into two distinct buckets to balance survival gathering w
 
 | Resource Bucket | Source / Nodes | Primary Use & Mechanics |
 | :---- | :---- | :---- |
-| **Environmental Resources** | Trees, Scrap Metal, Water, Urban Plants | Used for base barricades, basic ammo, cooking, basic armor, and trap repairs via durability tools (Axes, Crowbars). |
+| **Environmental Resources** | Trees, Scrap Metal, Water, Urban Plants | Used for basic ammo, cooking and basic armor, gathered with durability tools (Axes, Crowbars). |
 | **Common Zombie Drops** | Standard & Swarm Zombies | Rotting Meat, Bone Fragments, Cloth, and Low-Grade Scrap dropped via automatic proximity/inventory looting to keep combat pacing fast. |
 | **Elite & Boss Parts** | Mutated Specials & Area Bosses | Unique Weapon Mods, High-Tier Firearms, and Heavy Mutant Carapace Armor harvested using locational destruction (e.g., break an elite's armored shoulder to drop Hardened Plate; sever a spitter's gland to drop a Corrosive Mod Core). |
 
@@ -49,15 +50,7 @@ Built around a modular C++ system rather than separate class files per gun:
 * **Mod Socket Component:** Provides open slots on standard firearms.  
 * **Crafted Mods:** Unique parts harvested from Elite Zombies (e.g., Electric Pulse Gland, Acid-Spitter Sac) crafted into Active Mod Attachments at the Hub. Attaching a mod alters secondary fire modes or damage types (e.g., Acid Core on an AK-47 produces corrosive splash projectiles).
 
-## **3\. Base Protection & Survival Integration**
-
-Tie base defense directly to the expedition loop:
-
-* **Noise / Threat Meter (The Heat System):** Running noisy machinery at your Hub (generators, smelting forges, automated lathes) generates a Noise/Heat Value. When filled, it triggers a Siege Event (horde attacks the Hub).  
-* **Fortification Mechanics:** Reinforce Hub entry points (planking windows, metal gates, wire traps) using lumber and scrap metal gathered in the field.  
-* **Electricity & Automation:** Craft generators to power automated turret traps or electric fences using scavenged urban parts.
-
-## **4\. Development Roadmap & Technical Status**
+## **3\. Development Roadmap & Technical Status**
 
 ### **Phase 1: Core Combat & Movement (IN PROGRESS)**
 
@@ -98,11 +91,10 @@ Tie base defense directly to the expedition loop:
 * Elite/Boss part drop tables triggered on death or dismemberment.  
 * Hub crafting UI and recipe execution pipelines.
 
-### **Phase 4: Level Assembly & Base Siege Logic**
+### **Phase 4: Level Assembly**
 
 * Construct 1 complete gray-box zone with a loop-back shortcut to checkpoint.  
-* Connect Hub Heat/Noise triggers to spawn zombie wave attacks against base barricades.
 
 ## **MVP Deliverable Target**
 
-1 Hand-Crafted Level \+ 1 Base Hub \+ 2 Gun Types \+ 1 Boss Zombie dropping a unique Mod Part.
+1 Hand-Crafted Level \+ 1 Hub \+ 2 Gun Types \+ 1 Boss Zombie dropping a unique Mod Part.

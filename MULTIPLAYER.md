@@ -203,5 +203,4 @@ Not decided in detail. This is the direction, so new systems fit what's already 
 - **Armor you can see:** a list of what's worn sent to everyone (item names only, not the items), and meshes on the character.
 - **Harvesting and storage:** built on the item system (plans in ITEMS.md and CRAFTING.md).
 - **Spawn protection:** a few seconds without damage after respawning, so enemies at a Player Start can't kill a player again right away.
-- **Hub noise/heat and sieges:** values only the server keeps, sent to everyone through the GameState. Spawners can be started by a siege.
 - **Hosting and joining over the internet:** right now only in the editor. Real hosting needs an online service (Steam or Epic Online Services).
