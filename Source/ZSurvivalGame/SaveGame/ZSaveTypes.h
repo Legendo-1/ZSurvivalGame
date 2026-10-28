@@ -21,6 +21,9 @@ enum class EZSaveVersion : int32
 	Latest = LatestPlusOne - 1
 };
 
+/** Character names are trimmed and at most this long (the save menu and the host's check both use it) */
+inline constexpr int32 ZMaxCharacterNameLength = 24;
+
 /** One number stored on an item, e.g. Item.Stat.Durability = 12 */
 USTRUCT(BlueprintType)
 struct FZSavedItemStat

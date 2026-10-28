@@ -39,9 +39,6 @@ namespace
 	/** As many recipes the game doesn't know are kept */
 	constexpr int32 MaxUnknownRecipes = 500;
 
-	/** Character names are trimmed and at most this long */
-	constexpr int32 MaxCharacterNameLength = 24;
-
 	/** A player asking to save again within this many seconds is ignored */
 	constexpr double MinSecondsBetweenRequestedSaves = 2.0;
 
@@ -318,7 +315,7 @@ void UZPlayerSaveComponent::ApplyCharacter(const FZCharacterSaveData& Character)
 	TArray<FString> Kept;
 
 	CharacterId = Character.CharacterId.IsValid() ? Character.CharacterId : FGuid::NewGuid();
-	CharacterName = Character.CharacterName.TrimStartAndEnd().Left(MaxCharacterNameLength);
+	CharacterName = Character.CharacterName.TrimStartAndEnd().Left(ZMaxCharacterNameLength);
 	if (CharacterName.IsEmpty())
 	{
 		CharacterName = UZSaveSettings::Get()->DefaultCharacterName;

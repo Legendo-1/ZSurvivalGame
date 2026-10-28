@@ -21,12 +21,9 @@
 
 namespace
 {
-	/** Character names are trimmed and at most this long */
-	constexpr int32 MaxCharacterNameLength = 24;
-
 	FString CleanCharacterName(const FString& Name)
 	{
-		const FString Clean = Name.TrimStartAndEnd().Left(MaxCharacterNameLength);
+		const FString Clean = Name.TrimStartAndEnd().Left(ZMaxCharacterNameLength);
 		return Clean.IsEmpty() ? UZSaveSettings::Get()->DefaultCharacterName : Clean;
 	}
 }
