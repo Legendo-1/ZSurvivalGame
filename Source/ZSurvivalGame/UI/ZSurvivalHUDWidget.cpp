@@ -65,14 +65,15 @@ void UZSurvivalHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 	HealthBar->SetPercent(SurvivalCharacter->GetHealthPercent());
 	StaminaBar->SetPercent(SurvivalCharacter->GetStaminaPercent());
 
-	// ammo and crosshair only while a weapon is in the hands
+	// ammo and crosshair only while a gun is in the hands (not for a melee weapon)
 	const AZWeapon* Weapon = SurvivalCharacter->GetEquippedWeapon();
-	const ESlateVisibility WeaponVisibility = Weapon ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+	const bool bHoldingGun = Weapon && !Weapon->IsMelee();
+	const ESlateVisibility WeaponVisibility = bHoldingGun ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
 
 	if (AmmoText)
 	{
 		AmmoText->SetVisibility(WeaponVisibility);
-		if (Weapon)
+		if (bHoldingGun)
 		{
 			// magazine / reserve in the inventory (just the magazine if the reserve is unlimited)
 			const int32 ReserveAmmo = SurvivalCharacter->GetReserveAmmo();

@@ -2,7 +2,7 @@
 
 How to give the game its sounds, particles and character animations: shots, reloads, deaths, taking out a weapon, crafting, footsteps and the rest, so they work for every player.
 
-**Last updated:** 2026-10-28 (a sound for putting on armor and jewelry)
+**Last updated:** 2026-10-28 (melee hits and staggers; the melee attack animations)
 
 ## Who does what
 
@@ -24,8 +24,10 @@ C++ never names a sound file. It only sends an **event** with a **tag**, e.g. `G
 | `GameplayCue.Weapon.Impact` | A shot hits something | Where it hit | Weapon → **Impact Cue** |
 | `GameplayCue.Weapon.Reload` | A reload starts | On the character | Weapon → **Reload Cue** |
 | `GameplayCue.Weapon.Equip` | A weapon is taken out | On the character | Weapon → **Equip Cue** (its **Equip Montage** plays with it) |
+| `GameplayCue.Weapon.MeleeImpact` | A melee hit lands (Raw Magnitude = the damage; Physical Material = the body's surface) | Where it hit | The melee weapon's Data Asset → **Effects → Impact Cue** |
 | `GameplayCue.Character.Hit` | A character takes damage | Where it was hit | The character's Class Defaults → **Effects → Character Cues → Hit Cue** |
 | `GameplayCue.Character.Death` | A player or enemy dies | On the character | **Character Cues → Death Cue** |
+| `GameplayCue.Character.Stagger` | A character's poise breaks and it staggers (Instigator = who broke it) | On the character | **Character Cues → Stagger Cue** |
 | `GameplayCue.Character.LevelUp` | A player reaches a new level | On the player | (one for everyone) |
 | `GameplayCue.Item.Pickup` | A player picks something up | On the player | The item's Data Asset → **Effects → Pickup Cue** |
 | `GameplayCue.Item.Use` | A player uses an item up (a bandage, a tome) | On the player | Item → **Use Cue** |
@@ -150,6 +152,9 @@ Nothing is sent over the network for footsteps: every player's machine already p
 
 ## Other sounds in animations (reloads, swings)
 
+A melee swing's whoosh belongs in the attack montage (a Play Sound notify where the swing starts); the hit itself is `GameplayCue.Weapon.MeleeImpact`.
+
+
 1. Open the animation (e.g. a reload montage, or the zombie's attack).
 2. In the **Notifies** track, right-click at the right moment → **Add Notify → Play Sound** → pick the sound in its Details.
 3. Save.
@@ -165,6 +170,8 @@ Every player's machine plays every character's animations, so these sounds play 
 | **Fire Montage** | Each shot | The ability system plays it for everyone |
 | **Reload Montage** | While reloading, sped up or slowed down to the reload time (mods and traits change it) | The ability system |
 | **Equip Montage** | When the weapon is taken out | It comes with the Equip Cue, so every machine plays it at that moment |
+
+**Melee attacks** are montages in the weapon's moveset, and a character's **Stagger Montage** plays when it staggers: COMBAT.md has both. Attacks may move the character (root motion): they're predicted like the dodge, so the host and your machine move the same. A player's stagger must stay in place.
 
 A montage from an animation: right-click the animation → **Create → Create AnimMontage**.
 
@@ -192,7 +199,7 @@ Console (the key under Esc): `AbilitySystem.DisplayGameplayCues 1`. Every event'
 ## Multiplayer
 
 - **The server sends the events** (deaths, hits, taking out weapons, crafting, level-ups, pickups) to every player near them. The host plays them too.
-- **Your own shots and reloads play on your machine right away**, without waiting for the server; the server sends them to the others.
+- **Your own shots, reloads and melee hits play on your machine right away**, without waiting for the server; the server sends them to the others.
 - **The crafting loop is lasting:** a player who walks up while someone crafts hears it too, and it stops for everyone when the craft ends.
 - **One-off events reach only the players near them at that moment**, which is right for sounds. Someone who comes near later doesn't hear an old shot.
 - **UI sounds** never leave your machine.

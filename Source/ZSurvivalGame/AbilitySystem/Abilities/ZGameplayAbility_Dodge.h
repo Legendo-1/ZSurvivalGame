@@ -9,6 +9,8 @@
 /**
  *  Quick dash in the movement direction (forward when standing still), costs stamina
  *  Moves the character with root motion, which the client and the server run in sync
+ *  An action (see COMBAT.md): no dodging mid-swing or mid-shot (it waits in the input buffer), except in an action's Dodge Window.
+ *  Its first part is invulnerable: hits pass through (State.Invulnerable)
  */
 UCLASS()
 class UZGameplayAbility_Dodge : public UZGameplayAbility
@@ -27,6 +29,8 @@ public:
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 
+	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
+
 protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Dodge")
@@ -44,7 +48,24 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Dodge")
 	float ExitSpeed = 350.f;
 
+	/** Seconds from the start in which hits pass through the character (souls-like invulnerable frames); 0 = none */
+	UPROPERTY(EditDefaultsOnly, Category = "Dodge", meta = (ClampMin = "0", Units = "s"))
+	float InvulnerableTime = 0.2f;
+
+	/** Animation played with the dodge, e.g. a roll (optional). It must stay in place: the dodge moves the character itself, so one with root motion isn't played */
+	UPROPERTY(EditDefaultsOnly, Category = "Dodge")
+	TObjectPtr<UAnimMontage> DodgeMontage;
+
 	/** Called when the dodge movement is done */
 	UFUNCTION()
 	void OnDodgeFinished();
+
+	/** The invulnerable frames are over */
+	UFUNCTION()
+	void OnInvulnerabilityFinished();
+
+	/** Takes State.Invulnerable off again, if this dodge put it on */
+	void EndInvulnerability();
+
+	bool bInvulnerable = false;
 };

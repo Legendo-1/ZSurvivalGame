@@ -7,13 +7,13 @@
 #include "ZWeaponStats.generated.h"
 
 class UZItemInstance;
-class UZWeaponData;
+class UZWeaponDataBase;
 
 /** A weapon stat that upgrades and mods can change. Each one is the weapon data's value times (1 + the bonuses) */
 UENUM(BlueprintType)
 enum class EZWeaponStat : uint8
 {
-	/** Damage per bullet */
+	/** Damage per bullet, or per hit of a melee weapon */
 	Damage,
 	/** Shots per second */
 	FireRate,
@@ -26,7 +26,13 @@ enum class EZWeaponStat : uint8
 	/** Rounds per magazine */
 	MagazineSize,
 	/** Seconds a reload takes (lower is faster) */
-	ReloadTime
+	ReloadTime,
+	/** How much each hit wears down the target's poise toward a stagger */
+	PoiseDamage,
+	/** How fast melee attacks play */
+	AttackSpeed,
+	/** Stamina melee attacks cost (lower is cheaper) */
+	StaminaCost
 };
 
 /** A change to one weapon stat, as a share of its normal value */
@@ -56,19 +62,19 @@ public:
 
 	/** The stat for this weapon data and item (the item may be null: just the data) */
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	static float GetWeaponStat(const UZWeaponData* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat);
+	static float GetWeaponStat(const UZWeaponDataBase* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat);
 
 	/** The stat straight from the weapon data, without upgrades or mods */
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	static float GetBaseWeaponStat(const UZWeaponData* WeaponData, EZWeaponStat Stat);
+	static float GetBaseWeaponStat(const UZWeaponDataBase* WeaponData, EZWeaponStat Stat);
 
 	/** What the item's upgrade level and mods multiply the stat by: 1.2 = 20% more (at least 0.05, or 0 for spread and recoil) */
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	static float GetItemStatScale(const UZWeaponData* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat);
+	static float GetItemStatScale(const UZWeaponDataBase* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat);
 
 	/** How much the item's upgrade level and mods change the stat: 0.2 = 20% more */
 	UFUNCTION(BlueprintPure, Category = "Weapon")
-	static float GetItemStatBonus(const UZWeaponData* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat);
+	static float GetItemStatBonus(const UZWeaponDataBase* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat);
 
 	/** "Damage", "Fire Rate", ... */
 	UFUNCTION(BlueprintPure, Category = "Weapon")

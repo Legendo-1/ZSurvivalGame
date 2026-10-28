@@ -10,8 +10,11 @@
 /** Broadcast on the server when Health reaches 0, with who caused it (null if unknown, e.g. engine damage) */
 DECLARE_MULTICAST_DELEGATE_OneParam(FZOutOfHealthDelegate, AActor* /*DamageInstigator*/);
 
+/** Broadcast on the server when poise breaks (the character staggers), with who broke it (null if unknown) */
+DECLARE_MULTICAST_DELEGATE_OneParam(FZPoiseBrokenDelegate, AActor* /*Instigator*/);
+
 /**
- *  A character's attributes: health and stamina, and the stats traits and equipment change (damage, recoil, reload speed, armor, ...)
+ *  A character's attributes: health, stamina and poise, and the stats traits and equipment change (damage, recoil, reload speed, armor, ...)
  *  Players have it on the PlayerState next to the ability system, AI characters on themselves
  *  Values only change on the server and replicate to the clients
  */
@@ -38,6 +41,9 @@ public:
 	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, CraftingYieldChance);
 	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, TradeskillExperienceMultiplier);
 	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, Armor);
+	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, Poise);
+	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, MaxPoise);
+	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, IncomingPoiseDamage);
 
 	/** The attributes traits and equipment can change (everything but the current values and the meta attributes) */
 	static TArray<FGameplayAttribute> GetTraitAttributes();
@@ -55,6 +61,9 @@ public:
 	/** Broadcast on the server when Health reaches 0 */
 	FZOutOfHealthDelegate OnOutOfHealth;
 
+	/** Broadcast on the server when Poise reaches 0: the character staggers, and its poise is full again */
+	FZPoiseBrokenDelegate OnPoiseBroken;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Keeps the current values in range */
@@ -66,7 +75,7 @@ public:
 	/** Keeps Health/Stamina within a lower max (a higher max leaves a gap to heal), and reports running out of health */
 	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 
-	/** Turns IncomingDamage and IncomingHealing from gameplay effects into Health changes */
+	/** Turns IncomingDamage and IncomingHealing from gameplay effects into Health changes, and IncomingPoiseDamage into lost poise */
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 
 protected:
@@ -107,10 +116,25 @@ protected:
 	UFUNCTION()
 	void OnRep_Armor(const FGameplayAttributeData& OldValue);
 
+	UFUNCTION()
+	void OnRep_Poise(const FGameplayAttributeData& OldValue);
+
+	UFUNCTION()
+	void OnRep_MaxPoise(const FGameplayAttributeData& OldValue);
+
 private:
 
-	/** Keeps Health and Stamina between 0 and their max, the max values at 1 or more, multipliers above 0, chances between 0 and 1 and armor at 0 or more */
+	/** Keeps Health, Stamina and Poise between 0 and their max, max health and stamina at 1 or more, multipliers above 0, chances between 0 and 1, and armor and max poise at 0 or more */
 	void ClampAttribute(const FGameplayAttribute& Attribute, float& NewValue) const;
+
+	/** Server: poise damage taken; poise breaks at 0 */
+	void ApplyPoiseDamage(float PoiseDamage, AActor* Instigator);
+
+	/** Server: poise is full again (a while after the last poise damage) */
+	void RecoverPoise();
+
+	/** Server: refills poise once no poise damage came for Poise Recovery Delay (Project Settings → Game → Combat) */
+	FTimerHandle PoiseRecoveryTimer;
 
 	/** Who is dealing the damage being applied right now (set only during PostGameplayEffectExecute) */
 	TWeakObjectPtr<AActor> CurrentDamageInstigator;
@@ -168,4 +192,17 @@ private:
 	/** Lowers the damage taken (0 = none; how much: GetDamageAfterArmor). Mostly from armor that's worn (equipment) */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Armor, Category = "Attributes|Stats", meta = (AllowPrivateAccess = "true"))
 	FGameplayAttributeData Armor;
+
+	/** --- POISE: how much it takes to stagger the character. Hits take some (their poise damage); at 0 it staggers, and a while without hits fills it again --- */
+
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Poise, Category = "Attributes|Poise", meta = (AllowPrivateAccess = "true"))
+	FGameplayAttributeData Poise;
+
+	/** Full poise; traits and heavy armor can raise it */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxPoise, Category = "Attributes|Poise", meta = (AllowPrivateAccess = "true"))
+	FGameplayAttributeData MaxPoise;
+
+	/** Poise damage about to be taken. Not replicated: the server turns it into a Poise change right away */
+	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Meta", meta = (AllowPrivateAccess = "true"))
+	FGameplayAttributeData IncomingPoiseDamage;
 };

@@ -9,16 +9,19 @@
 class ACharacter;
 struct FGameplayAttribute;
 enum class EZWeaponStat : uint8;
+class UMeshComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class UZInventoryComponent;
 class UZItemDefinition;
 class UZItemInstance;
-class UZWeaponData;
+class UZMeleeWeaponData;
+class UZRangedWeaponData;
+class UZWeaponDataBase;
 
 /**
- *  The weapon in a character's hands, spawned by the server when a weapon item is equipped and removed when it's put away
- *  Every machine attaches it to its owner's hand; the server keeps the ammo, and writes it back to the item when the weapon is put away
+ *  The weapon in a character's hands (a gun or a melee weapon), spawned by the server when a weapon item is taken out and removed when it's put away
+ *  Every machine attaches it to its owner's hand; for a gun the server keeps the ammo, and writes it back to the item when the weapon is put away
  */
 UCLASS()
 class AZWeapon : public AActor
@@ -40,34 +43,59 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	/** Server: sets the weapon's data and loads the magazine from its item (full if there's no item) */
-	void InitWeapon(UZWeaponData* InWeaponData, UZItemInstance* InItemInstance);
+	/** Server: sets the weapon's data and, for a gun, loads the magazine from its item (full if there's no item) */
+	void InitWeapon(UZWeaponDataBase* InWeaponData, UZItemInstance* InItemInstance);
 
 	/** Server: stores the magazine ammo on the item, so it's kept when the weapon is put away or dropped */
 	void SaveAmmoToItem();
 
-	UZWeaponData* GetWeaponData() const { return WeaponData; }
+	UZWeaponDataBase* GetWeaponData() const { return WeaponData; }
+
+	/** The gun's data, or null for a melee weapon */
+	const UZRangedWeaponData* GetRangedData() const;
+
+	/** The melee weapon's data, or null for a gun */
+	const UZMeleeWeaponData* GetMeleeData() const;
+
+	/** True for knives, swords, axes, ...: the attack buttons swing it instead of shooting */
+	bool IsMelee() const { return GetMeleeData() != nullptr; }
 
 	/** The inventory item this weapon comes from (the server, and the owner's machine) */
 	UZItemInstance* GetItemInstance() const { return ItemInstance; }
 
-	/** Item used as reserve ammo, or null for unlimited reserve */
+	/** The mesh it shows (skeletal or static), or null if its data has none */
+	UMeshComponent* GetWeaponMesh() const;
+
+	/** Item used as reserve ammo, or null for unlimited reserve (or a melee weapon) */
 	UZItemDefinition* GetAmmoItem() const;
 
-	/** Rounds left in the magazine (only up to date on the server and the owning player's machine) */
+	/** Rounds left in the magazine (only up to date on the server and the owning player's machine; 0 for a melee weapon) */
 	int32 GetAmmo() const { return Ammo; }
 
+	/** Rounds the magazine holds (0 for a melee weapon) */
 	int32 GetMagazineSize() const;
 
 	bool IsAutomatic() const;
 
 	/** --- STATS: the weapon data, changed by the item's upgrade level and mods and by the traits of the character holding it --- */
 
-	/** Damage per bullet */
+	/** Damage per bullet, or per hit of a melee weapon (before an attack's own multiplier) */
 	float GetDamage() const;
+
+	/** Poise damage per bullet, or per hit of a melee weapon (before an attack's own multiplier) */
+	float GetPoiseDamage() const;
+
+	/** How fast a melee weapon's attack animations play (1 = as made); 1 for a gun */
+	float GetAttackSpeed() const;
+
+	/** What a melee weapon's attacks' stamina costs are multiplied by; 1 for a gun */
+	float GetStaminaCostMultiplier() const;
 
 	/** Shots per second */
 	float GetFireRate() const;
+
+	/** Seconds after a shot in which the shooter is committed (never longer than the time between shots) */
+	float GetShotRecoveryTime() const;
 
 	/** Spread cone in degrees */
 	float GetSpread(bool bAiming) const;
@@ -126,7 +154,7 @@ protected:
 	void AttachToOwner();
 
 	UPROPERTY(ReplicatedUsing = OnRep_WeaponData)
-	TObjectPtr<UZWeaponData> WeaponData;
+	TObjectPtr<UZWeaponDataBase> WeaponData;
 
 	/** The item this weapon comes from; only the owner needs it (its upgrades and mods change the stats) */
 	UPROPERTY(Replicated)

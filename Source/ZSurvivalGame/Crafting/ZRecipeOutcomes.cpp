@@ -7,7 +7,7 @@
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemFragments.h"
 #include "Items/ZItemInstance.h"
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZWeaponDataBase.h"
 
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"

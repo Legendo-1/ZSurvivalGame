@@ -3,6 +3,7 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_Fire.h"
 #include "AbilitySystemComponent.h"
 #include "Abilities/GameplayAbilityTargetTypes.h"
+#include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -13,7 +14,7 @@
 #include "AbilitySystem/ZGameplayTags.h"
 #include "ZSurvivalGameCharacter.h"
 #include "Weapons/ZWeapon.h"
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZRangedWeaponData.h"
 
 namespace
 {
@@ -31,6 +32,9 @@ UZGameplayAbility_Fire::UZGameplayAbility_Fire()
 	InputID = EZAbilityInputID::Fire;
 	SetAssetTags(FGameplayTagContainer(ZGameplayTags::Ability_Fire.GetTag()));
 	ActivationOwnedTags.AddTag(ZGameplayTags::State_Firing);
+
+	// an action: commits the shooter for a moment, and may follow an attack in its combo window
+	SetupAsAction(ZGameplayTags::Window_Combo);
 
 	// no shooting while reloading or dodging
 	ActivationBlockedTags.AddTag(ZGameplayTags::State_Reloading);
@@ -53,8 +57,9 @@ bool UZGameplayAbility_Fire::CanActivateAbility(const FGameplayAbilitySpecHandle
 		return false;
 	}
 
+	// only guns shoot (a melee weapon's attacks are its own abilities)
 	const AZWeapon* Weapon = GetWeapon(ActorInfo);
-	if (!Weapon || !Weapon->GetWeaponData())
+	if (!Weapon || !Weapon->GetRangedData())
 	{
 		return false;
 	}
@@ -113,7 +118,7 @@ void UZGameplayAbility_Fire::FireLocalShot()
 {
 	AZSurvivalGameCharacter* Character = GetZCharacter(CurrentActorInfo);
 	AZWeapon* Weapon = GetWeapon(CurrentActorInfo);
-	const UZWeaponData* WeaponData = Weapon ? Weapon->GetWeaponData() : nullptr;
+	const UZRangedWeaponData* WeaponData = Weapon ? Weapon->GetRangedData() : nullptr;
 	APlayerController* PlayerController = CurrentActorInfo->PlayerController.Get();
 	UAbilitySystemComponent* ASC = CurrentActorInfo->AbilitySystemComponent.Get();
 	if (!Character || !WeaponData || !PlayerController || !ASC)
@@ -177,7 +182,7 @@ void UZGameplayAbility_Fire::OnTargetDataReady(const FGameplayAbilityTargetDataH
 	UAbilitySystemComponent* ASC = CurrentActorInfo ? CurrentActorInfo->AbilitySystemComponent.Get() : nullptr;
 	AZSurvivalGameCharacter* Character = GetZCharacter(CurrentActorInfo);
 	AZWeapon* Weapon = GetWeapon(CurrentActorInfo);
-	const UZWeaponData* WeaponData = Weapon ? Weapon->GetWeaponData() : nullptr;
+	const UZRangedWeaponData* WeaponData = Weapon ? Weapon->GetRangedData() : nullptr;
 	if (!ASC || !Character || !WeaponData)
 	{
 		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
@@ -249,7 +254,7 @@ void UZGameplayAbility_Fire::OnTargetDataReady(const FGameplayAbilityTargetDataH
 		{
 			const bool bHeadshot = Hit->BoneName.ToString().Contains(TEXT("head"));
 			Damage = Weapon->GetDamage() * (bHeadshot ? WeaponData->HeadshotMultiplier : 1.f);
-			bDealtDamage = UZCombatLibrary::ApplyDamage(Character, Hit->GetActor(), Damage, *Hit);
+			bDealtDamage = UZCombatLibrary::ApplyDamage(Character, Hit->GetActor(), Damage, *Hit, Weapon->GetPoiseDamage());
 
 			// hit marker on the shooter's screen (runs right away on the host)
 			if (bDealtDamage)
@@ -275,6 +280,22 @@ void UZGameplayAbility_Fire::OnTargetDataReady(const FGameplayAbilityTargetDataH
 #endif
 	}
 
+	// the shooter's machine keeps them committed for the shot's recovery (a dodge pressed meanwhile waits for it);
+	// the server lets go right away, so its own timing never holds back the player's next action
+	const float RecoveryTime = Weapon->GetShotRecoveryTime();
+	if (CurrentActorInfo->IsLocallyControlled() && RecoveryTime > 0.f)
+	{
+		UAbilityTask_WaitDelay* WaitRecovery = UAbilityTask_WaitDelay::WaitDelay(this, RecoveryTime);
+		WaitRecovery->OnFinish.AddDynamic(this, &UZGameplayAbility_Fire::OnRecoveryFinished);
+		WaitRecovery->ReadyForActivation();
+		return;
+	}
+
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+}
+
+void UZGameplayAbility_Fire::OnRecoveryFinished()
+{
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
 

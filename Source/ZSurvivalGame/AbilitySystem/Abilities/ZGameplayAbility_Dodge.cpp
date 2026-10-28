@@ -3,6 +3,8 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_Dodge.h"
 #include "AbilitySystemComponent.h"
 #include "Abilities/Tasks/AbilityTask_ApplyRootMotionConstantForce.h"
+#include "Abilities/Tasks/AbilityTask_WaitDelay.h"
+#include "Animation/AnimMontage.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "AbilitySystem/ZAttributeSet.h"
@@ -14,6 +16,9 @@ UZGameplayAbility_Dodge::UZGameplayAbility_Dodge()
 	InputID = EZAbilityInputID::Dodge;
 	SetAssetTags(FGameplayTagContainer(ZGameplayTags::Ability_Dodge.GetTag()));
 	ActivationOwnedTags.AddTag(ZGameplayTags::State_Dodging);
+
+	// an action: not mid-swing or mid-shot, except in their Dodge Window (then it cuts them short)
+	SetupAsAction(ZGameplayTags::Window_Dodge);
 
 	// a dodge interrupts a reload
 	CancelAbilitiesWithTag.AddTag(ZGameplayTags::Ability_Reload);
@@ -70,10 +75,55 @@ void UZGameplayAbility_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle H
 	DodgeTask->OnFinish.AddDynamic(this, &UZGameplayAbility_Dodge::OnDodgeFinished);
 	DodgeTask->ReadyForActivation();
 
-	// TODO Phase 1 Step 2: Play Dodge Roll Animation Montage here when ready
+	// invulnerable frames: on the player's machine and on the server (where damage is decided); not replicated, each machine runs the dodge itself
+	if (InvulnerableTime > 0.f)
+	{
+		ActorInfo->AbilitySystemComponent->AddLooseGameplayTag(ZGameplayTags::State_Invulnerable);
+		bInvulnerable = true;
+
+		UAbilityTask_WaitDelay* WaitInvulnerability = UAbilityTask_WaitDelay::WaitDelay(this, InvulnerableTime);
+		WaitInvulnerability->OnFinish.AddDynamic(this, &UZGameplayAbility_Dodge::OnInvulnerabilityFinished);
+		WaitInvulnerability->ReadyForActivation();
+	}
+
+	// the roll animation (the ability system plays it for the others too); the dodge moves the character, so the animation mustn't
+	if (DodgeMontage)
+	{
+		if (DodgeMontage->HasRootMotion())
+		{
+			UE_LOG(LogZSurvivalGame, Warning, TEXT("'%s' doesn't play the dodge animation '%s': it moves the character (root motion), and the dodge already does"), *GetNameSafe(Character), *GetNameSafe(DodgeMontage));
+		}
+		else
+		{
+			ActorInfo->AbilitySystemComponent->PlayMontage(this, ActivationInfo, DodgeMontage, 1.f);
+		}
+	}
 }
 
 void UZGameplayAbility_Dodge::OnDodgeFinished()
 {
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+}
+
+void UZGameplayAbility_Dodge::OnInvulnerabilityFinished()
+{
+	EndInvulnerability();
+}
+
+void UZGameplayAbility_Dodge::EndInvulnerability()
+{
+	UAbilitySystemComponent* ASC = CurrentActorInfo ? CurrentActorInfo->AbilitySystemComponent.Get() : nullptr;
+	if (bInvulnerable && ASC)
+	{
+		ASC->RemoveLooseGameplayTag(ZGameplayTags::State_Invulnerable);
+	}
+
+	bInvulnerable = false;
+}
+
+void UZGameplayAbility_Dodge::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
+{
+	EndInvulnerability();
+
+	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

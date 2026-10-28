@@ -17,8 +17,10 @@
 #include "AI/ZAICharacter.h"
 #include "AI/ZZombieCharacter.h"
 #include "AbilitySystem/ZAttributeSet.h"
+#include "AbilitySystem/ZCombatLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "Audio/ZFootstepComponent.h"
+#include "Combat/ZCombatComponent.h"
 #include "Crafting/ZCraftingComponent.h"
 #include "Crafting/ZCraftingRecipe.h"
 #include "Crafting/ZCraftingStation.h"
@@ -41,7 +43,9 @@
 #include "UI/ZInventoryScreenWidget.h"
 #include "UI/ZTraitRowWidget.h"
 #include "Weapons/ZWeapon.h"
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZMeleeMoveset.h"
+#include "Weapons/ZMeleeWeaponData.h"
+#include "Weapons/ZWeaponDataBase.h"
 
 bool UZCheatManager::CheckIsHost(const TCHAR* CommandName) const
 {
@@ -90,6 +94,37 @@ void UZCheatManager::ZSpawnZombies(int32 Count, float Distance)
 	}
 
 	UE_LOG(LogZSurvivalGame, Log, TEXT("ZSpawnZombies: spawned %d"), NumZombies);
+}
+
+void UZCheatManager::ZSpawnDummy(float Distance, const FString& Who)
+{
+	if (!CheckIsHost(TEXT("ZSpawnDummy")))
+	{
+		return;
+	}
+
+	for (const APlayerState* Player : GetTargetPlayers(Who))
+	{
+		const APawn* Pawn = Player ? Player->GetPawn() : nullptr;
+		if (!Pawn)
+		{
+			continue;
+		}
+
+		// in front of the character (not the camera), at the same height, facing it; without a controller it never moves or attacks
+		const FVector Forward = FRotator(0.f, Pawn->GetActorRotation().Yaw, 0.f).Vector();
+		const FVector SpawnLocation = Pawn->GetActorLocation() + Forward * FMath::Max(Distance, 90.f) + FVector(0.f, 0.f, 2.f);
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		SpawnParams.bDeferConstruction = true;
+		if (AZZombieCharacter* Dummy = GetWorld()->SpawnActor<AZZombieCharacter>(AZZombieCharacter::StaticClass(), SpawnLocation, (-Forward).Rotation(), SpawnParams))
+		{
+			Dummy->AutoPossessAI = EAutoPossessAI::Disabled;
+			Dummy->FinishSpawning(FTransform((-Forward).Rotation(), SpawnLocation));
+			UE_LOG(LogZSurvivalGame, Log, TEXT("ZSpawnDummy: '%s' %.0f cm in front of '%s'"), *GetNameSafe(Dummy), FVector::Dist2D(Dummy->GetActorLocation(), Pawn->GetActorLocation()), *GetNameSafe(Pawn));
+		}
+	}
 }
 
 void UZCheatManager::ZKillEnemies()
@@ -460,10 +495,74 @@ void UZCheatManager::ZWeaponStats()
 		}
 	}
 
+	const FString ModList = Mods.Num() > 0 ? FString::Join(Mods, TEXT(", ")) : (Item ? TEXT("none") : TEXT("no item here"));
+	if (const UZMeleeWeaponData* MeleeData = Weapon->GetMeleeData())
+	{
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZWeaponStats: %s +%d [mods: %s]: damage %.2f, poise damage %.2f, attack speed %.2f, stamina cost x%.2f, reach %.0f, moveset %s"),
+			*GetNameSafe(MeleeData), Item ? Item->GetUpgradeLevel() : 0, *ModList, Weapon->GetDamage(), Weapon->GetPoiseDamage(), Weapon->GetAttackSpeed(),
+			Weapon->GetStaminaCostMultiplier(), MeleeData->MaxReach, *GetNameSafe(MeleeData->Moveset.Get()));
+		return;
+	}
+
 	const FVector2D Recoil = Weapon->GetRecoil();
-	UE_LOG(LogZSurvivalGame, Log, TEXT("ZWeaponStats: %s +%d [mods: %s]: damage %.2f, fire rate %.2f/s, spread %.2f (aiming %.2f), recoil %.3f up %.3f sideways, range %.0f, magazine %d/%d, reload %.2f s"),
-		*GetNameSafe(Weapon->GetWeaponData()), Item ? Item->GetUpgradeLevel() : 0, Mods.Num() > 0 ? *FString::Join(Mods, TEXT(", ")) : (Item ? TEXT("none") : TEXT("no item here")),
-		Weapon->GetDamage(), Weapon->GetFireRate(), Weapon->GetSpread(false), Weapon->GetSpread(true), Recoil.X, Recoil.Y, Weapon->GetRange(), Weapon->GetAmmo(), Weapon->GetMagazineSize(), Weapon->GetReloadTime());
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZWeaponStats: %s +%d [mods: %s]: damage %.2f, poise damage %.2f, fire rate %.2f/s, spread %.2f (aiming %.2f), recoil %.3f up %.3f sideways, range %.0f, magazine %d/%d, reload %.2f s, shot recovery %.2f s"),
+		*GetNameSafe(Weapon->GetWeaponData()), Item ? Item->GetUpgradeLevel() : 0, *ModList, Weapon->GetDamage(), Weapon->GetPoiseDamage(), Weapon->GetFireRate(),
+		Weapon->GetSpread(false), Weapon->GetSpread(true), Recoil.X, Recoil.Y, Weapon->GetRange(), Weapon->GetAmmo(), Weapon->GetMagazineSize(), Weapon->GetReloadTime(), Weapon->GetShotRecoveryTime());
+}
+
+void UZCheatManager::ZStagger(const FString& Who)
+{
+	if (!CheckIsHost(TEXT("ZStagger")))
+	{
+		return;
+	}
+
+	if (Who.Equals(TEXT("enemies"), ESearchCase::IgnoreCase))
+	{
+		int32 NumStaggered = 0;
+		for (TActorIterator<AZAICharacter> It(GetWorld()); It; ++It)
+		{
+			NumStaggered += UZCombatLibrary::Stagger(*It, nullptr) ? 1 : 0;
+		}
+
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZStagger: staggered %d enemies"), NumStaggered);
+		return;
+	}
+
+	if (Who.Equals(TEXT("players"), ESearchCase::IgnoreCase))
+	{
+		int32 NumStaggered = 0;
+		for (const APlayerState* Player : GetTargetPlayers(TEXT("all")))
+		{
+			NumStaggered += Player && UZCombatLibrary::Stagger(Player->GetPawn(), nullptr) ? 1 : 0;
+		}
+
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZStagger: staggered %d players"), NumStaggered);
+		return;
+	}
+
+	const APlayerController* PlayerController = GetOuterAPlayerController();
+	APawn* Pawn = PlayerController ? PlayerController->GetPawn() : nullptr;
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZStagger: %s"), UZCombatLibrary::Stagger(Pawn, nullptr) ? TEXT("staggered") : TEXT("can't stagger you now (dead, or no stagger ability)"));
+}
+
+void UZCheatManager::ZCombat()
+{
+	const APlayerController* PlayerController = GetOuterAPlayerController();
+	const AZSurvivalGameCharacter* Character = PlayerController ? Cast<AZSurvivalGameCharacter>(PlayerController->GetPawn()) : nullptr;
+	const UAbilitySystemComponent* ASC = Character ? Character->GetAbilitySystemComponent() : nullptr;
+	if (!ASC)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZCombat: no character"));
+		return;
+	}
+
+	// poise and stamina only reach their owner (and the host has everyone's)
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZCombat: %s; poise %.0f/%.0f, stamina %.0f/%.0f, weapon %s"),
+		*Character->GetCombatComponent()->GetDebugString(),
+		ASC->GetNumericAttribute(UZAttributeSet::GetPoiseAttribute()), ASC->GetNumericAttribute(UZAttributeSet::GetMaxPoiseAttribute()),
+		ASC->GetNumericAttribute(UZAttributeSet::GetStaminaAttribute()), ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute()),
+		*UEnum::GetDisplayValueAsText(Character->GetWeaponType()).ToString());
 }
 
 void UZCheatManager::ZEquip(const FString& ItemName, int32 SlotNumber)

@@ -9,9 +9,10 @@
 class AZWeapon;
 
 /**
- *  Fires one shot of the equipped weapon (automatic weapons are fired again by the character while the button is held)
+ *  Fires one shot of the equipped gun (automatic guns are fired again by the character while the button is held)
  *  The shooter's machine traces the bullets from the camera and sends the hits to the server,
  *  which checks them and applies the damage. One round per shot; fire rate from the weapon data
+ *  An action (see COMBAT.md): after each shot the shooter is committed for the gun's Shot Recovery Time (no dodging yet); a shot may also start in an attack's combo window
  */
 UCLASS()
 class UZGameplayAbility_Fire : public UZGameplayAbility
@@ -45,6 +46,10 @@ protected:
 
 	/** Server: is this hit plausible for the shooter (in range)? */
 	bool IsHitValid(const FHitResult& Hit, float Range) const;
+
+	/** The shot's recovery is over: the shooter may dodge again */
+	UFUNCTION()
+	void OnRecoveryFinished();
 
 	/** The weapon in the character's hands */
 	static AZWeapon* GetWeapon(const FGameplayAbilityActorInfo* ActorInfo);

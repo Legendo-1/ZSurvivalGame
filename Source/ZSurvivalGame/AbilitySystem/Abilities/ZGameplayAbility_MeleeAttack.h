@@ -8,8 +8,9 @@
 
 /**
  *  Melee attack for AI characters (server only): plays the character's attack animation,
- *  then after its hit delay damages everyone hostile in front of it
- *  Damage, reach, radius and timing come from the AZAICharacter
+ *  then after its hit delay damages everyone hostile in front of it (and wears down their poise)
+ *  Damage, poise damage, reach, radius and timing come from the AZAICharacter. A stagger cuts it short
+ *  (Players' melee attacks are UZGameplayAbility_LightAttack and UZGameplayAbility_HeavyAttack)
  */
 UCLASS()
 class UZGameplayAbility_MeleeAttack : public UZGameplayAbility

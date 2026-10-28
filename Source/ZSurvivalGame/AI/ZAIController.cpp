@@ -46,6 +46,13 @@ void AZAIController::Think()
 		return;
 	}
 
+	// staggered: it can't chase or attack until it's over
+	if (UZCombatLibrary::IsStaggered(ControlledCharacter))
+	{
+		StopMovement();
+		return;
+	}
+
 	APawn* Target = FindTarget(ControlledCharacter);
 	if (!Target)
 	{

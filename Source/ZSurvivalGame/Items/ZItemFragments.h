@@ -9,11 +9,11 @@
 #include "ZItemFragments.generated.h"
 
 class UGameplayEffect;
-class UZWeaponData;
+class UZWeaponDataBase;
 
 /**
- *  Makes the item a weapon: using (equipping) it puts the weapon in the character's hands
- *  Each weapon item keeps its own magazine ammo (Item.Stat.MagazineAmmo), starting full
+ *  Makes the item a weapon, a gun or a melee weapon (by its Weapon Data): using (equipping) it puts the weapon in the character's hands
+ *  Each gun item keeps its own magazine ammo (Item.Stat.MagazineAmmo), starting full
  */
 UCLASS(meta = (DisplayName = "Weapon"))
 class UZItemFragment_Weapon : public UZItemFragment
@@ -22,9 +22,9 @@ class UZItemFragment_Weapon : public UZItemFragment
 
 public:
 
-	/** The weapon's stats and looks */
+	/** The weapon's stats and looks: a ZRangedWeaponData (gun) or a ZMeleeWeaponData (knife, sword, ...) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
-	TObjectPtr<UZWeaponData> WeaponData;
+	TObjectPtr<UZWeaponDataBase> WeaponData;
 
 	virtual void OnInstanceCreated(UZItemInstance* Instance) const override;
 
@@ -71,7 +71,7 @@ public:
 	TArray<EZWeaponType> AllowedWeaponTypes;
 
 	/** True if it fits this weapon (it has the slot, and the type is allowed) */
-	bool FitsWeapon(const UZWeaponData* WeaponData) const;
+	bool FitsWeapon(const UZWeaponDataBase* WeaponData) const;
 
 	/** "Recoil -25%", one line per modifier */
 	FText GetModifiersText() const;

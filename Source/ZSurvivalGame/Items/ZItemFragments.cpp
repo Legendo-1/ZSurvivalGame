@@ -15,7 +15,8 @@
 #include "Items/ZItemInstance.h"
 #include "Progression/ZProgressionComponent.h"
 #include "Progression/ZTraitDefinition.h"
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZMeleeWeaponData.h"
+#include "Weapons/ZRangedWeaponData.h"
 
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
@@ -49,10 +50,10 @@ namespace
 
 void UZItemFragment_Weapon::OnInstanceCreated(UZItemInstance* Instance) const
 {
-	// a new weapon starts with a full magazine
-	if (WeaponData)
+	// a new gun starts with a full magazine
+	if (const UZRangedWeaponData* RangedData = Cast<UZRangedWeaponData>(WeaponData))
 	{
-		Instance->SetStatTagStack(ZGameplayTags::Item_Stat_MagazineAmmo, WeaponData->MagazineSize);
+		Instance->SetStatTagStack(ZGameplayTags::Item_Stat_MagazineAmmo, RangedData->MagazineSize);
 	}
 }
 
@@ -75,8 +76,8 @@ void UZItemFragment_Weapon::OnInstanceLoaded(UZItemInstance* Instance) const
 		}
 	}
 
-	// no more rounds than the magazine holds with these mods (extra rounds would go to the reserve when it's taken out)
-	const int32 MagazineSize = FMath::RoundToInt32(UZWeaponStatsLibrary::GetWeaponStat(WeaponData, Instance, EZWeaponStat::MagazineSize));
+	// no more rounds than the magazine holds with these mods (extra rounds would go to the reserve when it's taken out); a melee weapon holds none
+	const int32 MagazineSize = WeaponData->IsA<UZRangedWeaponData>() ? FMath::RoundToInt32(UZWeaponStatsLibrary::GetWeaponStat(WeaponData, Instance, EZWeaponStat::MagazineSize)) : 0;
 	Instance->SetStatTagStack(ZGameplayTags::Item_Stat_MagazineAmmo, FMath::Clamp(Instance->GetStatTagStackCount(ZGameplayTags::Item_Stat_MagazineAmmo), 0, MagazineSize));
 }
 
@@ -117,12 +118,26 @@ void UZItemFragment_Weapon::GetDescriptionLines(const UZItemInstance* Instance, 
 
 	// the item's own stats: its data with its upgrades and mods (the holder's traits come on top)
 	const auto Stat = [this, Instance](EZWeaponStat WeaponStat) { return UZWeaponStatsLibrary::GetWeaponStat(WeaponData, Instance, WeaponStat); };
-	const float SpreadScale = UZWeaponStatsLibrary::GetItemStatScale(WeaponData, Instance, EZWeaponStat::Spread);
 
-	OutLines.Add(FText::Format(LOCTEXT("WeaponDamageLine", "Damage {0}, {1} shots per second"), AsDecimal(Stat(EZWeaponStat::Damage)), AsDecimal(Stat(EZWeaponStat::FireRate))));
-	OutLines.Add(FText::Format(LOCTEXT("WeaponMagazineLine", "Magazine {0}, reload {1} s"), FMath::RoundToInt32(Stat(EZWeaponStat::MagazineSize)), AsDecimal(Stat(EZWeaponStat::ReloadTime))));
-	OutLines.Add(FText::Format(LOCTEXT("WeaponSpreadLine", "Spread {0}, aiming {1}, range {2} m"), AsDecimal(WeaponData->HipSpread * SpreadScale),
-		AsDecimal(WeaponData->AimSpread * SpreadScale), FMath::RoundToInt32(Stat(EZWeaponStat::Range) / 100.f)));
+	if (const UZRangedWeaponData* RangedData = Cast<UZRangedWeaponData>(WeaponData))
+	{
+		const float SpreadScale = UZWeaponStatsLibrary::GetItemStatScale(WeaponData, Instance, EZWeaponStat::Spread);
+		OutLines.Add(FText::Format(LOCTEXT("WeaponDamageLine", "Damage {0}, {1} shots per second"), AsDecimal(Stat(EZWeaponStat::Damage)), AsDecimal(Stat(EZWeaponStat::FireRate))));
+		OutLines.Add(FText::Format(LOCTEXT("WeaponMagazineLine", "Magazine {0}, reload {1} s"), FMath::RoundToInt32(Stat(EZWeaponStat::MagazineSize)), AsDecimal(Stat(EZWeaponStat::ReloadTime))));
+		OutLines.Add(FText::Format(LOCTEXT("WeaponSpreadLine", "Spread {0}, aiming {1}, range {2} m"), AsDecimal(RangedData->HipSpread * SpreadScale),
+			AsDecimal(RangedData->AimSpread * SpreadScale), FMath::RoundToInt32(Stat(EZWeaponStat::Range) / 100.f)));
+	}
+	else if (WeaponData->IsA<UZMeleeWeaponData>())
+	{
+		OutLines.Add(FText::Format(LOCTEXT("MeleeDamageLine", "Damage {0} per hit, poise damage {1}"), AsDecimal(Stat(EZWeaponStat::Damage)), AsDecimal(Stat(EZWeaponStat::PoiseDamage))));
+
+		const float AttackSpeed = Stat(EZWeaponStat::AttackSpeed);
+		const float StaminaCost = Stat(EZWeaponStat::StaminaCost);
+		if (!FMath::IsNearlyEqual(AttackSpeed, 1.f) || !FMath::IsNearlyEqual(StaminaCost, 1.f))
+		{
+			OutLines.Add(FText::Format(LOCTEXT("MeleeSpeedLine", "Attack speed {0}%, stamina cost {1}%"), FMath::RoundToInt32(AttackSpeed * 100.f), FMath::RoundToInt32(StaminaCost * 100.f)));
+		}
+	}
 
 	if (WeaponData->MaxUpgradeLevel > 0)
 	{
@@ -149,12 +164,12 @@ void UZItemFragment_Weapon::ValidateForItem(const UZItemDefinition* Item, FDataV
 
 	if (Item->IsStackable())
 	{
-		Context.AddError(LOCTEXT("WeaponStackable", "Weapons keep their own magazine, so they can't stack: set Max Stack Size to 1."));
+		Context.AddError(LOCTEXT("WeaponStackable", "Weapons keep their own magazine, upgrades and mods, so they can't stack: set Max Stack Size to 1."));
 	}
 }
 #endif
 
-bool UZItemFragment_WeaponMod::FitsWeapon(const UZWeaponData* WeaponData) const
+bool UZItemFragment_WeaponMod::FitsWeapon(const UZWeaponDataBase* WeaponData) const
 {
 	return WeaponData && Slot.IsValid() && WeaponData->ModSlots.HasTagExact(Slot)
 		&& (AllowedWeaponTypes.IsEmpty() || AllowedWeaponTypes.Contains(WeaponData->WeaponType));

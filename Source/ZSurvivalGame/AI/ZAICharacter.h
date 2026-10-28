@@ -7,6 +7,7 @@
 #include "AbilitySystemInterface.h"
 #include "GenericTeamAgentInterface.h"
 #include "ZSurvivalGameTypes.h"
+#include "AbilitySystem/ZCombatLibrary.h"
 #include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "ZAICharacter.generated.h"
 
@@ -24,7 +25,7 @@ class UZLootTable;
  *  Each enemy type is a child class or Blueprint that sets its looks and numbers (see AZZombieCharacter)
  */
 UCLASS(Abstract)
-class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IZCharacterCuesInterface
+class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IZCharacterCuesInterface, public IZCombatantInterface
 {
 	GENERATED_BODY()
 
@@ -53,6 +54,9 @@ public:
 
 	virtual const FZCharacterCues& GetCharacterCues() const override { return CharacterCues; }
 
+	/** Its Stagger Montage, for the stagger ability */
+	virtual UAnimMontage* GetStaggerMontage() const override { return StaggerMontage; }
+
 	/** Server: starts the attack ability if the attack cooldown allows it; returns true if it started */
 	bool TryAttack();
 
@@ -63,6 +67,7 @@ public:
 	float GetAggroRange() const { return AggroRange; }
 	float GetAttackRange() const { return AttackRange; }
 	float GetMeleeDamage() const { return MeleeDamage; }
+	float GetMeleePoiseDamage() const { return MeleePoiseDamage; }
 	float GetMeleeReach() const { return MeleeReach; }
 	float GetMeleeRadius() const { return MeleeRadius; }
 	float GetMeleeHitDelay() const { return MeleeHitDelay; }
@@ -81,6 +86,9 @@ protected:
 	/** Server: called when Health reaches 0 (DamageInstigator is who did it, or null) */
 	void HandleOutOfHealth(AActor* DamageInstigator);
 
+	/** Server: called when Poise reaches 0: it staggers */
+	void HandlePoiseBroken(AActor* StaggerInstigator);
+
 	/** Every machine: ragdoll and stop moving */
 	void PlayDeath();
 
@@ -95,6 +103,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Survival|Stats", meta = (ClampMin = "1"))
 	float MaxHealth = 100.f;
+
+	/** How much poise damage it takes before it staggers (it refills after a few seconds without hits, see Project Settings → Game → Combat). 0 = every hit with poise damage staggers it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Survival|Stats", meta = (ClampMin = "0"))
+	float MaxPoise = 30.f;
 
 	/** Who it fights: it attacks other teams and can't be hurt by its own */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Survival|Stats")
@@ -139,9 +151,19 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee", meta = (ClampMin = "0"))
 	float MeleeHitDelay = 0.4f;
 
+	/** How much each of its hits wears down the target's poise toward a stagger */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee", meta = (ClampMin = "0"))
+	float MeleePoiseDamage = 15.f;
+
 	/** Attack animation (optional) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee")
 	TObjectPtr<UAnimMontage> AttackMontage;
+
+	/** --- STAGGER --- */
+
+	/** Animation when its poise breaks (optional: without one it stands still for the Default Stagger Duration). It may move it (root motion) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Stagger")
+	TObjectPtr<UAnimMontage> StaggerMontage;
 
 	/** --- LOOT --- */
 
@@ -170,6 +192,10 @@ protected:
 	/** The ability used to attack (UZGameplayAbility_MeleeAttack by default) */
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<UGameplayAbility> AttackAbility;
+
+	/** The ability that staggers it when its poise breaks (UZGameplayAbility_Stagger by default); empty = it never staggers, e.g. for a boss */
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TSubclassOf<UGameplayAbility> StaggerAbility;
 
 	/** Extra abilities, e.g. a spitter's ranged attack */
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")

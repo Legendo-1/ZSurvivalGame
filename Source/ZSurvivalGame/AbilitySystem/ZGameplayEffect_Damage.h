@@ -7,7 +7,8 @@
 #include "ZGameplayEffect_Damage.generated.h"
 
 /**
- *  Instant damage: adds the SetByCaller.Damage value to the target's IncomingDamage, which UZAttributeSet turns into lost health
+ *  Instant damage: adds the SetByCaller.Damage value to the target's IncomingDamage, which UZAttributeSet turns into lost health,
+ *  and SetByCaller.PoiseDamage to its IncomingPoiseDamage, which wears its poise down toward a stagger
  *  Applied by UZCombatLibrary::ApplyDamage. Make a Blueprint child of it to add tags (e.g. damage types) or gameplay cues
  */
 UCLASS()

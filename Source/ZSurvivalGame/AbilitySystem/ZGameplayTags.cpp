@@ -4,12 +4,17 @@
 
 namespace ZGameplayTags
 {
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability, "Ability", "Parent of every ability's tag (a stagger cancels them all)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Type_Action, "Ability.Type.Action", "Actions that commit the character: attacks, shots, dodges. One started in a window of another cancels that one");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Sprint, "Ability.Sprint", "Sprint ability");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Aim, "Ability.Aim", "Aim ability");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Dodge, "Ability.Dodge", "Dodge ability");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Fire, "Ability.Fire", "Fire the equipped weapon");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Reload, "Ability.Reload", "Reload the equipped weapon");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_MeleeAttack, "Ability.MeleeAttack", "Melee attack (used by AI characters)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Attack_Light, "Ability.Attack.Light", "A player's light melee attack (one step of the light combo)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Attack_Heavy, "Ability.Attack.Heavy", "A player's heavy melee attack (one step of the heavy combo)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Stagger, "Ability.Stagger", "Staggered: the hit reaction when poise breaks");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Sprinting, "State.Sprinting", "Sprint key held (the speed only changes while sprinting is allowed)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Aiming, "State.Aiming", "Aiming down sights");
@@ -18,9 +23,21 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Reloading, "State.Reloading", "Reloading the equipped weapon");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Attacking, "State.Attacking", "In the middle of a melee attack");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Dead, "State.Dead", "Out of health; blocks all abilities");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Busy, "State.Busy", "Committed to an action (attack, shot, dodge, stagger); other actions wait in the input buffer unless a window allows them");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Staggered, "State.Staggered", "Staggered (poise broken); no actions until it's over");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Invulnerable, "State.Invulnerable", "Takes no damage or poise damage, e.g. the first part of a dodge");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Window_Combo, "Window.Combo", "The next attack (or a shot) may start, cutting the current attack short");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Window_Dodge, "Window.Dodge", "A dodge may start, cutting the current action short");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Window_Turn, "Window.Turn", "An attack still turns toward the camera (its windup); after it the attack keeps its direction until the Dodge Window");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Attack_Light, "Event.Attack.Light", "Starts a light attack (Event Magnitude = the step in the light combo)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Attack_Heavy, "Event.Attack.Heavy", "Starts a heavy attack (Event Magnitude = the step in the heavy combo)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Stagger, "Event.Stagger", "Staggers the character (Instigator = who broke its poise)");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Damage, "SetByCaller.Damage", "Damage amount for UZGameplayEffect_Damage");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Healing, "SetByCaller.Healing", "Healing amount for UZGameplayEffect_Heal");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_PoiseDamage, "SetByCaller.PoiseDamage", "Poise damage for UZGameplayEffect_Damage");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Weapon, "Item.Type.Weapon", "Weapons");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Ammo, "Item.Type.Ammo", "Ammunition used when reloading");
@@ -73,8 +90,10 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Impact, "GameplayCue.Weapon.Impact", "A shot hit something (Location = impact point, Normal = surface normal, Physical Material = the surface)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Reload, "GameplayCue.Weapon.Reload", "A reload started (Raw Magnitude = seconds it takes, Source Object = the weapon data)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Equip, "GameplayCue.Weapon.Equip", "A weapon was taken out (Source Object = the weapon data; its Equip Montage plays too)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_MeleeImpact, "GameplayCue.Weapon.MeleeImpact", "A melee weapon hit a character (Location = hit point, Normal = the swing's direction, Physical Material = the body's surface, Raw Magnitude = damage dealt, Source Object = the weapon data)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_Hit, "GameplayCue.Character.Hit", "A character took damage (Location = hit point, Raw Magnitude = damage after armor)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_Death, "GameplayCue.Character.Death", "A character died (Instigator = the killer)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_Stagger, "GameplayCue.Character.Stagger", "A character's poise broke and it staggers (Instigator = who broke it)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_LevelUp, "GameplayCue.Character.LevelUp", "A player reached a new level (Raw Magnitude = the level)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Item_Pickup, "GameplayCue.Item.Pickup", "A player picked something up (Source Object = the item, Raw Magnitude = how many)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Item_Use, "GameplayCue.Item.Use", "A player used up an item, e.g. a bandage (Source Object = the item)");

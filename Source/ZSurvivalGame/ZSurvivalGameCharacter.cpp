@@ -26,13 +26,17 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_Dodge.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Fire.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Reload.h"
+#include "AbilitySystem/Abilities/ZGameplayAbility_ComboAttack.h"
+#include "AbilitySystem/Abilities/ZGameplayAbility_Stagger.h"
+#include "Combat/ZCombatComponent.h"
+#include "Combat/ZMeleeTraceComponent.h"
 #include "Interaction/ZInteractionComponent.h"
 #include "Items/ZEquipmentComponent.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemFragments.h"
 #include "Items/ZItemInstance.h"
 #include "Weapons/ZWeapon.h"
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZWeaponDataBase.h"
 
 AZSurvivalGameCharacter::AZSurvivalGameCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UZCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -82,12 +86,19 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter(const FObjectInitializer& Objec
 
 	FootstepComponent = CreateDefaultSubobject<UZFootstepComponent>(TEXT("Footsteps"));
 
+	CombatComponent = CreateDefaultSubobject<UZCombatComponent>(TEXT("Combat"));
+
+	MeleeTraceComponent = CreateDefaultSubobject<UZMeleeTraceComponent>(TEXT("MeleeTrace"));
+
 	// The player's abilities, given to the PlayerState's ability system in PossessedBy
 	DefaultAbilities.Add(UZGameplayAbility_Sprint::StaticClass());
 	DefaultAbilities.Add(UZGameplayAbility_Aim::StaticClass());
 	DefaultAbilities.Add(UZGameplayAbility_Dodge::StaticClass());
 	DefaultAbilities.Add(UZGameplayAbility_Fire::StaticClass());
 	DefaultAbilities.Add(UZGameplayAbility_Reload::StaticClass());
+	DefaultAbilities.Add(UZGameplayAbility_LightAttack::StaticClass());
+	DefaultAbilities.Add(UZGameplayAbility_HeavyAttack::StaticClass());
+	DefaultAbilities.Add(UZGameplayAbility_Stagger::StaticClass());
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character)
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
@@ -138,8 +149,9 @@ void AZSurvivalGameCharacter::Tick(float DeltaTime)
 		const float TargetArmLength = IsAiming() ? AimArmLength : DefaultArmLength;
 		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaTime, AimZoomSpeed);
 
-		// automatic weapons keep firing while the button is held (the Fire ability keeps the fire rate), and reload when empty
-		if (bFireHeld && EquippedWeapon && EquippedWeapon->IsAutomatic())
+		// automatic weapons keep firing while the button is held (the Fire ability keeps the fire rate), and reload when empty;
+		// a press waiting in the input buffer (e.g. a dodge) goes first
+		if (bFireHeld && EquippedWeapon && EquippedWeapon->IsAutomatic() && CombatComponent->GetBufferedAction() == EZCombatAction::None)
 		{
 			if (EquippedWeapon->GetAmmo() > 0)
 			{
@@ -183,11 +195,19 @@ void AZSurvivalGameCharacter::UpdateStamina(float DeltaTime)
 	const FGameplayAttribute StaminaAttribute = UZAttributeSet::GetStaminaAttribute();
 	const float OldStamina = ASC->GetNumericAttributeBase(StaminaAttribute);
 	float NewStamina = OldStamina;
+	const double Now = GetWorld()->GetTimeSeconds();
+
+	// something used stamina since the last update (an attack, a dodge): it comes back only after a pause
+	if (OldStamina < StaminaAfterLastUpdate - KINDA_SMALL_NUMBER)
+	{
+		LastStaminaUseTime = Now;
+	}
 
 	// Handle Sprinting Stamina Drain (no drain while sprint is held but blocked by direction)
 	if (Movement->IsSprinting() && GetVelocity().SizeSquared() > 0.f)
 	{
 		NewStamina = FMath::Max(0.f, OldStamina - (StaminaDrainRate * DeltaTime));
+		LastStaminaUseTime = Now;
 		if (NewStamina <= 0.f)
 		{
 			// Stop sprinting when out of stamina (the server ends the ability, which also ends it on the player's machine)
@@ -195,7 +215,7 @@ void AZSurvivalGameCharacter::UpdateStamina(float DeltaTime)
 			ASC->CancelAbilities(&SprintTags);
 		}
 	}
-	else
+	else if (Now - LastStaminaUseTime >= StaminaRegenDelay)
 	{
 		// Regenerate stamina when not sprinting (faster with the player's stamina regen from traits)
 		const float MaxStamina = ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute());
@@ -207,6 +227,8 @@ void AZSurvivalGameCharacter::UpdateStamina(float DeltaTime)
 	{
 		ASC->SetNumericAttributeBase(StaminaAttribute, NewStamina);
 	}
+
+	StaminaAfterLastUpdate = ASC->GetNumericAttributeBase(StaminaAttribute);
 }
 
 float AZSurvivalGameCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
@@ -272,6 +294,7 @@ void AZSurvivalGameCharacter::UnPossessed()
 	if (AZSurvivalGamePlayerState* ZPlayerState = GetPlayerState<AZSurvivalGamePlayerState>())
 	{
 		ZPlayerState->GetAttributeSet()->OnOutOfHealth.RemoveAll(this);
+		ZPlayerState->GetAttributeSet()->OnPoiseBroken.RemoveAll(this);
 		ZPlayerState->GetInventory()->OnItemRemoving.RemoveAll(this);
 		ZPlayerState->GetEquipment()->OnEquipmentChanged.RemoveDynamic(this, &AZSurvivalGameCharacter::HandleEquipmentChanged);
 		ZPlayerState->GetEquipment()->OnItemEquippedByPlayer.RemoveAll(this);
@@ -320,6 +343,8 @@ void AZSurvivalGameCharacter::InitAbilitySystem()
 		UZAttributeSet* Attributes = ZPlayerState->GetAttributeSet();
 		Attributes->OnOutOfHealth.RemoveAll(this);
 		Attributes->OnOutOfHealth.AddUObject(this, &AZSurvivalGameCharacter::HandleOutOfHealth);
+		Attributes->OnPoiseBroken.RemoveAll(this);
+		Attributes->OnPoiseBroken.AddUObject(this, &AZSurvivalGameCharacter::HandlePoiseBroken);
 
 		// respawned: the PlayerState still has the old character's death, so start fresh
 		if (ASC->HasMatchingGameplayTag(ZGameplayTags::State_Dead))
@@ -330,6 +355,7 @@ void AZSurvivalGameCharacter::InitAbilitySystem()
 		// a new body starts full, also when a saved character came in whose traits and equipment raised the max (a higher max leaves a gap otherwise)
 		ASC->SetNumericAttributeBase(UZAttributeSet::GetHealthAttribute(), ASC->GetNumericAttribute(UZAttributeSet::GetMaxHealthAttribute()));
 		ASC->SetNumericAttributeBase(UZAttributeSet::GetStaminaAttribute(), ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute()));
+		ASC->SetNumericAttributeBase(UZAttributeSet::GetPoiseAttribute(), ASC->GetNumericAttribute(UZAttributeSet::GetMaxPoiseAttribute()));
 	}
 }
 
@@ -392,9 +418,21 @@ void AZSurvivalGameCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	}
 }
 
+void AZSurvivalGameCharacter::HandlePoiseBroken(AActor* StaggerInstigator)
+{
+	if (!bIsDead)
+	{
+		UZCombatLibrary::Stagger(this, StaggerInstigator);
+	}
+}
+
 void AZSurvivalGameCharacter::PlayDeath()
 {
 	bFireHeld = false;
+
+	// nothing waits or hits any more
+	CombatComponent->ClearBuffer();
+	MeleeTraceComponent->EndAllHitboxes();
 
 	// stop moving and fall over as a ragdoll
 	GetCharacterMovement()->StopMovementImmediately();
@@ -570,7 +608,7 @@ void AZSurvivalGameCharacter::HandleGameplayCue(UObject* Self, FGameplayTag Game
 	// (a player who comes near later doesn't see an old one)
 	if (EventType == EGameplayCueEvent::Executed && GameplayCueTag.MatchesTag(ZGameplayTags::GameplayCue_Weapon_Equip) && !bIsDead)
 	{
-		const UZWeaponData* WeaponData = Cast<UZWeaponData>(Parameters.SourceObject.Get());
+		const UZWeaponDataBase* WeaponData = Cast<UZWeaponDataBase>(Parameters.SourceObject.Get());
 		if (UAnimMontage* EquipMontage = WeaponData ? WeaponData->EquipMontage.Get() : nullptr)
 		{
 			// it starts on every machine on its own, without prediction, so one that moves the character would put its owner out of step with the server
@@ -733,12 +771,12 @@ void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Completed, this, &AZSurvivalGameCharacter::DoInteractEnd);
 		}
 
-		// Weapon slots: each key takes out the weapon in its slot
+		// Weapon slots: each key takes out the weapon in its slot (after the current attack or dodge)
 		for (const FZWeaponSlotInput& SlotInput : WeaponSlotInputs)
 		{
 			if (SlotInput.InputAction && SlotInput.Slot.IsValid())
 			{
-				EnhancedInputComponent->BindAction(SlotInput.InputAction.Get(), ETriggerEvent::Started, this, &AZSurvivalGameCharacter::SelectWeaponSlot, SlotInput.Slot);
+				EnhancedInputComponent->BindAction(SlotInput.InputAction.Get(), ETriggerEvent::Started, this, &AZSurvivalGameCharacter::DoSelectWeaponSlot, SlotInput.Slot);
 			}
 		}
 	}
@@ -808,6 +846,25 @@ void AZSurvivalGameCharacter::DoJumpEnd()
 	StopJumping();
 }
 
+void AZSurvivalGameCharacter::Jump()
+{
+	// mid-swing, mid-dodge or staggered: no jump (the jump never reaches the server either). A shot's short recovery doesn't stop it
+	const UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (IsLocallyControlled() && ASC)
+	{
+		FGameplayTagContainer NoJumpStates;
+		NoJumpStates.AddTag(ZGameplayTags::State_Attacking);
+		NoJumpStates.AddTag(ZGameplayTags::State_Dodging);
+		NoJumpStates.AddTag(ZGameplayTags::State_Staggered);
+		if (ASC->HasAnyMatchingGameplayTags(NoJumpStates))
+		{
+			return;
+		}
+	}
+
+	Super::Jump();
+}
+
 void AZSurvivalGameCharacter::DoSprintStart()
 {
 	// the Sprint ability checks aiming, speed limits and stamina
@@ -821,6 +878,13 @@ void AZSurvivalGameCharacter::DoSprintEnd()
 
 void AZSurvivalGameCharacter::DoAimStart()
 {
+	// with a melee weapon: the heavy attack (now, or as soon as the current action allows)
+	if (IsHoldingMeleeWeapon())
+	{
+		CombatComponent->RequestAction(EZCombatAction::HeavyAttack, FGameplayTag());
+		return;
+	}
+
 	// the Aim ability also cancels sprint
 	PressAbilityInput(EZAbilityInputID::Aim);
 }
@@ -832,13 +896,19 @@ void AZSurvivalGameCharacter::DoAimEnd()
 
 void AZSurvivalGameCharacter::DoDodge()
 {
-	// a dodge is a single press; the Dodge ability checks and pays the stamina
-	PressAbilityInput(EZAbilityInputID::Dodge);
-	ReleaseAbilityInput(EZAbilityInputID::Dodge);
+	// a dodge is a single press, now or as soon as the current action allows (its Dodge Window); the Dodge ability checks and pays the stamina
+	CombatComponent->RequestAction(EZCombatAction::Dodge, FGameplayTag());
 }
 
 void AZSurvivalGameCharacter::DoFireStart()
 {
+	// with a melee weapon: the light attack (now, or as soon as the current action allows)
+	if (IsHoldingMeleeWeapon())
+	{
+		CombatComponent->RequestAction(EZCombatAction::LightAttack, FGameplayTag());
+		return;
+	}
+
 	bFireHeld = true;
 
 	// empty magazine: reload instead (if there's ammo for it)
@@ -852,7 +922,8 @@ void AZSurvivalGameCharacter::DoFireStart()
 		return;
 	}
 
-	PressAbilityInput(EZAbilityInputID::Fire);
+	// right after a shot or mid-dodge it waits for its turn
+	CombatComponent->RequestAction(EZCombatAction::Fire, FGameplayTag());
 }
 
 void AZSurvivalGameCharacter::DoFireEnd()
@@ -864,9 +935,8 @@ void AZSurvivalGameCharacter::DoFireEnd()
 
 void AZSurvivalGameCharacter::DoReload()
 {
-	// a reload is a single press; the Reload ability checks there's something to reload
-	PressAbilityInput(EZAbilityInputID::Reload);
-	ReleaseAbilityInput(EZAbilityInputID::Reload);
+	// a reload is a single press, now or once the current action is over; the Reload ability checks there's something to reload
+	CombatComponent->RequestAction(EZCombatAction::Reload, FGameplayTag());
 }
 
 void AZSurvivalGameCharacter::DoInteractStart()
@@ -906,6 +976,8 @@ void AZSurvivalGameCharacter::CancelWeaponAbilities()
 		FGameplayTagContainer WeaponAbilityTags;
 		WeaponAbilityTags.AddTag(ZGameplayTags::Ability_Fire);
 		WeaponAbilityTags.AddTag(ZGameplayTags::Ability_Reload);
+		WeaponAbilityTags.AddTag(ZGameplayTags::Ability_Attack_Light);
+		WeaponAbilityTags.AddTag(ZGameplayTags::Ability_Attack_Heavy);
 		ASC->CancelAbilities(&WeaponAbilityTags);
 	}
 }
@@ -988,6 +1060,12 @@ void AZSurvivalGameCharacter::SelectWeaponSlot(FGameplayTag SlotType)
 	}
 
 	ServerSelectWeaponSlot(SlotType);
+}
+
+void AZSurvivalGameCharacter::DoSelectWeaponSlot(FGameplayTag SlotType)
+{
+	// not in the middle of an attack or a dodge: the switch waits for it (input buffer)
+	CombatComponent->RequestAction(EZCombatAction::SwitchWeapon, SlotType);
 }
 
 void AZSurvivalGameCharacter::ServerSelectWeaponSlot_Implementation(FGameplayTag SlotType)
@@ -1076,6 +1154,11 @@ float AZSurvivalGameCharacter::GetMaxWalkSpeedFor(bool bSprinting, bool bAiming,
 	else if (Limit == EZSpeedLimit::Walk)
 	{
 		NewSpeed = FMath::Min(NewSpeed, WalkSpeed);
+	}
+	else if (Limit == EZSpeedLimit::Still)
+	{
+		// committed (an attack, a stagger): only the animation's root motion moves the character
+		NewSpeed = 0.f;
 	}
 
 	return NewSpeed;

@@ -9,6 +9,7 @@
 #include "GenericTeamAgentInterface.h"
 #include "Logging/LogMacros.h"
 #include "ZSurvivalGameTypes.h"
+#include "AbilitySystem/ZCombatLibrary.h"
 #include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "Audio/ZFootstepComponent.h"
 #include "Items/ZItemDefinition.h"
@@ -19,11 +20,14 @@ class UCameraComponent;
 class UInputAction;
 class UAbilitySystemComponent;
 class UZGameplayAbility;
+class UAnimMontage;
 class UZCharacterMovementComponent;
+class UZCombatComponent;
 class UZEquipmentComponent;
 class UZInteractionComponent;
 class UZInventoryComponent;
 class UZItemInstance;
+class UZMeleeTraceComponent;
 class AZWeapon;
 struct FInputActionValue;
 struct FGameplayAttribute;
@@ -47,10 +51,11 @@ struct FZWeaponSlotInput
 /**
  *  A simple player-controllable third person character
  *  Implements a controllable orbiting camera
- *  Sprint, aim, dodge, fire and reload are abilities (see AbilitySystem/); health and stamina live on the PlayerState
+ *  Sprint, aim, dodge, fire, reload and the melee attacks are abilities (see AbilitySystem/); health, stamina and poise live on the PlayerState
+ *  Attacks, dodges, shots, reloads and weapon switches go through the combat component's input buffer (souls-like commitment, see COMBAT.md)
  */
 UCLASS(abstract)
-class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IGameplayCueInterface, public IZCharacterCuesInterface, public IZGaitSpeedsInterface
+class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IGameplayCueInterface, public IZCharacterCuesInterface, public IZGaitSpeedsInterface, public IZCombatantInterface
 {
 	GENERATED_BODY()
 
@@ -69,6 +74,14 @@ class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterfac
 	/** Footstep sounds, matching the surface and the gait (walk, jog, sprint) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZFootstepComponent> FootstepComponent;
+
+	/** The input buffer (an action pressed while busy waits for its turn) and the melee combo */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZCombatComponent> CombatComponent;
+
+	/** Finds what melee attacks hit (the weapon's blade during the attacks' Weapon Hitbox notifies), on the player's own machine */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZMeleeTraceComponent> MeleeTraceComponent;
 
 protected:
 
@@ -131,6 +144,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Stats")
 	float StaminaRegenRate = 10.f; // Stamina per second while idle/walking
+
+	/** Seconds after stamina was last used (an attack, a dodge, sprinting) before it comes back */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Survival|Stats", meta = (ClampMin = "0", Units = "s"))
+	float StaminaRegenDelay = 1.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Survival|Movement")
 	float JogSpeed = 350.f;
@@ -203,9 +220,19 @@ protected:
 
 	/** --- EFFECTS --- */
 
-	/** The player's hit and death cues (GameplayCue Notify assets with these tags play the sounds and effects, see AUDIO.md) */
+	/** The player's hit, death and stagger cues (GameplayCue Notify assets with these tags play the sounds and effects, see AUDIO.md) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects")
 	FZCharacterCues CharacterCues;
+
+	/** --- COMBAT --- */
+
+	/** Animation when the player's poise breaks (optional: without one they stand still for the Default Stagger Duration). It must stay in place: root motion off */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
+	TObjectPtr<UAnimMontage> StaggerMontage;
+
+	/** Server: when stamina was last used, and what it was after the last update (a drop since then means something used it) */
+	double LastStaminaUseTime = -1000.0;
+	float StaminaAfterLastUpdate = 0.f;
 
 	/** The player's ability system, owned by the PlayerState */
 	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
@@ -224,6 +251,12 @@ public:
 	virtual FGenericTeamId GetGenericTeamId() const override;
 
 	virtual const FZCharacterCues& GetCharacterCues() const override { return CharacterCues; }
+
+	/** The player's Stagger Montage, for the stagger ability */
+	virtual UAnimMontage* GetStaggerMontage() const override { return StaggerMontage; }
+
+	/** The weapon in the hands, whose blade the melee hitboxes follow */
+	virtual AZWeapon* GetHeldWeapon() const override { return EquippedWeapon; }
 
 	using IGameplayCueInterface::HandleGameplayCue;
 
@@ -263,13 +296,16 @@ protected:
 	/** Server: called when Health reaches 0 (DamageInstigator is who did it, or null) */
 	void HandleOutOfHealth(AActor* DamageInstigator);
 
+	/** Server: called when Poise reaches 0: the player staggers */
+	void HandlePoiseBroken(AActor* StaggerInstigator);
+
 	/** Every machine: ragdoll and stop moving */
 	void PlayDeath();
 
 	UFUNCTION()
 	void OnRep_IsDead();
 
-	/** Server: drains stamina while sprinting and regenerates it otherwise */
+	/** Server: drains stamina while sprinting and regenerates it otherwise (Stamina Regen Delay after it was last used) */
 	void UpdateStamina(float DeltaTime);
 
 	/** Server: gives the StartingItems, once per player */
@@ -312,7 +348,7 @@ protected:
 	void PressAbilityInput(EZAbilityInputID InputID);
 	void ReleaseAbilityInput(EZAbilityInputID InputID);
 
-	/** Cancels firing and reloading, e.g. when switching weapons */
+	/** Cancels firing, reloading and melee attacks, e.g. when switching weapons */
 	void CancelWeaponAbilities();
 
 	/** Attribute as 0..1 of its max, for UI bars */
@@ -345,6 +381,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpStart();
 
+	/** No jumping mid-swing, mid-dodge or staggered; only the player's own machine checks, the server follows its moves */
+	virtual void Jump() override;
+
 	/** Handles jump pressed inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
@@ -356,16 +395,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoSprintEnd();
 
+	/** Dodge pressed: dodges now, or as soon as the current action allows (input buffer) */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoDodge();
 
+	/** Aim pressed: aims with a gun; with a melee weapon it's the heavy attack */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoAimStart();
 
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoAimEnd();
 
-	/** Fire pressed: shoots (automatic weapons keep shooting while held); reloads instead when the magazine is empty */
+	/** Fire pressed: shoots (automatic weapons keep shooting while held); reloads instead when the magazine is empty. With a melee weapon it's the light attack */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoFireStart();
 
@@ -390,9 +431,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
 	void SetWeaponType(EZWeaponType NewWeaponType);
 
-	/** Takes out the weapon in a kind of weapon slot (e.g. Equipment.Slot.LongGun), or puts it away if it's already in the hands; does nothing if the slot is empty. What the weapon keys do */
+	/** Takes out the weapon in a kind of weapon slot (e.g. Equipment.Slot.LongGun), or puts it away if it's already in the hands; does nothing if the slot is empty */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
 	void SelectWeaponSlot(FGameplayTag SlotType);
+
+	/** What the weapon keys do: SelectWeaponSlot, once the player isn't busy (mid-swing, mid-dodge) */
+	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
+	void DoSelectWeaponSlot(FGameplayTag SlotType);
+
+	/** True while a melee weapon type is out: the attack buttons swing it (light, heavy) instead of shooting and aiming */
+	UFUNCTION(BlueprintPure, Category = "Survival|Weapon")
+	bool IsHoldingMeleeWeapon() const { return IsMeleeWeaponType(CurrentWeaponType); }
+
+	/** The input buffer and the melee combo */
+	UZCombatComponent* GetCombatComponent() const { return CombatComponent; }
 
 	/** Puts this inventory weapon in its weapon slot and in the hands (e.g. from an inventory screen) */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")

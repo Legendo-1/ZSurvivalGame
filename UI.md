@@ -2,7 +2,7 @@
 
 How the inventory screen and the HUD work, how to change their keys, and how to give them your own look.
 
-**Last updated:** 2026-10-28 (the equipment window, on the left of the inventory screen)
+**Last updated:** 2026-10-28 (the ammo and the crosshair only show for guns)
 
 ## The inventory screen
 
@@ -116,9 +116,9 @@ Sounds in the world (shots, pickups, crafting at a station) are in AUDIO.md.
 |---|---|---|---|
 | `HealthBar` | Progress Bar | Yes | Health |
 | `StaminaBar` | Progress Bar | Yes | Stamina |
-| `AmmoText` | Text | Optional | "magazine / reserve", e.g. "12 / 60", while a weapon is in the hands, hidden otherwise |
-| `Crosshair` | any (e.g. Image) | Optional | Shown while a weapon is in the hands |
-| `HitMarker` | any (e.g. Image) | Optional | Flashes when a shot dealt damage (longer for a kill) |
+| `AmmoText` | Text | Optional | "magazine / reserve", e.g. "12 / 60", while a gun is in the hands, hidden otherwise (also with a melee weapon) |
+| `Crosshair` | any (e.g. Image) | Optional | Shown while a gun is in the hands |
+| `HitMarker` | any (e.g. Image) | Optional | Flashes when a shot or a melee hit dealt damage (longer for a kill) |
 | `StatusText` | Text | Optional | "You died. Respawning..." while dead |
 | `InteractionText` | Text | Optional | "[E] Pick up Rifle Ammo x15" while looking at something to interact with |
 | `InteractionProgress` | Progress Bar | Optional | Fills while holding the interact key on an interaction that takes time |

@@ -8,12 +8,17 @@
 namespace ZGameplayTags
 {
 	// Abilities: set on each ability, used to cancel or block abilities by type
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Type_Action);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Sprint);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Aim);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Dodge);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Fire);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Reload);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_MeleeAttack);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Attack_Light);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Attack_Heavy);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Stagger);
 
 	// States: on the character while an ability runs (or while dead), used to block other abilities
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Sprinting);
@@ -23,10 +28,24 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Reloading);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Attacking);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dead);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Busy);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Staggered);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Invulnerable);
+
+	// Windows: parts of an action's animation (Anim Notify States) where another action may cut it short, e.g. the next attack of a combo
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Window_Combo);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Window_Dodge);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Window_Turn);
+
+	// Events: start abilities that need to know more than "the key was pressed" (Event Magnitude carries the detail)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Attack_Light);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Attack_Heavy);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Stagger);
 
 	// Set by caller: values filled in by code when a gameplay effect is applied
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_Damage);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_Healing);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_PoiseDamage);
 
 	// Item types: on item definitions (ItemTags), for sorting, filtering and rules
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Weapon);
@@ -90,8 +109,10 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Impact);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Reload);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_Equip);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Weapon_MeleeImpact);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Character_Hit);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Character_Death);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Character_Stagger);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Character_LevelUp);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Item_Pickup);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Item_Use);

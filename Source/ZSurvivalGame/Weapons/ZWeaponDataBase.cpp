@@ -1,6 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZWeaponDataBase.h"
 #include "Animation/AnimMontage.h"
 
 #if WITH_EDITOR
@@ -10,7 +10,7 @@
 #define LOCTEXT_NAMESPACE "ZWeapons"
 
 #if WITH_EDITOR
-EDataValidationResult UZWeaponData::IsDataValid(FDataValidationContext& Context) const
+EDataValidationResult UZWeaponDataBase::IsDataValid(FDataValidationContext& Context) const
 {
 	EDataValidationResult Result = Super::IsDataValid(Context);
 

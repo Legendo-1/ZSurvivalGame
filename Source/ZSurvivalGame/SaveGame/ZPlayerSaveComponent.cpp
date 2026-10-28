@@ -27,7 +27,7 @@
 #include "SaveGame/ZSaveSettings.h"
 #include "SaveGame/ZSaveSubsystem.h"
 #include "Weapons/ZWeapon.h"
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZWeaponDataBase.h"
 
 #define LOCTEXT_NAMESPACE "ZSave"
 

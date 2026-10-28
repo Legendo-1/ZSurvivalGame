@@ -2,7 +2,7 @@
 
 How items, the inventory, equipment, pickups, loot and interacting work, and how to add new ones. Crafting has its own guide: CRAFTING.md. The inventory screen: UI.md.
 
-**Last updated:** 2026-10-28 (equipment: one short gun, one long gun, one melee weapon, armor and jewelry)
+**Last updated:** 2026-10-28 (the machete, the first melee weapon; gun and melee weapon data)
 
 ## The pieces
 
@@ -22,6 +22,7 @@ How items, the inventory, equipment, pickups, loot and interacting work, and how
 | Item | Type | Stack | Picked up by |
 |---|---|---|---|
 | `ID_Pistol`, `ID_Rifle` | Weapon (Weapon fragment → DA_Pistol / DA_Rifle) | 1 | Interact key |
+| `ID_Machete` | Melee weapon (Weapon fragment → DA_Machete; COMBAT.md) | 1 | Interact key |
 | `ID_Ammo_Pistol`, `ID_Ammo_Rifle` | Ammo | 999 | Walking over it |
 | `ID_Cloth`, `ID_Scrap`, `ID_BoneFragment`, `ID_RottenMeat` | Crafting material | 99 | Walking over it |
 | `ID_Bandage` | Consumable, heals 25 | 10 | Interact key |
@@ -36,7 +37,7 @@ How items, the inventory, equipment, pickups, loot and interacting work, and how
 | `ID_Jewelry_BoneNecklace` | Necklace (`Content/Items/Jewelry`): Max Health +15 | 1 | Interact key |
 | `ID_Jewelry_IronRing`, `ID_Jewelry_RunnersRing`, `ID_Jewelry_SteadyRing` | Rings: Armor +5, Stamina Regen +15%, Recoil -10% | 1 | Interact key |
 
-- **Starting items:** pistol, rifle, 36 pistol ammo, 90 rifle ammo, 2 bandages. Change them in BP_ThirdPersonCharacter → Class Defaults → **Survival|Inventory → Starting Items**. A player gets them once; after dying they keep their inventory. Starting weapons and clothes are equipped right away, as long as their slot is free.
+- **Starting items:** pistol, rifle, machete, 36 pistol ammo, 90 rifle ammo, 2 bandages. Change them in BP_ThirdPersonCharacter → Class Defaults → **Survival|Inventory → Starting Items**. A player gets them once; after dying they keep their inventory. Starting weapons and clothes are equipped right away, as long as their slot is free.
 - **The armor and jewelry** are examples to test with: nothing drops them yet. Give them with `ZGiveItem` (below), or add them to a loot table or the starting items.
 - **Zombie loot** (`LT_Zombie`): rifle ammo 6–15 (50%), pistol ammo 4–10 (40%), cloth 1–2 (40%), scrap 1 (30%), bone fragments 1–2 (30%), rotten meat 1 (25%). The loot disappears after 2 minutes.
 - On the ground, items are placeholder shapes for now (boxes, balls and cylinders). Set **Pickup Mesh** in an item to change it.
@@ -60,14 +61,15 @@ A player has these slots (like Remnant 2):
 - **Armor and jewelry change your stats** while you wear them, like traits do. Putting on something with more max health doesn't heal you: heal the gap yourself. Taking it off only costs health if you have more than the new max: **Armor** lowers the damage you take, and pieces can also add Max Health, Max Stamina, Stamina Regen, Recoil, Reload Speed, Damage, and so on. The equipment window shows your armor and how much damage gets through.
 - **How armor works:** damage × 100 / (100 + Armor). 50 armor: you take 67%. 100 armor: 50%. 300 armor: 25%. Each point helps a little less than the one before, and you never become unhittable. The 100 is **Armor For Half Damage** in Project Settings → Game → Equipment. Traits can raise Armor too.
 - **The slots are settings:** **Edit → Project Settings → Game → Equipment → Slot Types**. Each line is one kind of slot: its tag, how many (e.g. 4 rings), its name and its group in the equipment window.
-- **Melee weapons** don't exist yet: the slot and key are ready for them.
+- **Melee weapons** go in the Melee slot, e.g. the machete. With one in your hands, the mouse buttons attack instead of firing and aiming (COMBAT.md).
 
 ## Weapons and ammo
 
 - **Weapons are items.** Taking one out (its key, or equipping it) makes the server spawn the weapon in the hands; putting it away removes it again. Only equipped weapons can be in the hands.
 - **Each weapon item keeps its magazine, upgrade level and mods** when it's put away or dropped, and a new weapon starts full.
 - **Reloading takes ammo from the inventory.** The weapon data's **Ammo Item** says which (DA_Rifle → `ID_Ammo_Rifle`). Leave Ammo Item empty for unlimited reserve ammo.
-- **The HUD's AmmoText** shows "magazine / reserve", e.g. `24 / 60`.
+- **The HUD's AmmoText** shows "magazine / reserve", e.g. `24 / 60`. With a melee weapon in your hands the HUD hides the ammo and the crosshair.
+- **Gun or melee:** a gun's data asset is a **ZRangedWeaponData** (DA_Pistol, DA_Rifle), a melee weapon's a **ZMeleeWeaponData** (DA_Machete). What they share (name, slot, looks, upgrades) is the same in both. Gun data made before the melee weapons existed was called ZWeaponData; it loads as ZRangedWeaponData by itself.
 - **Upgrades and mods** change the weapon's stats (CRAFTING.md → Weapon upgrades and mods). `UZWeaponStatsLibrary` works out a weapon item's stats, also for an inventory screen, e.g. **Get Weapon Stat** (Damage) for an item that isn't in the hands. `ZWeaponStats` writes the stats of the weapon in your hands to the Output Log.
 
 ## Interacting
@@ -116,10 +118,11 @@ A wrong item name lists all the items there are. Numbers can be left out in the 
 ## How to add things
 
 - **A new item:** in `Content/Items/<type folder>`, right-click → **Miscellaneous → Data Asset → ZItemDefinition**. Name it `ID_...` and fill in Display Name, Item Tags, Max Stack Size and Auto Pickup. Add its features under **Fragments → +**.
-- **A new weapon:**
-  1. Make a weapon Data Asset (**ZWeaponData**) with its stats and **Ammo Item**. Set **Equipment Slot**: Short Gun, Long Gun or Melee (a new one starts as Long Gun). Its animations are under **Looks**, its sounds and effects under **Effects** (AUDIO.md).
+- **A new gun:**
+  1. In `Content/Weapons`, right-click → **Miscellaneous → Data Asset** → **ZRangedWeaponData**, with its stats and **Ammo Item**. Set **Equipment Slot**: Short Gun or Long Gun (a new one starts as Long Gun). Its animations are under **Looks**, its sounds and effects under **Effects** (AUDIO.md).
   2. Make an item with a **Weapon** fragment pointing to it.
   3. Add the item to **Starting Items** or a loot table.
+- **A new melee weapon:** COMBAT.md → Making a melee weapon.
 - **New armor or jewelry:**
   1. In `Content/Items/Armor` or `Content/Items/Jewelry`: right-click → **Miscellaneous → Data Asset → ZItemDefinition** → name it `ID_Armor_...` or `ID_Jewelry_...`.
   2. **Display Name**, **Description**, **Item Tags**: `Item.Type.Armor` or `Item.Type.Jewelry`. **Max Stack Size**: 1.
@@ -141,7 +144,6 @@ A wrong item name lists all the items there are. Numbers can be left out in the 
 - **Weapon durability:** a Durability fragment on weapons, worn down by shooting (tools already have durability, and weapons already have upgrades and mods).
 - **What dying costs:** for now you keep everything.
 - **Armor you can see:** worn armor shown on the character (it's only stats for now).
-- **Melee weapons and attacks** for the melee slot.
 - **Armor weight:** heavy armor making dodges slower (DESIGN.md: light, medium and heavy rolls).
 
 The inventory is saved with the character, every item with its stats and mods (SAVING.md). Items are saved by their asset name, so renaming one needs a redirect (SAVING.md → Renaming or removing things saves use). A new fragment with its own stats should keep them within its limits when an item loads from a save: its `OnInstanceLoaded`.

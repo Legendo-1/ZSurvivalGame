@@ -15,6 +15,7 @@ AZZombieCharacter::AZZombieCharacter()
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> ZombieMesh(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"));
 	static ConstructorHelpers::FClassFinder<UAnimInstance> ZombieAnimation(TEXT("/Game/Variant_Combat/Anims/ABP_Manny_Combat"));
 	static ConstructorHelpers::FObjectFinder<UAnimMontage> ZombieAttack(TEXT("/Game/Variant_Combat/Anims/AM_ComboAttack.AM_ComboAttack"));
+	static ConstructorHelpers::FObjectFinder<UAnimMontage> ZombieStagger(TEXT("/Game/Characters/Mannequins/Anims/Stagger/AM_Stagger_Front.AM_Stagger_Front"));
 	static ConstructorHelpers::FObjectFinder<UZLootTable> ZombieLoot(TEXT("/Game/Items/LootTables/LT_Zombie.LT_Zombie"));
 
 	if (ZombieMesh.Succeeded())
@@ -32,6 +33,11 @@ AZZombieCharacter::AZZombieCharacter()
 		AttackMontage = ZombieAttack.Object;
 	}
 
+	if (ZombieStagger.Succeeded())
+	{
+		StaggerMontage = ZombieStagger.Object;
+	}
+
 	if (ZombieLoot.Succeeded())
 	{
 		LootTable = ZombieLoot.Object;
@@ -44,5 +50,7 @@ AZZombieCharacter::AZZombieCharacter()
 	AggroRange = 3000.f;
 	AttackCooldown = 1.6f;
 	MeleeDamage = 15.f;
+	MeleePoiseDamage = 15.f;
+	MaxPoise = 30.f;
 	GetCharacterMovement()->MaxWalkSpeed = 280.f;
 }

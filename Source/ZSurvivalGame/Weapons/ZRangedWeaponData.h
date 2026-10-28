@@ -3,57 +3,25 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/DataAsset.h"
-#include "GameplayTagContainer.h"
-#include "ZSurvivalGameTypes.h"
-#include "AbilitySystem/ZGameplayTags.h"
-#include "ZWeaponData.generated.h"
+#include "Weapons/ZWeaponDataBase.h"
+#include "ZRangedWeaponData.generated.h"
 
-class USkeletalMesh;
-class UStaticMesh;
 class UAnimMontage;
 class UZItemDefinition;
 
 /**
- *  A weapon's stats and looks. Make one Data Asset per weapon:
- *  right-click in the Content Browser → Miscellaneous → Data Asset → ZWeaponData
- *  The player carries it as an item whose Weapon fragment points to this
+ *  A gun's stats and looks. Make one Data Asset per gun:
+ *  right-click in the Content Browser → Miscellaneous → Data Asset → ZRangedWeaponData
+ *  (Data assets made before the melee weapons were "ZWeaponData"; they load as this.)
  */
 UCLASS(BlueprintType)
-class UZWeaponData : public UPrimaryDataAsset
+class UZRangedWeaponData : public UZWeaponDataBase
 {
 	GENERATED_BODY()
 
 public:
 
-	/** Name shown in the UI */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
-	FText DisplayName;
-
-	/** Which animation set the character uses while holding it */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
-	EZWeaponType WeaponType = EZWeaponType::Rifle;
-
-	/** Which weapon slot it goes in: short gun (pistols, submachine guns, sawn-offs), long gun (rifles, shotguns, snipers) or melee. A player equips one of each */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon", meta = (Categories = "Equipment.Slot"))
-	FGameplayTag EquipmentSlot = ZGameplayTags::Equipment_Slot_LongGun;
-
 	/** --- LOOKS --- */
-
-	/** The weapon's mesh: set this or Static Mesh (none is fine for testing; the weapon is then invisible) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
-	TObjectPtr<USkeletalMesh> SkeletalMesh;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
-	TObjectPtr<UStaticMesh> StaticMesh;
-
-	/** Socket or bone on the character's mesh that holds the weapon (falls back to hand_r if the mesh doesn't have it) */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
-	FName AttachSocket = TEXT("weapon_r");
-
-	/** Offset from that socket, to line the weapon up with the hand */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
-	FTransform AttachOffset;
 
 	/** Socket on the weapon's mesh where shots and muzzle flashes start */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
@@ -67,11 +35,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
 	TObjectPtr<UAnimMontage> ReloadMontage;
 
-	/** Character animation played when the weapon is taken out (optional; plays with the Equip Cue). It must stay in place: one that moves the character (root motion) isn't played */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
-	TObjectPtr<UAnimMontage> EquipMontage;
-
-	/** --- EFFECTS: what plays is a GameplayCue Notify asset with the tag (see AUDIO.md); a child tag gives this weapon its own. Empty = nothing --- */
+	/** --- EFFECTS --- */
 
 	/** Each shot, e.g. the bang and the muzzle flash (Location = the muzzle) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Weapon.Fire"))
@@ -85,10 +49,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Weapon.Reload"))
 	FGameplayTag ReloadCue = ZGameplayTags::GameplayCue_Weapon_Reload;
 
-	/** The weapon is taken out; the Equip Montage plays with it */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Weapon.Equip"))
-	FGameplayTag EquipCue = ZGameplayTags::GameplayCue_Weapon_Equip;
-
 	/** --- FIRING --- */
 
 	/** Damage per bullet */
@@ -98,6 +58,10 @@ public:
 	/** Damage multiplier for hits on the head */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Firing", meta = (ClampMin = "0"))
 	float HeadshotMultiplier = 2.f;
+
+	/** Poise damage per bullet: how much each hit wears down the target's poise toward a stagger (0 = bullets never stagger) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Firing", meta = (ClampMin = "0"))
+	float PoiseDamage = 0.f;
 
 	/** Shots per second */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Firing", meta = (ClampMin = "0.1"))
@@ -131,6 +95,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Firing", meta = (ClampMin = "0"))
 	float RecoilYaw = 0.15f;
 
+	/**
+	 *  Seconds after each shot in which the shooter is committed: no dodging or switching weapons yet (pressed meanwhile, they happen right after).
+	 *  At most the time between two shots, so it never slows the fire rate (see COMBAT.md)
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Firing", meta = (ClampMin = "0", ClampMax = "2", Units = "s"))
+	float ShotRecoveryTime = 0.15f;
+
 	/** --- AMMO --- */
 
 	/** Shots per magazine */
@@ -145,21 +116,5 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Ammo")
 	TObjectPtr<UZItemDefinition> AmmoItem;
 
-	/** --- UPGRADES AND MODS --- */
-
-	/** The mod slots it has, e.g. Weapon.ModSlot.Barrel; one mod fits in each */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Upgrades", meta = (Categories = "Weapon.ModSlot"))
-	FGameplayTagContainer ModSlots;
-
-	/** How many times it can be upgraded */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Upgrades", meta = (ClampMin = "0"))
-	int32 MaxUpgradeLevel = 5;
-
-	/** Extra damage per upgrade level: 0.1 = +10% each */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Upgrades", meta = (ClampMin = "0"))
-	float DamagePerUpgradeLevel = 0.1f;
-
-#if WITH_EDITOR
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
-#endif
+	virtual float GetBaseStat(EZWeaponStat Stat) const override;
 };

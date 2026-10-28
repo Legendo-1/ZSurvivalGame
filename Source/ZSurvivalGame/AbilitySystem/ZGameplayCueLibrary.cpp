@@ -8,6 +8,7 @@
 FZCharacterCues::FZCharacterCues()
 	: HitCue(ZGameplayTags::GameplayCue_Character_Hit)
 	, DeathCue(ZGameplayTags::GameplayCue_Character_Death)
+	, StaggerCue(ZGameplayTags::GameplayCue_Character_Stagger)
 {
 }
 

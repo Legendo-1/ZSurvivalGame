@@ -3,11 +3,11 @@
 #include "Weapons/ZWeaponStats.h"
 #include "Items/ZItemFragments.h"
 #include "Items/ZItemInstance.h"
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZWeaponDataBase.h"
 
 #define LOCTEXT_NAMESPACE "ZWeapons"
 
-float UZWeaponStatsLibrary::GetWeaponStat(const UZWeaponData* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat)
+float UZWeaponStatsLibrary::GetWeaponStat(const UZWeaponDataBase* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat)
 {
 	if (!WeaponData)
 	{
@@ -18,34 +18,20 @@ float UZWeaponStatsLibrary::GetWeaponStat(const UZWeaponData* WeaponData, const 
 	return Stat == EZWeaponStat::MagazineSize ? FMath::Max(FMath::RoundToFloat(Value), 1.f) : Value;
 }
 
-float UZWeaponStatsLibrary::GetItemStatScale(const UZWeaponData* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat)
+float UZWeaponStatsLibrary::GetItemStatScale(const UZWeaponDataBase* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat)
 {
 	// spread and recoil can go away completely; anything else gets small, but not 0 (e.g. a fire rate of 0 would never fire)
 	const float MinScale = Stat == EZWeaponStat::Spread || Stat == EZWeaponStat::Recoil ? 0.f : 0.05f;
 	return FMath::Max(1.f + GetItemStatBonus(WeaponData, Item, Stat), MinScale);
 }
 
-float UZWeaponStatsLibrary::GetBaseWeaponStat(const UZWeaponData* WeaponData, EZWeaponStat Stat)
+float UZWeaponStatsLibrary::GetBaseWeaponStat(const UZWeaponDataBase* WeaponData, EZWeaponStat Stat)
 {
-	if (!WeaponData)
-	{
-		return 0.f;
-	}
-
-	switch (Stat)
-	{
-	case EZWeaponStat::Damage:			return WeaponData->Damage;
-	case EZWeaponStat::FireRate:		return WeaponData->FireRate;
-	case EZWeaponStat::Spread:			return WeaponData->HipSpread;
-	case EZWeaponStat::Recoil:			return WeaponData->RecoilPitch;
-	case EZWeaponStat::Range:			return WeaponData->Range;
-	case EZWeaponStat::MagazineSize:	return WeaponData->MagazineSize;
-	case EZWeaponStat::ReloadTime:		return WeaponData->ReloadTime;
-	default:							return 0.f;
-	}
+	// each kind of weapon knows its own stats (a sword has no magazine)
+	return WeaponData ? WeaponData->GetBaseStat(Stat) : 0.f;
 }
 
-float UZWeaponStatsLibrary::GetItemStatBonus(const UZWeaponData* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat)
+float UZWeaponStatsLibrary::GetItemStatBonus(const UZWeaponDataBase* WeaponData, const UZItemInstance* Item, EZWeaponStat Stat)
 {
 	if (!Item)
 	{
@@ -90,6 +76,9 @@ FText UZWeaponStatsLibrary::GetStatName(EZWeaponStat Stat)
 	case EZWeaponStat::Range:			return LOCTEXT("StatRange", "Range");
 	case EZWeaponStat::MagazineSize:	return LOCTEXT("StatMagazineSize", "Magazine Size");
 	case EZWeaponStat::ReloadTime:		return LOCTEXT("StatReloadTime", "Reload Time");
+	case EZWeaponStat::PoiseDamage:		return LOCTEXT("StatPoiseDamage", "Poise Damage");
+	case EZWeaponStat::AttackSpeed:		return LOCTEXT("StatAttackSpeed", "Attack Speed");
+	case EZWeaponStat::StaminaCost:		return LOCTEXT("StatStaminaCost", "Stamina Cost");
 	default:							return FText::GetEmpty();
 	}
 }

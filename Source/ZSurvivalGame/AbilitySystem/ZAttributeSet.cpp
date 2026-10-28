@@ -4,6 +4,10 @@
 #include "AbilitySystemGlobals.h"
 #include "GameplayEffectExtension.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
+#include "ZSurvivalGame.h"
+#include "Combat/ZCombatSettings.h"
 #include "Items/ZEquipmentSettings.h"
 
 UZAttributeSet::UZAttributeSet()
@@ -22,6 +26,9 @@ UZAttributeSet::UZAttributeSet()
 	InitCraftingYieldChance(0.f);
 	InitTradeskillExperienceMultiplier(1.f);
 	InitArmor(0.f);
+	InitPoise(40.f);
+	InitMaxPoise(40.f);
+	InitIncomingPoiseDamage(0.f);
 }
 
 TArray<FGameplayAttribute> UZAttributeSet::GetTraitAttributes()
@@ -36,7 +43,8 @@ TArray<FGameplayAttribute> UZAttributeSet::GetTraitAttributes()
 		GetStaminaRegenMultiplierAttribute(),
 		GetCraftingYieldChanceAttribute(),
 		GetTradeskillExperienceMultiplierAttribute(),
-		GetArmorAttribute()
+		GetArmorAttribute(),
+		GetMaxPoiseAttribute()
 	};
 }
 
@@ -78,6 +86,10 @@ void UZAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME_CONDITION_NOTIFY(UZAttributeSet, CraftingYieldChance, COND_OwnerOnly, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UZAttributeSet, TradeskillExperienceMultiplier, COND_OwnerOnly, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UZAttributeSet, Armor, COND_OwnerOnly, REPNOTIFY_Always);
+
+	// only the player themselves needs their poise (e.g. for a HUD bar later)
+	DOREPLIFETIME_CONDITION_NOTIFY(UZAttributeSet, Poise, COND_OwnerOnly, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UZAttributeSet, MaxPoise, COND_OwnerOnly, REPNOTIFY_Always);
 }
 
 void UZAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
@@ -114,6 +126,10 @@ void UZAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, fl
 	{
 		SetStamina(NewValue);
 	}
+	else if (Attribute == GetMaxPoiseAttribute() && GetPoise() > NewValue)
+	{
+		SetPoise(NewValue);
+	}
 
 	if (Attribute == GetHealthAttribute() && OldValue > 0.f && NewValue <= 0.f)
 	{
@@ -137,6 +153,18 @@ void UZAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackD
 			CurrentDamageInstigator = Data.EffectSpec.GetContext().GetInstigator();
 			SetHealth(GetHealth() - DamageTaken);
 			CurrentDamageInstigator = nullptr;
+		}
+	}
+
+	// damage effects can carry poise damage too; it wears poise down toward a stagger
+	if (Data.EvaluatedData.Attribute == GetIncomingPoiseDamageAttribute())
+	{
+		const float PoiseDamage = GetIncomingPoiseDamage();
+		SetIncomingPoiseDamage(0.f);
+
+		if (PoiseDamage > 0.f && GetHealth() > 0.f)
+		{
+			ApplyPoiseDamage(PoiseDamage, Data.EffectSpec.GetContext().GetInstigator());
 		}
 	}
 
@@ -171,9 +199,13 @@ void UZAttributeSet::ClampAttribute(const FGameplayAttribute& Attribute, float& 
 	{
 		NewValue = FMath::Clamp(NewValue, 0.f, 1.f);
 	}
-	else if (Attribute == GetArmorAttribute())
+	else if (Attribute == GetArmorAttribute() || Attribute == GetMaxPoiseAttribute())
 	{
 		NewValue = FMath::Max(NewValue, 0.f);
+	}
+	else if (Attribute == GetPoiseAttribute())
+	{
+		NewValue = FMath::Clamp(NewValue, 0.f, GetMaxPoise());
 	}
 	else if (Attribute == GetDamageMultiplierAttribute() || Attribute == GetRecoilMultiplierAttribute() || Attribute == GetReloadSpeedMultiplierAttribute() || Attribute == GetDodgeDistanceMultiplierAttribute() || Attribute == GetStaminaRegenMultiplierAttribute() || Attribute == GetTradeskillExperienceMultiplierAttribute())
 	{
@@ -239,4 +271,40 @@ void UZAttributeSet::OnRep_TradeskillExperienceMultiplier(const FGameplayAttribu
 void UZAttributeSet::OnRep_Armor(const FGameplayAttributeData& OldValue)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UZAttributeSet, Armor, OldValue);
+}
+
+void UZAttributeSet::OnRep_Poise(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UZAttributeSet, Poise, OldValue);
+}
+
+void UZAttributeSet::OnRep_MaxPoise(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UZAttributeSet, MaxPoise, OldValue);
+}
+
+void UZAttributeSet::ApplyPoiseDamage(float PoiseDamage, AActor* Instigator)
+{
+	SetPoise(GetPoise() - PoiseDamage);
+
+	// poise comes back all at once after a while without poise damage: steady pressure staggers, single hits now and then don't
+	if (const UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(PoiseRecoveryTimer, FTimerDelegate::CreateUObject(this, &UZAttributeSet::RecoverPoise), FMath::Max(UZCombatSettings::Get()->PoiseRecoveryDelay, 0.01f), false);
+	}
+
+	if (GetPoise() > 0.f)
+	{
+		return;
+	}
+
+	// broken: full again for next time (the stagger itself is up to the character)
+	UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' poise broken by '%s'"), *GetNameSafe(GetOwningActor()), *GetNameSafe(Instigator));
+	SetPoise(GetMaxPoise());
+	OnPoiseBroken.Broadcast(Instigator);
+}
+
+void UZAttributeSet::RecoverPoise()
+{
+	SetPoise(GetMaxPoise());
 }

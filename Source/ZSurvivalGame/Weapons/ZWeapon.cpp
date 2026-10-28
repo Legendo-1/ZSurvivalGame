@@ -13,7 +13,8 @@
 #include "AbilitySystem/ZGameplayTags.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemInstance.h"
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZMeleeWeaponData.h"
+#include "Weapons/ZRangedWeaponData.h"
 #include "Weapons/ZWeaponStats.h"
 
 AZWeapon::AZWeapon()
@@ -28,7 +29,7 @@ AZWeapon::AZWeapon()
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 
-	// the meshes are only for looks; shots trace from the camera
+	// the meshes are only for looks (shots trace from the camera); a melee weapon's hits are found along its blade sockets
 	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMesh"));
 	SkeletalMeshComponent->SetupAttachment(Root);
 	SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -49,7 +50,7 @@ void AZWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetime
 	DOREPLIFETIME_CONDITION(AZWeapon, ItemInstance, COND_OwnerOnly);
 }
 
-void AZWeapon::InitWeapon(UZWeaponData* InWeaponData, UZItemInstance* InItemInstance)
+void AZWeapon::InitWeapon(UZWeaponDataBase* InWeaponData, UZItemInstance* InItemInstance)
 {
 	WeaponData = InWeaponData;
 	ItemInstance = InItemInstance;
@@ -61,16 +62,39 @@ void AZWeapon::InitWeapon(UZWeaponData* InWeaponData, UZItemInstance* InItemInst
 		OwnerInventory->OnInventoryChanged.AddUniqueDynamic(this, &AZWeapon::OnInventoryChanged);
 	}
 
-	// the item remembers its magazine between being put away and taken out again (a mod may have made the magazine smaller since)
-	Ammo = ItemInstance ? ItemInstance->GetStatTagStackCount(ZGameplayTags::Item_Stat_MagazineAmmo) : GetMagazineSize();
-	FitAmmoToMagazine();
+	// a gun's item remembers its magazine between being put away and taken out again (a mod may have made the magazine smaller since)
+	if (GetRangedData())
+	{
+		Ammo = ItemInstance ? ItemInstance->GetStatTagStackCount(ZGameplayTags::Item_Stat_MagazineAmmo) : GetMagazineSize();
+		FitAmmoToMagazine();
+	}
 
 	ApplyWeaponData();
 }
 
+const UZRangedWeaponData* AZWeapon::GetRangedData() const
+{
+	return Cast<UZRangedWeaponData>(WeaponData);
+}
+
+const UZMeleeWeaponData* AZWeapon::GetMeleeData() const
+{
+	return Cast<UZMeleeWeaponData>(WeaponData);
+}
+
+UMeshComponent* AZWeapon::GetWeaponMesh() const
+{
+	if (SkeletalMeshComponent->GetSkeletalMeshAsset())
+	{
+		return SkeletalMeshComponent;
+	}
+
+	return StaticMeshComponent->GetStaticMesh() ? StaticMeshComponent : nullptr;
+}
+
 void AZWeapon::SaveAmmoToItem()
 {
-	if (HasAuthority() && ItemInstance)
+	if (HasAuthority() && ItemInstance && GetRangedData())
 	{
 		ItemInstance->SetStatTagStack(ZGameplayTags::Item_Stat_MagazineAmmo, Ammo);
 	}
@@ -78,17 +102,19 @@ void AZWeapon::SaveAmmoToItem()
 
 UZItemDefinition* AZWeapon::GetAmmoItem() const
 {
-	return WeaponData ? WeaponData->AmmoItem.Get() : nullptr;
+	const UZRangedWeaponData* RangedData = GetRangedData();
+	return RangedData ? RangedData->AmmoItem.Get() : nullptr;
 }
 
 int32 AZWeapon::GetMagazineSize() const
 {
-	return FMath::RoundToInt32(GetItemStat(EZWeaponStat::MagazineSize));
+	return GetRangedData() ? FMath::RoundToInt32(GetItemStat(EZWeaponStat::MagazineSize)) : 0;
 }
 
 bool AZWeapon::IsAutomatic() const
 {
-	return WeaponData && WeaponData->bAutomatic;
+	const UZRangedWeaponData* RangedData = GetRangedData();
+	return RangedData && RangedData->bAutomatic;
 }
 
 float AZWeapon::GetDamage() const
@@ -96,32 +122,57 @@ float AZWeapon::GetDamage() const
 	return GetItemStat(EZWeaponStat::Damage) * GetOwnerAttribute(UZAttributeSet::GetDamageMultiplierAttribute());
 }
 
+float AZWeapon::GetPoiseDamage() const
+{
+	return GetItemStat(EZWeaponStat::PoiseDamage);
+}
+
+float AZWeapon::GetAttackSpeed() const
+{
+	// mods can change it, but never stop the attacks
+	return IsMelee() ? FMath::Max(GetItemStat(EZWeaponStat::AttackSpeed), 0.1f) : 1.f;
+}
+
+float AZWeapon::GetStaminaCostMultiplier() const
+{
+	return IsMelee() ? GetItemStat(EZWeaponStat::StaminaCost) : 1.f;
+}
+
 float AZWeapon::GetFireRate() const
 {
-	return WeaponData ? GetItemStat(EZWeaponStat::FireRate) : 1.f;
+	return GetRangedData() ? GetItemStat(EZWeaponStat::FireRate) : 1.f;
+}
+
+float AZWeapon::GetShotRecoveryTime() const
+{
+	// never longer than the time between shots, so it doesn't slow the fire rate down
+	const UZRangedWeaponData* RangedData = GetRangedData();
+	return RangedData ? FMath::Min(RangedData->ShotRecoveryTime, 1.f / FMath::Max(GetFireRate(), 0.1f)) : 0.f;
 }
 
 float AZWeapon::GetSpread(bool bAiming) const
 {
 	// mods change hip and aimed spread alike
-	if (!WeaponData)
+	const UZRangedWeaponData* RangedData = GetRangedData();
+	if (!RangedData)
 	{
 		return 0.f;
 	}
 
-	return (bAiming ? WeaponData->AimSpread : WeaponData->HipSpread) * UZWeaponStatsLibrary::GetItemStatScale(WeaponData, ItemInstance, EZWeaponStat::Spread);
+	return (bAiming ? RangedData->AimSpread : RangedData->HipSpread) * UZWeaponStatsLibrary::GetItemStatScale(WeaponData, ItemInstance, EZWeaponStat::Spread);
 }
 
 FVector2D AZWeapon::GetRecoil() const
 {
-	if (!WeaponData)
+	const UZRangedWeaponData* RangedData = GetRangedData();
+	if (!RangedData)
 	{
 		return FVector2D::ZeroVector;
 	}
 
 	// mods and the holder's traits change the kick up and sideways alike
 	const float Scale = UZWeaponStatsLibrary::GetItemStatScale(WeaponData, ItemInstance, EZWeaponStat::Recoil) * GetOwnerAttribute(UZAttributeSet::GetRecoilMultiplierAttribute());
-	return FVector2D(WeaponData->RecoilPitch, WeaponData->RecoilYaw) * Scale;
+	return FVector2D(RangedData->RecoilPitch, RangedData->RecoilYaw) * Scale;
 }
 
 float AZWeapon::GetRange() const
@@ -148,7 +199,8 @@ float AZWeapon::GetOwnerAttribute(const FGameplayAttribute& Attribute, float Def
 
 FVector AZWeapon::GetMuzzleLocation() const
 {
-	const FName MuzzleSocket = WeaponData ? WeaponData->MuzzleSocket : NAME_None;
+	const UZRangedWeaponData* RangedData = GetRangedData();
+	const FName MuzzleSocket = RangedData ? RangedData->MuzzleSocket : NAME_None;
 
 	if (SkeletalMeshComponent->DoesSocketExist(MuzzleSocket))
 	{
@@ -165,7 +217,7 @@ FVector AZWeapon::GetMuzzleLocation() const
 
 bool AZWeapon::IsReadyToFire(float Tolerance) const
 {
-	if (!WeaponData)
+	if (!GetRangedData())
 	{
 		return false;
 	}
@@ -196,7 +248,7 @@ void AZWeapon::AddAmmo(int32 Rounds)
 void AZWeapon::FitAmmoToMagazine()
 {
 	const int32 Extra = Ammo - GetMagazineSize();
-	if (!HasAuthority() || Extra <= 0)
+	if (!HasAuthority() || !GetRangedData() || Extra <= 0)
 	{
 		return;
 	}

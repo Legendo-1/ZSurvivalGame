@@ -23,6 +23,11 @@ public:
 	UFUNCTION(Exec)
 	void ZSpawnZombies(int32 Count = 1, float Distance = 800.f);
 
+	/** Spawns a zombie that stands still (no AI), Distance cm in front of your character and facing you: something to practice attacks and staggers on, e.g. ZSpawnDummy 120;
+	 *  ZSpawnDummy 120 all puts one in front of every player (host) */
+	UFUNCTION(Exec)
+	void ZSpawnDummy(float Distance = 120.f, const FString& Who = TEXT(""));
+
 	/** Kills every AI character in the level */
 	UFUNCTION(Exec)
 	void ZKillEnemies();
@@ -58,6 +63,16 @@ public:
 	/** Writes the stats of the weapon in your hands to the Output Log: its upgrade level and mods, and what they and your traits make of it (as this window sees it) */
 	UFUNCTION(Exec)
 	void ZWeaponStats();
+
+	/** --- COMBAT --- */
+
+	/** Staggers you as if your poise broke; ZStagger players staggers every player, ZStagger enemies every AI character (host) */
+	UFUNCTION(Exec)
+	void ZStagger(const FString& Who = TEXT(""));
+
+	/** Writes your combat state to the Output Log: the attack, the input buffer, busy or staggered, open windows, poise and stamina (as this window sees it) */
+	UFUNCTION(Exec)
+	void ZCombat();
 
 	/** --- EQUIPMENT --- */
 

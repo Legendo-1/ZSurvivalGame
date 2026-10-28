@@ -20,6 +20,8 @@ class UZCharacterMovementComponent : public UCharacterMovementComponent
 
 public:
 
+	UZCharacterMovementComponent();
+
 	/** Set by the Sprint ability. On the server the client's moves overwrite it */
 	void SetWantsToSprint(bool bNewWantsToSprint) { bWantsToSprint = bNewWantsToSprint; }
 	bool WantsToSprint() const { return bWantsToSprint; }
@@ -49,10 +51,19 @@ protected:
 	/** Turns the character toward the camera or toward the movement, before each move */
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 
+	/** The Attack Turn Rate during an attack's windup, else the normal rotation rate */
+	virtual FRotator GetDeltaRotation(float DeltaTime) const override;
+
 	/** Replaying old moves after a server correction overwrites the states; this puts the current ones back */
 	virtual bool ClientUpdatePositionAfterServerUpdate() override;
 
 private:
+
+	/** While Still (attacks), animation root motion only moves the character; its turning is dropped, so the attack goes where the camera looks */
+	FTransform ProcessRootMotion(const FTransform& LocalRootMotion, UCharacterMovementComponent* Movement, float DeltaSeconds) const;
+
+	/** True while an attack is in its windup: it turns toward the camera at the Attack Turn Rate */
+	bool bAttackTurning = false;
 
 	bool bWantsToSprint = false;
 	bool bWantsToAim = false;

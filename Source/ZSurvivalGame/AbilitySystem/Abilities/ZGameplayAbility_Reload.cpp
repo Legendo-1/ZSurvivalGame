@@ -10,13 +10,16 @@
 #include "ZSurvivalGameCharacter.h"
 #include "Items/ZInventoryComponent.h"
 #include "Weapons/ZWeapon.h"
-#include "Weapons/ZWeaponData.h"
+#include "Weapons/ZRangedWeaponData.h"
 
 UZGameplayAbility_Reload::UZGameplayAbility_Reload()
 {
 	InputID = EZAbilityInputID::Reload;
 	SetAssetTags(FGameplayTagContainer(ZGameplayTags::Ability_Reload.GetTag()));
 	ActivationOwnedTags.AddTag(ZGameplayTags::State_Reloading);
+
+	// not during another action (a shot's recovery, a dodge): it waits in the input buffer. It isn't an action itself, so a dodge can still cut it short
+	bWaitsWhileBusy = true;
 }
 
 bool UZGameplayAbility_Reload::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
@@ -35,7 +38,7 @@ void UZGameplayAbility_Reload::ActivateAbility(const FGameplayAbilitySpecHandle 
 {
 	AZSurvivalGameCharacter* Character = GetZCharacter(ActorInfo);
 	AZWeapon* Weapon = Character ? Character->GetEquippedWeapon() : nullptr;
-	const UZWeaponData* WeaponData = Weapon ? Weapon->GetWeaponData() : nullptr;
+	const UZRangedWeaponData* WeaponData = Weapon ? Weapon->GetRangedData() : nullptr;
 	if (!WeaponData || !CommitAbility(Handle, ActorInfo, ActivationInfo))
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);

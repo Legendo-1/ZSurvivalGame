@@ -68,10 +68,12 @@ Built around a modular C++ system rather than separate class files per gun:
 * \[x\] Rifle aim strafe animations (2D BlendSpace for walking sideways/backwards when aiming) and aim offset.  
 * \[x\] Sound and effect events (GameplayCues) for shots, impacts, reloads, taking out a weapon, hits, deaths, level-ups, pickups, used items and crafting, set per weapon, character, item and recipe; UI sounds; a take-out animation per weapon (see AUDIO.md).  
 * \[x\] Footsteps that match the surface (10 surfaces from Physical Materials) and the gait (walk, jog, sprint), with start, stop, jump and landing sounds, for players and enemies (see AUDIO.md).  
-* \[x\] Fire, reload and take-out animations on the upper body (the legs keep walking), and sounds for the shots (the pistol has its own), taking out the weapons and reloading (see ANIMATION.md and AUDIO.md).  
+* \[x\] Fire, reload and take-out animations on the upper body (the legs keep walking), and sounds for the shots (the pistol has its own), taking out the weapons and reloading (see ANIMATION.md and AUDIO.md).
+* \[x\] Souls-like melee combat: melee weapons (a machete for now) with light and heavy combos from a shared moveset, hitboxes that follow the blade during the swing, poise and staggers for players and enemies, invulnerable dodge frames, and locked-in actions with an input buffer for attacks, dodges, shots, reloads and weapon switches (see COMBAT.md).  
 * \[ \] **Open Phase 1 Items:**  
   * Pistol aim strafe animations and aim offset.  
-  * Weapon meshes, and the remaining sounds and effects (impacts, hits, deaths, pickups, crafting).
+  * Weapon meshes, and the remaining sounds and effects (impacts, melee hits, staggers, deaths, pickups, crafting).
+  * One-handed melee animations without a shield (attacks and walking use a sword and shield pack for now, and most walking directions are missing), and a dodge roll animation.
 
 ### **Phase 2: Item & Mod Data Architecture (IN PROGRESS)**
 
@@ -83,7 +85,7 @@ Built around a modular C++ system rather than separate class files per gun:
 * \[x\] Equipment, Remnant style: one short gun, one long gun and one melee weapon (keys 1, 2, 3), head, torso and leg armor, a necklace and four rings, in an equipment window next to the inventory; armor lowers damage, and armor and jewelry change stats like traits; saved with the character (see ITEMS.md).  
 * \[x\] Saving, Remnant style: each player's character (level, traits, items with their stats and mods, tradeskills, recipes found) on their own PC, taken into any game and checked by the host; the world's progress in the host's save; save slots ready for a menu; crash-safe files with a backup (see SAVING.md).  
 * \[ \] Mods that change fire modes and damage types (e.g. an Acid Core from an elite), and mods you can see on the weapon.  
-* \[ \] Melee weapons for the melee slot, armor you can see on the character, and armor weight (light, medium and heavy dodges).
+* \[ \] More melee weapons (knives, axes, two-handed weapons), armor you can see on the character, and armor weight (light, medium and heavy dodges).
 
 ### **Phase 3: Loot, Harvest, & Crafting Loops**
 

@@ -2,7 +2,7 @@
 
 How the character's animations are connected, from the mouse button to the pose you see.
 
-**Last updated:** 2026-10-27 (fire, reload and take-out montages on the upper body)
+**Last updated:** 2026-10-28 (melee attacks and staggers: whole-body montages; walking with a melee weapon)
 
 The chain has three layers, each passing data to the next.
 
@@ -13,7 +13,8 @@ The character knows **what the player is doing**. It knows nothing about animati
 | Function | Answers |
 |---|---|
 | `IsAiming()` | Is the right mouse button held? |
-| `GetWeaponType()` | Unarmed, Pistol or Rifle? |
+| `GetWeaponType()` | Unarmed, Pistol, Rifle, Melee One Handed or Melee Two Handed? |
+| `IsHoldingMeleeWeapon()` | Is a melee weapon out? |
 | `GetAimOffset()` | How far the camera points up/down compared to the character |
 
 ## 2. ABP_Manny's Event Graph: collects the data
@@ -85,9 +86,16 @@ So the legs keep walking (and the feet keep their blend space) while the arms re
 6. Connect the **Layered blend per bone** into the old **Slot** node (DefaultSlot, kept for whole-body montages like a dodge roll later), so the chain is: Layered blend per bone → Slot (DefaultSlot) → AO_Rifle → Control Rig → Output Pose. **Compile** and **Save**.
 7. **In each upper-body montage** (reload, take out, fire): open it → in the montage panel, the slot on the left says `DefaultGroup.DefaultSlot` → click it → pick `DefaultGroup.UpperBody` → **Save**.
 
-Whole-body montages (a dodge roll, a death animation) keep `DefaultGroup.DefaultSlot`.
+Whole-body montages (a dodge roll, a death animation, **melee attacks**, **staggers**) keep `DefaultGroup.DefaultSlot`.
 
 **A take-out (equip) montage must stay in place:** in its animation's **Asset Details**, **Enable Root Motion** stays off. One that moves the character isn't played (AUDIO.md explains why).
+
+## Melee weapons
+
+- **Attacks** are whole-body montages (DefaultSlot) with three markers in them: **Weapon Hitbox**, **Combo Window** and **Dodge Window**. COMBAT.md → "Making an attack animation" has the steps. An attack may move the character (Enable Root Motion in its animation): it plays predicted, like the dodge.
+- **Staggers:** the character's **Stagger Montage** (Class Defaults → **Combat**). A player's must stay in place (root motion off), since the host starts it before your machine knows.
+- **Walking with a melee weapon:** the weapon types **Melee One Handed** and **Melee Two Handed** need their own pins on the **Blend Poses by weapon type** nodes in the Idle and Walk/Run states (right-click the node → **Add pin**, then connect a pose or blend space). Until then they use the node's **Default Pose**.
+- **Holding the weapon:** the placeholder attacks are unarmed punches, which don't move the `weapon_r` bone, so the machete is held by `hand_r` (its **Attach Socket**). Melee animations from a pack usually move `weapon_r`: then use that.
 
 ## Footsteps
 

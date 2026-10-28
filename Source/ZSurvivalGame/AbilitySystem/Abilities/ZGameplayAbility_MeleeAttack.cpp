@@ -15,6 +15,9 @@ UZGameplayAbility_MeleeAttack::UZGameplayAbility_MeleeAttack()
 
 	SetAssetTags(FGameplayTagContainer(ZGameplayTags::Ability_MeleeAttack.GetTag()));
 	ActivationOwnedTags.AddTag(ZGameplayTags::State_Attacking);
+
+	// an action: the character is busy while it swings, and a stagger cuts it short
+	SetupAsAction(FGameplayTag());
 }
 
 void UZGameplayAbility_MeleeAttack::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -59,7 +62,7 @@ void UZGameplayAbility_MeleeAttack::OnHitTime()
 			if (HitActor && !AlreadyHit.Contains(HitActor))
 			{
 				AlreadyHit.Add(HitActor);
-				UZCombatLibrary::ApplyDamage(Attacker, HitActor, Attacker->GetMeleeDamage(), Hit);
+				UZCombatLibrary::ApplyDamage(Attacker, HitActor, Attacker->GetMeleeDamage(), Hit, Attacker->GetMeleePoiseDamage());
 			}
 		}
 	}

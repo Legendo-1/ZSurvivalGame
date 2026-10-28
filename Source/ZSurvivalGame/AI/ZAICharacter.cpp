@@ -14,6 +14,7 @@
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayTags.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_MeleeAttack.h"
+#include "AbilitySystem/Abilities/ZGameplayAbility_Stagger.h"
 #include "Audio/ZFootstepComponent.h"
 #include "Items/ZLootTable.h"
 #include "Items/ZPickup.h"
@@ -54,6 +55,7 @@ AZAICharacter::AZAICharacter()
 	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
 
 	AttackAbility = UZGameplayAbility_MeleeAttack::StaticClass();
+	StaggerAbility = UZGameplayAbility_Stagger::StaticClass();
 }
 
 void AZAICharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -84,14 +86,22 @@ void AZAICharacter::BeginPlay()
 		return;
 	}
 
-	// health from this enemy type (max first, so the health isn't capped at the old max)
+	// health and poise from this enemy type (max first, so the value isn't capped at the old max)
 	AbilitySystemComponent->SetNumericAttributeBase(UZAttributeSet::GetMaxHealthAttribute(), MaxHealth);
 	AbilitySystemComponent->SetNumericAttributeBase(UZAttributeSet::GetHealthAttribute(), MaxHealth);
+	AbilitySystemComponent->SetNumericAttributeBase(UZAttributeSet::GetMaxPoiseAttribute(), MaxPoise);
+	AbilitySystemComponent->SetNumericAttributeBase(UZAttributeSet::GetPoiseAttribute(), MaxPoise);
 	AttributeSet->OnOutOfHealth.AddUObject(this, &AZAICharacter::HandleOutOfHealth);
+	AttributeSet->OnPoiseBroken.AddUObject(this, &AZAICharacter::HandlePoiseBroken);
 
 	if (AttackAbility)
 	{
 		AbilitySystemComponent->GiveAbility(FGameplayAbilitySpec(AttackAbility, 1, INDEX_NONE, this));
+	}
+
+	if (StaggerAbility)
+	{
+		AbilitySystemComponent->GiveAbility(FGameplayAbilitySpec(StaggerAbility, 1, INDEX_NONE, this));
 	}
 
 	for (const TSubclassOf<UGameplayAbility>& AbilityClass : DefaultAbilities)
@@ -193,6 +203,14 @@ void AZAICharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	// stop the AI and remove the body after a while
 	DetachFromControllerPendingDestroy();
 	SetLifeSpan(DeadBodyLifeSpan);
+}
+
+void AZAICharacter::HandlePoiseBroken(AActor* StaggerInstigator)
+{
+	if (!bIsDead)
+	{
+		UZCombatLibrary::Stagger(this, StaggerInstigator);
+	}
 }
 
 void AZAICharacter::PlayDeath()

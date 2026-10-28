@@ -1,8 +1,8 @@
 # Multiplayer & abilities
 
-How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
+How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Melee combat, poise and staggers: COMBAT.md. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
 
-**Last updated:** 2026-10-28 (equipment: weapon slots with keys 1/2/3, armor and jewelry)
+**Last updated:** 2026-10-28 (melee attacks, staggers, locked-in actions and the input buffer)
 
 ## The basic idea
 
@@ -17,7 +17,9 @@ How the player's actions, weapons, enemies, health and death work in multiplayer
 | Ability system, health, stamina, stats, inventory, equipment, crafting, tradeskills, level and traits | **PlayerState** (`AZSurvivalGamePlayerState`) | Every player has one on every machine, and it survives respawns |
 | Body, camera, input, the weapon in the hands | **Character** (`AZSurvivalGameCharacter`, BP_ThirdPersonCharacter) | The part you control and see |
 | Sprint, aim and speed limit states | **Movement component** (`UZCharacterMovementComponent`) | Sent to the server with every move, so the server moves you at the same speed |
-| Weapon stats | **Weapon Data Assets** (`UZWeaponData`: DA_Pistol, DA_Rifle) | One asset per weapon, easy to tune |
+| Weapon stats | **Weapon Data Assets**: guns `UZRangedWeaponData` (DA_Pistol, DA_Rifle), melee weapons `UZMeleeWeaponData` (DA_Machete) with a **moveset** of attacks (`UZMeleeMoveset`) | One asset per weapon, easy to tune |
+| The input buffer and the combo | **Combat component** on the character (`UZCombatComponent`) | Presses wait there on your machine; the server uses it to check combos |
+| What a melee swing hits | **Melee trace component** on the character (`UZMeleeTraceComponent`) | Sweeps the blade on the machine that finds the hits: your own (players) or the server (enemies) |
 | A weapon in the hands | **Weapon actor** (`AZWeapon`) | Spawned by the server when a weapon item is equipped, attached to the hand on every machine; the server keeps its ammo |
 | A crafting station | **Station actor** (`AZCraftingStation`, BP_Workbench) | Placed in a level; recipes that need it only work nearby (the server checks the distance) |
 | Enemies' health and attacks | **The enemy itself** (`AZAICharacter`) | Enemies have no PlayerState, so their ability system is on the character |
@@ -54,22 +56,40 @@ The host does all of this on its own machine.
 
 Shots go through the capsule and hit the character's mesh, so a hit knows the bone. Hits on a bone with "head" in its name do **2× damage** (Headshot Multiplier in the weapon data).
 
+## Melee attacks and locked-in actions
+
+COMBAT.md explains the rules for players. In multiplayer:
+
+1. **Left mouse** with a melee weapon → `DoFireStart` → the combat component. If you're busy (mid-swing, mid-dodge, a shot's recovery, staggered), the press waits in the input buffer; otherwise it starts the attack now.
+2. **The attack's number in the combo** (first, second, ...) is picked by your machine (from the Combo Window it sees) and sent with the attack as a gameplay event (`Event.Attack.Light` / `Heavy`).
+3. **Your game runs the attack right away** (predicted, like the dodge): the animation, its root motion, and the hitboxes. **The server runs it too**, a moment later. The server only accepts a first attack or the follow-up of the attack before (`Combo Timing Tolerance`), so nobody can skip to the strongest one.
+4. **Your machine finds the hits** (the blade during the Weapon Hitbox notify) and sends them to the server, which checks them: close enough (the weapon's Max Reach plus **Melee Reach Tolerance**) and not hit more often than the attack has hitboxes. Then it deals the damage and poise damage.
+5. **The server decides staggers** (poise is only on the server): it starts the stagger, cuts short whatever you were doing, and tells your machine.
+6. **The server is lenient about timing:** it trusts your machine about when a window was open (your animation runs a moment ahead of the server's). It only refuses actions while you're staggered or dead.
+
+Enemies run everything on the server.
+
 ## The abilities
 
 | Ability | What it does | Blocked by | Cost / notes |
 |---|---|---|---|
 | **Sprint** (`UZGameplayAbility_Sprint`) | Sprint speed while the key is held | Aiming, firing, speed limit, 10 stamina or less | Stamina per second, drained by the server |
 | **Aim** (`UZGameplayAbility_Aim`) | Aim walk speed, faces the camera, camera zoom, less spread, while the right mouse button is held | | Cancels sprint |
-| **Dodge** (`UZGameplayAbility_Dodge`) | Quick dash in the movement direction (forward when standing still) | Less stamina than the cost | 25 stamina; cancels a reload |
-| **Fire** (`UZGameplayAbility_Fire`) | One shot of the weapon in the hands (left mouse / right trigger) | Reloading, dodging, empty magazine, fire rate | 1 round; cancels sprint |
-| **Reload** (`UZGameplayAbility_Reload`) | Loads the magazine from the inventory's ammo after the weapon's reload time (R / gamepad left face button) | Full magazine, no ammo in the inventory | Jog speed at most meanwhile |
-| **Melee attack** (`UZGameplayAbility_MeleeAttack`) | Enemies only: attack animation, then damage to everyone hostile in front | | Server only |
+| **Dodge** (`UZGameplayAbility_Dodge`) | Quick dash in the movement direction (forward when standing still); invulnerable for the first 0.2 s | Less stamina than the cost; busy (except in a Dodge Window) | 25 stamina; cancels a reload |
+| **Fire** (`UZGameplayAbility_Fire`) | One shot of the gun in the hands (left mouse / right trigger); busy for the Shot Recovery Time after it | Reloading, dodging, empty magazine, fire rate, busy | 1 round; cancels sprint |
+| **Reload** (`UZGameplayAbility_Reload`) | Loads the magazine from the inventory's ammo after the weapon's reload time (R / gamepad left face button) | Full magazine, no ammo in the inventory, busy | Jog speed at most meanwhile |
+| **Light / Heavy attack** (`UZGameplayAbility_LightAttack`, `_HeavyAttack`) | One attack of the melee weapon's light or heavy combo: its animation, and damage where its hitboxes touch | No melee weapon, in the air, no stamina left, busy (except in a Combo Window) | The attack's stamina; no walking meanwhile; cancels sprint and aim |
+| **Stagger** (`UZGameplayAbility_Stagger`) | Players and enemies: started by the server when poise breaks; the stagger animation, no actions meanwhile | | Cancels every other ability |
+| **Melee attack** (`UZGameplayAbility_MeleeAttack`) | Enemies only: attack animation, then damage and poise damage to everyone hostile in front | Busy, staggered | Server only |
 
-Every ability is blocked while dead.
+Every ability is blocked while dead or staggered.
 
 **Tags** are labels the abilities use to find and block each other:
-- `Ability.Sprint`, `Ability.Aim`, `Ability.Dodge`, `Ability.Fire`, `Ability.Reload`, `Ability.MeleeAttack`: on each ability, e.g. Aim cancels anything tagged `Ability.Sprint`.
+- `Ability.Sprint`, `Ability.Aim`, `Ability.Dodge`, `Ability.Fire`, `Ability.Reload`, `Ability.Attack.Light`, `Ability.Attack.Heavy`, `Ability.Stagger`, `Ability.MeleeAttack`: on each ability, e.g. Aim cancels anything tagged `Ability.Sprint`.
+- `Ability.Type.Action`: on the actions (attacks, dodge, fire). An action started in another one's window cuts that one short.
 - `State.Sprinting`, `State.Aiming`, `State.Dodging`, `State.Firing`, `State.Reloading`, `State.Attacking`: on the character while that ability runs, e.g. Fire is blocked by `State.Reloading`.
+- `State.Busy`: while an action runs. Actions (and the reload) wait until it's gone, unless the animation is in their window (`Window.Combo`, `Window.Dodge`).
+- `State.Staggered`: during a stagger. It blocks every ability. `State.Invulnerable`: the dodge's first moments; damage passes through.
 - `State.Dead`: on a character when its health reaches 0. It blocks every ability.
 
 ## Weapons
@@ -83,12 +103,15 @@ Every ability is blocked while dead.
 - **Upgrades and mods** (CRAFTING.md) change a weapon item's stats. The weapon in the hands works its stats out from its data, its item (upgrade level and mods) and the holder's traits. It sends its item to its owner only (`COND_OwnerOnly`), so the owner's machine predicts spread, recoil, the magazine and reload time with the same numbers as the server.
 - **When a magazine gets smaller** (e.g. an Extended Magazine comes off while the weapon is in the hands), the server moves the extra rounds back into the reserve ammo.
 
-**A new weapon:** right-click in `Content/Weapons` → **Miscellaneous → Data Asset** → **ZWeaponData** and fill it in. Then make an item with a **Weapon** fragment pointing to it (ITEMS.md → How to add things). Its **Weapon Type** decides which animation set it uses, its **Equipment Slot** which slot (and key) it goes in.
+- **Melee weapons** (`ID_Machete`, DA_Machete) are weapons in the hands like the guns, without ammo. Their attacks are in their moveset (COMBAT.md).
+
+**A new gun:** right-click in `Content/Weapons` → **Miscellaneous → Data Asset** → **ZRangedWeaponData** and fill it in. Then make an item with a **Weapon** fragment pointing to it (ITEMS.md → How to add things). Its **Weapon Type** decides which animation set it uses, its **Equipment Slot** which slot (and key) it goes in. **A new melee weapon:** COMBAT.md → Making a melee weapon.
 
 ## Enemies
 
 - **`AZAICharacter`** is the base class for every AI character (zombies, other monsters, human NPCs). Each one has its own health, team, AI ranges and melee numbers (Class Defaults: **Survival|Stats**, **AI**, **AI|Melee**).
-- **`AZZombieCharacter`** is the first enemy type: the Quinn mannequin with the combat template's animations and punch, until zombie models exist. 60 health, slower than a jogging player, 15 damage per hit.
+- **`AZZombieCharacter`** is the first enemy type: the Quinn mannequin with the combat template's animations and punch, until zombie models exist. 60 health, slower than a jogging player, 15 damage and 15 poise damage per hit, 30 poise (two machete hits stagger it).
+- **Enemies stagger** when their poise breaks: their attack is cut short and the AI waits it out. **Max Poise** is under **Survival|Stats**, the **Stagger Montage** under **AI|Stagger**, the poise damage of its hits under **AI|Melee**.
 - **The AI** (`AZAIController`, server only) goes for the closest living player within its aggro range, walks there and attacks when close. With a **Nav Mesh** in the level it walks around obstacles; without one it walks straight at you. It moves by accelerating, like a player's input (**Use Acceleration For Paths**, set in `AZAICharacter`), so the animation Blueprint plays its walk instead of sliding it along in the standing pose.
 - **`AZEnemySpawner`**: place it in a level to keep spawning enemies around it (Max Alive, Spawn Interval, Spawn Radius, Total To Spawn, Enemy Class).
 
@@ -101,6 +124,7 @@ Every ability is blocked while dead.
 - **All damage goes through `UZCombatLibrary::ApplyDamage`**, which Blueprints can use too (e.g. traps). It checks the teams, lowers the target's health through a GameplayEffect on **IncomingDamage**, and plays the hit effect.
 - **Health and stamina** are attributes in `UZAttributeSet`: Health, MaxHealth, Stamina, MaxStamina. **Only the server changes them.** Health is sent to everyone, stamina only to its own player (for the HUD).
 - **Armor** (an attribute too, mostly from worn armor) lowers all damage on the server: damage × 100 / (100 + Armor). Enemies have 0, so later armored bosses only need a value.
+- **Poise** (Poise, MaxPoise) is worn down by hits that carry poise damage (`ApplyDamage`'s Poise Damage); at 0 the character staggers (COMBAT.md). A character in its dodge's invulnerable moment (`State.Invulnerable`) takes no damage and no poise damage.
 - **A player at 0 health** falls as a ragdoll and puts the weapon away; the items stay in the inventory. After **5 seconds** they respawn at a Player Start with full health and stamina. The body disappears 10 seconds later.
 - **An enemy at 0 health** falls as a ragdoll, stops its AI, drops its loot (its **Loot Table**) and disappears after 10 seconds. Every player gets its **Experience Reward** and **Trait Point Reward** (for bosses), see PROGRESSION.md. Its Blueprint can react with the **On Died** event, which also says who killed it (e.g. to count kills later).
 - **Player Starts:** each level needs at least one; one per player is best. If they're all crowded, the character is moved to a free spot nearby instead of failing to spawn.
@@ -135,7 +159,7 @@ The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are expl
 | Weapon type and the weapon in the hands | `CurrentWeaponType` and `EquippedWeapon`, set by the server (weapon keys, equipping) |
 | Armor and jewelry | Nothing yet: only the owner gets what's equipped (armor isn't visible on the character yet) |
 | Shots, impacts, hits, deaths, reloads, taking out weapons, crafting, ... | GameplayCues, sent by the server (AUDIO.md) |
-| Attack, fire and reload animations | The ability system plays them for everyone |
+| Attack, fire, reload, dodge and stagger animations | The ability system plays them for everyone |
 | The animation for taking out a weapon | It comes with the equip GameplayCue |
 | Footsteps | Nothing is sent: every machine plays them from the animations and movement it already has (AUDIO.md → Footsteps) |
 | Death (ragdoll) | `bIsDead`, sent by the server |
@@ -161,7 +185,10 @@ The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are expl
 | Max health and max stamina of players (100) | `UZAttributeSet` constructor in C++ |
 | Enemy health, team, speed, ranges, melee damage | `AZZombieCharacter` in C++, or a Blueprint child's Class Defaults |
 | Respawn delay (5 s) and dead body time (10 s) | BP_ThirdPersonGameMode → Class Defaults → **Respawn** |
-| Dodge cost, speed and duration, minimum stamina to sprint | The ability's C++ constructor (or a Blueprint child of the ability) |
+| Dodge cost, speed, duration and invulnerable time, minimum stamina to sprint | The ability's C++ constructor (or a Blueprint child of the ability) |
+| Melee damage, poise damage, attack speed, reach | The melee weapon's Data Asset; each attack's multipliers and stamina in its moveset (COMBAT.md) |
+| Input buffer time, poise recovery, stagger length, the host's slack for melee hits | **Project Settings → Game → Combat** |
+| How long stamina waits before it comes back | BP_ThirdPersonCharacter → Class Defaults → **Survival\|Stats → Stamina Regen Delay** |
 
 ## Testing
 
@@ -179,6 +206,10 @@ The **Server** window is the host. The **Client** window is the second player.
 | `ZKillEnemies` | Kills every enemy |
 | `ZHeal` | Fills your health and stamina |
 | `ZHurt 50` | Takes 50 health (`ZHurt 0` shows your health) |
+| `ZSpawnDummy 120` | A zombie without AI in front of you, to practice melee on (`ZSpawnDummy 120 all`: one in front of every player) |
+| `ZStagger` | Staggers you (`ZStagger players`, `ZStagger enemies`) |
+| `ZCombat` | Your combat state: attack, input buffer, busy or staggered, open windows, poise and stamina |
+| `Z.Melee.DrawDebug 1` | Draws melee hitboxes and hits |
 | `ZFloorSurface Metal` | The floor under you sounds like metal until Play stops; `ZFloorSurface` says what it is |
 | `Z.Footsteps.Debug 1` / `0` | Shows / hides every footstep (Output Log and in the world) |
 | `Z.Weapon.DrawDebug 0` / `1` | Hides / shows the shot debug lines |
@@ -195,7 +226,7 @@ The item and equipment commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZU
 Not decided in detail. This is the direction, so new systems fit what's already there.
 
 - **Weapon looks:** weapon meshes, and the sounds, effects and animations themselves. The events that play them are ready (AUDIO.md).
-- **Hit reactions:** enemies flinch or stagger when hit (an ability or GameplayCue triggered by damage).
+- **Hit reactions:** small flinches on every hit (staggers when poise breaks are built: COMBAT.md).
 - **Downed and revive:** players go down first and teammates can revive them, before dying for real.
 - **Smarter AI:** AI perception (sight and hearing) instead of distance, monsters and human NPCs fighting each other, patrols and ranged attacks, possibly with a StateTree.
 - **Damage types** (acid, electric), e.g. from weapon mods: GameplayEffects with tags (Blueprint children of `UZGameplayEffect_Damage`). Effects everyone sees are GameplayCues.

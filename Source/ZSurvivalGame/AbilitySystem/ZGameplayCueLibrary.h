@@ -24,6 +24,10 @@ struct FZCharacterCues
 	/** Dying (Instigator = the killer). Empty = none */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Character.Death"))
 	FGameplayTag DeathCue;
+
+	/** Staggering when its poise breaks, e.g. a grunt (Instigator = who broke it). Empty = none */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Character.Stagger"))
+	FGameplayTag StaggerCue;
 };
 
 UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))

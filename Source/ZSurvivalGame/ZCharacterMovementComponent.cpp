@@ -3,6 +3,13 @@
 #include "ZCharacterMovementComponent.h"
 #include "GameFramework/Character.h"
 #include "ZSurvivalGameCharacter.h"
+#include "AbilitySystemComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "AbilitySystem/ZGameplayTags.h"
+#include "Combat/ZAnimNotifyState_ActionWindow.h"
+#include "Combat/ZCombatComponent.h"
+#include "Combat/ZCombatSettings.h"
 
 namespace
 {
@@ -13,6 +20,23 @@ namespace
 	// the speed limit uses the last two bits (FLAG_Custom_2 and FLAG_Custom_3)
 	constexpr uint8 SpeedLimitShift = 6;
 	constexpr uint8 SpeedLimitMask = 0x3;
+}
+
+UZCharacterMovementComponent::UZCharacterMovementComponent()
+{
+	ProcessRootMotionPreConvertToWorld.BindUObject(this, &UZCharacterMovementComponent::ProcessRootMotion);
+}
+
+FTransform UZCharacterMovementComponent::ProcessRootMotion(const FTransform& LocalRootMotion, UCharacterMovementComponent* Movement, float DeltaSeconds) const
+{
+	if (SpeedLimit != EZSpeedLimit::Still)
+	{
+		return LocalRootMotion;
+	}
+
+	FTransform TranslationOnly = LocalRootMotion;
+	TranslationOnly.SetRotation(FQuat::Identity);
+	return TranslationOnly;
 }
 
 /** A saved move that also remembers sprint, aim and the speed limit */
@@ -143,7 +167,7 @@ void UZCharacterMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
 
 	// ignore values that aren't a speed limit
 	const uint8 SpeedLimitBits = static_cast<uint8>((Flags >> SpeedLimitShift) & SpeedLimitMask);
-	SpeedLimit = SpeedLimitBits <= static_cast<uint8>(EZSpeedLimit::Walk) ? static_cast<EZSpeedLimit>(SpeedLimitBits) : EZSpeedLimit::None;
+	SpeedLimit = SpeedLimitBits <= static_cast<uint8>(EZSpeedLimit::Still) ? static_cast<EZSpeedLimit>(SpeedLimitBits) : EZSpeedLimit::None;
 }
 
 FNetworkPredictionData_Client* UZCharacterMovementComponent::GetPredictionData_Client() const
@@ -161,12 +185,47 @@ void UZCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Delt
 {
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
 
-	// Face the camera when always-face-camera is on or while aiming (TODO: also while attacking, once attacks exist), otherwise turn toward movement
+	// Face the camera when always-face-camera is on, while aiming or while committed to an attack (the Still speed limit: attacks go where the camera looks),
+	// otherwise turn toward movement. All of these reach the server with each move, so both turn the same way (an attack's root motion follows the facing)
 	const AZSurvivalGameCharacter* ZCharacter = Cast<AZSurvivalGameCharacter>(CharacterOwner);
-	const bool bFaceCamera = bWantsToAim || (ZCharacter && ZCharacter->ShouldAlwaysFaceCamera());
+	const bool bFaceCamera = bWantsToAim || SpeedLimit == EZSpeedLimit::Still || (ZCharacter && ZCharacter->ShouldAlwaysFaceCamera());
 
 	bOrientRotationToMovement = !bFaceCamera;
 	bUseControllerDesiredRotation = bFaceCamera;
+
+	// An attack turns quickly toward the camera during its windup (its Turn Window, else the first Attack Turn Time of the montage),
+	// then keeps that direction until its Dodge Window opens. The montage plays on the player's machine and the server alike, so both turn the same way
+	bAttackTurning = false;
+	const UZCombatComponent* Combat = ZCharacter ? ZCharacter->GetCombatComponent() : nullptr;
+	if (SpeedLimit == EZSpeedLimit::Still && Combat && Combat->IsAttacking())
+	{
+		const UAbilitySystemComponent* ASC = ZCharacter->GetAbilitySystemComponent();
+		const UAnimMontage* Montage = ASC ? ASC->GetCurrentMontage() : nullptr;
+		const UAnimInstance* AnimInstance = CharacterOwner->GetMesh() ? CharacterOwner->GetMesh()->GetAnimInstance() : nullptr;
+		if (Montage && AnimInstance)
+		{
+			const float Position = AnimInstance->Montage_GetPosition(Montage);
+			bAttackTurning = UZAnimNotifyState_ActionWindow::HasWindow(Montage, ZGameplayTags::Window_Turn)
+				? UZAnimNotifyState_ActionWindow::IsWindowOpen(Montage, Position, ZGameplayTags::Window_Turn)
+				: Position <= UZCombatSettings::Get()->AttackTurnTime;
+
+			bOrientRotationToMovement = false;
+			bUseControllerDesiredRotation = bAttackTurning || UZAnimNotifyState_ActionWindow::IsWindowOpen(Montage, Position, ZGameplayTags::Window_Dodge);
+		}
+	}
+
+	// The engine doesn't turn the character while an animation's root motion moves it; while Still it keeps facing the camera (ProcessRootMotion drops the animation's turning)
+	bAllowPhysicsRotationDuringAnimRootMotion = SpeedLimit == EZSpeedLimit::Still;
+}
+
+FRotator UZCharacterMovementComponent::GetDeltaRotation(float DeltaTime) const
+{
+	if (bAttackTurning)
+	{
+		return FRotator(0.0, FMath::Min(UZCombatSettings::Get()->AttackTurnRate * DeltaTime, 360.f), 0.0);
+	}
+
+	return Super::GetDeltaRotation(DeltaTime);
 }
 
 bool UZCharacterMovementComponent::ClientUpdatePositionAfterServerUpdate()

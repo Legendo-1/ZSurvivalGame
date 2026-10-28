@@ -2,7 +2,7 @@
 
 How character levels, trait points and traits work, and how to add new traits.
 
-**Last updated:** 2026-10-28 (a higher max health leaves a gap to heal; the Armor stat)
+**Last updated:** 2026-10-28 (the Max Poise stat)
 
 ## The idea
 
@@ -64,6 +64,7 @@ The stats traits can change (armor and jewelry change the same ones while they'r
 | `CraftingYieldChance` | Chance (0 to 1) that a craft gives its results twice (normally 0) |
 | `TradeskillExperienceMultiplier` | Tradeskill experience from crafting |
 | `Armor` | Lowers the damage taken (normally 0): damage × 100 / (100 + Armor), so 100 armor halves it. Mostly from worn armor |
+| `MaxPoise` | How much poise damage it takes to stagger you (normally 40, see COMBAT.md). A Value of 10 adds 10 |
 
 ## How to add things
 
@@ -83,7 +84,7 @@ Right-click the asset → **Asset Actions → Validate Assets** checks that the 
 ## Multiplayer
 
 - **The server** decides experience and trait points, raises and resets traits (the player's machine only asks) and puts on the effect.
-- **The player's machine** gets its own level, points and traits. The stats come as attributes, so recoil, reload time and dodge distance are the same on both machines.
+- **The player's machine** gets its own level, points and traits. The stats come as attributes, so recoil, reload time, dodge distance and melee attack speed are the same on both machines.
 - **Each player has their own.** Kills give every player experience.
 - **Saved with the character** on the player's own PC: experience, bonus trait points and traits (SAVING.md). Loading a character doesn't show level-up messages; the host checks the traits don't cost more points than the character has.
 
