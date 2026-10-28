@@ -11,7 +11,7 @@
 DECLARE_MULTICAST_DELEGATE_OneParam(FZOutOfHealthDelegate, AActor* /*DamageInstigator*/);
 
 /**
- *  A character's attributes: health and stamina, and the stats traits change (damage, recoil, reload speed, ...)
+ *  A character's attributes: health and stamina, and the stats traits and equipment change (damage, recoil, reload speed, armor, ...)
  *  Players have it on the PlayerState next to the ability system, AI characters on themselves
  *  Values only change on the server and replicate to the clients
  */
@@ -37,9 +37,13 @@ public:
 	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, StaminaRegenMultiplier);
 	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, CraftingYieldChance);
 	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, TradeskillExperienceMultiplier);
+	ATTRIBUTE_ACCESSORS_BASIC(UZAttributeSet, Armor);
 
-	/** The attributes traits can change (everything but the current values and the meta attributes) */
+	/** The attributes traits and equipment can change (everything but the current values and the meta attributes) */
 	static TArray<FGameplayAttribute> GetTraitAttributes();
+
+	/** What's left of damage after armor: Damage × N / (N + Armor), N = Armor For Half Damage (Project Settings → Game → Equipment) */
+	static float GetDamageAfterArmor(float Damage, float ArmorValue);
 
 	/** An attribute of an actor (or of its PlayerState's ability system), or Default if it has none */
 	static float GetAttributeValue(const AActor* Actor, const FGameplayAttribute& Attribute, float Default);
@@ -100,9 +104,12 @@ protected:
 	UFUNCTION()
 	void OnRep_TradeskillExperienceMultiplier(const FGameplayAttributeData& OldValue);
 
+	UFUNCTION()
+	void OnRep_Armor(const FGameplayAttributeData& OldValue);
+
 private:
 
-	/** Keeps Health and Stamina between 0 and their max, the max values at 1 or more, multipliers above 0 and chances between 0 and 1 */
+	/** Keeps Health and Stamina between 0 and their max, the max values at 1 or more, multipliers above 0, chances between 0 and 1 and armor at 0 or more */
 	void ClampAttribute(const FGameplayAttribute& Attribute, float& NewValue) const;
 
 	/** Who is dealing the damage being applied right now (set only during PostGameplayEffectExecute) */
@@ -157,4 +164,8 @@ private:
 	/** Tradeskill experience from crafting */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_TradeskillExperienceMultiplier, Category = "Attributes|Stats", meta = (AllowPrivateAccess = "true"))
 	FGameplayAttributeData TradeskillExperienceMultiplier;
+
+	/** Lowers the damage taken (0 = none; how much: GetDamageAfterArmor). Mostly from armor that's worn (equipment) */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Armor, Category = "Attributes|Stats", meta = (AllowPrivateAccess = "true"))
+	FGameplayAttributeData Armor;
 };

@@ -58,6 +58,14 @@ struct FZSavedItem
 	/** It was in the character's hands */
 	UPROPERTY(BlueprintReadOnly, Category = "Save")
 	bool bEquipped = false;
+
+	/** The kind of equipment slot it was in, e.g. Equipment.Slot.Ring (empty: not equipped) */
+	UPROPERTY(BlueprintReadOnly, Category = "Save")
+	FGameplayTag EquipmentSlot;
+
+	/** Which slot of that kind, from 0 */
+	UPROPERTY(BlueprintReadOnly, Category = "Save")
+	int32 EquipmentIndex = 0;
 };
 
 /** Ranks put into one trait */

@@ -23,6 +23,8 @@
 #include "Crafting/ZCraftingRecipe.h"
 #include "Crafting/ZCraftingStation.h"
 #include "Crafting/ZCraftingSubsystem.h"
+#include "Items/ZEquipmentComponent.h"
+#include "Items/ZEquipmentSettings.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemDefinition.h"
 #include "Items/ZItemInstance.h"
@@ -35,6 +37,7 @@
 #include "SaveGame/ZSaveStorage.h"
 #include "SaveGame/ZSaveSubsystem.h"
 #include "UI/ZCharacterPanelWidget.h"
+#include "UI/ZEquipmentPanelWidget.h"
 #include "UI/ZInventoryScreenWidget.h"
 #include "UI/ZTraitRowWidget.h"
 #include "Weapons/ZWeapon.h"
@@ -463,6 +466,70 @@ void UZCheatManager::ZWeaponStats()
 		Weapon->GetDamage(), Weapon->GetFireRate(), Weapon->GetSpread(false), Weapon->GetSpread(true), Recoil.X, Recoil.Y, Weapon->GetRange(), Weapon->GetAmmo(), Weapon->GetMagazineSize(), Weapon->GetReloadTime());
 }
 
+void UZCheatManager::ZEquip(const FString& ItemName, int32 SlotNumber)
+{
+	// a request to the server, so this works in every window
+	UZEquipmentComponent* Equipment = UZEquipmentComponent::FindEquipmentComponent(GetOuterAPlayerController());
+	UZInventoryComponent* Inventory = GetMyInventory();
+	const UZItemDefinition* Item = FindItem(ItemName);
+	UZItemInstance* Instance = Inventory && Item ? Inventory->FindFirstInstance(Item) : nullptr;
+	if (!Equipment || !Instance)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZEquip: you have no %s"), *ItemName);
+		return;
+	}
+
+	if (!Item->IsEquippable())
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZEquip: %s can't be equipped (no Weapon or Wearable fragment)"), *ItemName);
+		return;
+	}
+
+	// slot numbers count from 1, like the window shows them (Ring 3); none: a free slot of its kind
+	const FZEquipmentSlot Slot = SlotNumber > 0 ? FZEquipmentSlot(Item->GetEquipmentSlotType(), SlotNumber - 1) : FZEquipmentSlot();
+	Equipment->RequestEquip(Instance, Slot);
+}
+
+void UZCheatManager::ZUnequip(const FString& ItemName)
+{
+	UZEquipmentComponent* Equipment = UZEquipmentComponent::FindEquipmentComponent(GetOuterAPlayerController());
+	UZInventoryComponent* Inventory = GetMyInventory();
+	const UZItemDefinition* Item = FindItem(ItemName);
+
+	// the equipped one, if there are several
+	UZItemInstance* Instance = Equipment && Inventory && Item ? Inventory->FindFirstInstanceMatching([Item, Equipment](const UZItemInstance* Candidate)
+	{
+		return Candidate->GetItemDefinition() == Item && Equipment->IsEquipped(Candidate);
+	}) : nullptr;
+
+	if (!Instance)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZUnequip: you have no %s equipped"), *ItemName);
+		return;
+	}
+
+	Equipment->RequestUnequip(Instance);
+}
+
+void UZCheatManager::ZEquipment()
+{
+	const APlayerController* PlayerController = GetOuterAPlayerController();
+	const UZEquipmentComponent* Equipment = UZEquipmentComponent::FindEquipmentComponent(PlayerController);
+	if (!Equipment)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZEquipment: no equipment yet"));
+		return;
+	}
+
+	const AZSurvivalGameCharacter* Character = PlayerController ? Cast<AZSurvivalGameCharacter>(PlayerController->GetPawn()) : nullptr;
+	const UZItemInstance* InHands = Character ? Character->GetEquippedItem() : nullptr;
+	const float Armor = UZAttributeSet::GetAttributeValue(PlayerController ? PlayerController->PlayerState : nullptr, UZAttributeSet::GetArmorAttribute(), 0.f);
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZEquipment: %s; in hands: %s (%s); armor %.0f (takes %.0f%% damage)"), *Equipment->GetDebugString(),
+		InHands ? *GetNameSafe(InHands->GetItemDefinition()) : TEXT("nothing"), Character ? *UEnum::GetValueAsString(Character->GetWeaponType()) : TEXT("no character"),
+		Armor, UZAttributeSet::GetDamageAfterArmor(100.f, Armor));
+}
+
 void UZCheatManager::ZInventoryUI(const FString& Command)
 {
 	AZSurvivalGamePlayerController* PlayerController = Cast<AZSurvivalGamePlayerController>(GetOuterAPlayerController());
@@ -566,9 +633,34 @@ void UZCheatManager::ZInventoryUI(const FString& Command)
 	{
 		CharacterPanel->ResetTraits();
 	}
+	else if (Action == TEXT("equip"))
+	{
+		// what dropping an item on an equipment slot does: "equip ID_Rifle LongGun 1" (the slot's kind under Equipment.Slot, and its number from 1)
+		FZEquipmentSlot Slot;
+		if (Words.IsValidIndex(2))
+		{
+			Slot.Type = FGameplayTag::RequestGameplayTag(*(TEXT("Equipment.Slot.") + Words[2]), false);
+			Slot.Index = Words.IsValidIndex(3) ? FCString::Atoi(*Words[3]) - 1 : 0;
+		}
+
+		UZItemInstance* Item = FindInstance(1);
+		if (Slot.IsValid() && !Screen->CanEquip(Item, Slot))
+		{
+			UE_LOG(LogZSurvivalGame, Warning, TEXT("ZInventoryUI: %s doesn't go in %s, so the drop does nothing"), Words.IsValidIndex(1) ? *Words[1] : TEXT("-"), *Slot.ToString());
+		}
+		else
+		{
+			Screen->EquipItem(Item, Slot);
+		}
+	}
+	else if (Action == TEXT("unequip"))
+	{
+		// what right-clicking it in the equipment window does
+		Screen->UnequipItem(FindInstance(1));
+	}
 	else if (Action != TEXT("show"))
 	{
-		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZInventoryUI: don't know '%s' (open, close, show, select, use, drop, add, remove, clear, count, combine, drag, raise, reset)"), *Command);
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZInventoryUI: don't know '%s' (open, close, show, select, use, drop, add, remove, clear, count, combine, drag, raise, reset, equip, unequip)"), *Command);
 	}
 
 	UE_LOG(LogZSurvivalGame, Log, TEXT("ZInventoryUI %s: %s"), *Command, *Screen->GetDebugString());
@@ -759,6 +851,11 @@ void UZCheatManager::ZSaveInfo()
 			Details.Add(FString::Printf(TEXT("mod %s"), *Mod.PrimaryAssetName.ToString()));
 		}
 
+		if (Item.EquipmentSlot.IsValid())
+		{
+			Details.Add(FString::Printf(TEXT("equipped: %s"), *FZEquipmentSlot(Item.EquipmentSlot, Item.EquipmentIndex).ToString()));
+		}
+
 		Items.Add(FString::Printf(TEXT("%s x%d%s%s"), *Item.Item.PrimaryAssetName.ToString(), Item.Count,
 			Details.Num() > 0 ? *FString::Printf(TEXT(" (%s)"), *FString::Join(Details, TEXT(", "))) : TEXT(""), Item.bEquipped ? TEXT(" [in hands]") : TEXT("")));
 	}
@@ -895,6 +992,14 @@ void UZCheatManager::ZBreakSave()
 	NotAStat.Value = 1;
 
 	Character.DiscoveredRecipes.Add(FPrimaryAssetId(TEXT("Recipe:RC_DoesNotExist")));
+
+	// a rifle in a ring slot players don't have, and ammo "worn" on the head (the rifle first: adding to the list can move it)
+	Rifle.EquipmentSlot = ZGameplayTags::Equipment_Slot_Ring;
+	Rifle.EquipmentIndex = 99;
+	FZSavedItem& AmmoOnHead = Character.Inventory.AddDefaulted_GetRef();
+	AmmoOnHead.Item = FPrimaryAssetId(TEXT("Item:ID_Ammo_Pistol"));
+	AmmoOnHead.Count = 5;
+	AmmoOnHead.EquipmentSlot = ZGameplayTags::Equipment_Slot_Head;
 
 	if (Saves->WriteActiveSaveForTesting())
 	{

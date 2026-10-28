@@ -31,10 +31,13 @@ public:
 	/** Keeps the mods that fit (the others go back to the inventory) and no more rounds than the magazine holds */
 	virtual void OnInstanceLoaded(UZItemInstance* Instance) const override;
 
-	/** Puts the weapon in the user's hands */
+	/** Puts the weapon in its slot and in the user's hands */
 	virtual bool OnUse(UZItemInstance* Instance, APawn* User) const override;
 
 	virtual FText GetUseActionName() const override;
+
+	/** Its weapon data's slot: short gun, long gun or melee */
+	virtual FGameplayTag GetEquipmentSlotType() const override;
 
 	/** Its stats with the item's upgrades and mods, and what's in each mod slot */
 	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
@@ -187,6 +190,50 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Tool", meta = (ClampMin = "1"))
 	int32 Quality = 1;
 
+	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
+
+#if WITH_EDITOR
+	virtual void ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const override;
+#endif
+};
+
+/**
+ *  Makes the item armor or jewelry: worn in an equipment slot (e.g. Equipment.Slot.Torso or Equipment.Slot.Ring), it changes the player's stats,
+ *  e.g. Armor (less damage taken) or MaxHealth. Using it from the inventory puts it on
+ *  Only for items that don't stack, since each one is worn on its own
+ */
+UCLASS(meta = (DisplayName = "Wearable"))
+class UZItemFragment_Wearable : public UZItemFragment
+{
+	GENERATED_BODY()
+
+public:
+
+	/** Where it's worn, e.g. Equipment.Slot.Head or Equipment.Slot.Ring (players need that slot: Project Settings → Game → Equipment) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wearable", meta = (Categories = "Equipment.Slot"))
+	FGameplayTag Slot;
+
+	/** What it changes while it's worn, e.g. Armor +10 or MaxHealth +15 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wearable")
+	TArray<FZStatModifier> Modifiers;
+
+	/** Putting it on (Source Object = the item). A child tag gives it its own sound (see AUDIO.md); empty = nothing */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects", meta = (Categories = "GameplayCue.Item.Equip"))
+	FGameplayTag EquipCue = ZGameplayTags::GameplayCue_Item_Equip;
+
+	virtual FGameplayTag GetEquipmentSlotType() const override { return Slot; }
+
+	virtual void GetEquippedStatModifiers(TArray<FZStatModifier>& OutModifiers) const override;
+
+	/** Plays the Equip Cue */
+	virtual void OnEquippedByPlayer(UZItemInstance* Instance, APawn* User) const override;
+
+	/** Puts it on, in a free slot of its kind (or in place of what's in the first one) */
+	virtual bool OnUse(UZItemInstance* Instance, APawn* User) const override;
+
+	virtual FText GetUseActionName() const override;
+
+	/** Where it's worn and what it changes */
 	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const override;
 
 #if WITH_EDITOR

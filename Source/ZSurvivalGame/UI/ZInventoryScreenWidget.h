@@ -14,18 +14,21 @@ class UTextBlock;
 class UZCharacterPanelWidget;
 class UZCraftingComponent;
 class UZCraftingRecipe;
+class UZEquipmentComponent;
+class UZEquipmentPanelWidget;
 class UZInventoryComponent;
 class UZItemDetailsWidget;
 class UZItemInstance;
 enum class EZCraftingResult : uint8;
 
 /**
- *  The inventory screen: the player's items, combining them to craft, and the character panel (level, traits, tradeskills)
+ *  The inventory screen: the equipment window, the player's items, combining them to craft, and the character panel (level, traits, tradeskills)
  *  The player controller opens and closes it (the inventory key, or using a crafting station), see AZSurvivalGamePlayerController::OpenInventory
  *
- *  Items: click selects, right-click or double-click uses, dragging one item onto another tries the two together, dragging one outside the window drops it on the ground
+ *  Items: click selects, right-click or double-click uses (equips; takes off what's equipped), dragging one item onto another tries the two together, onto an equipment slot equips it there,
+ *  dragging one outside the window drops it on the ground
  *  Combine slots: put items in (drag them there, the Add button, or Y on a gamepad), choose how many and press Combine. Recipes stay secret: only trying finds them
- *  Everything it does is a request to the server (UZInventoryComponent, UZCraftingComponent, UZProgressionComponent), so it works the same for every player
+ *  Everything it does is a request to the server (UZInventoryComponent, UZEquipmentComponent, UZCraftingComponent, UZProgressionComponent), so it works the same for every player
  *
  *  Your own look: a Widget Blueprint with this parent class. Widgets with the names below are used, all optional.
  *  A Widget Blueprint without any widgets of its own gets the complete built-in look
@@ -45,6 +48,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	UZCraftingComponent* GetCrafting() const { return Crafting.Get(); }
 
+	/** What the owning player has equipped */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	UZEquipmentComponent* GetEquipment() const { return Equipment.Get(); }
+
 	/** --- SELECTING --- */
 
 	/** Selects an item: it's highlighted, and the buttons work on it */
@@ -62,9 +69,24 @@ public:
 
 	/** --- DOING THINGS WITH ITEMS (requests to the server) --- */
 
-	/** Uses the item: equips a weapon, uses a bandage, reads a tome */
+	/** Uses the item: equips a weapon or armor, uses a bandage, reads a tome. An item that's equipped is taken off */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void UseItem(UZItemInstance* Item);
+
+	/** Equips the item in this slot (what's there comes out), like dragging it onto the slot; without a slot, in a free one of its kind */
+	UFUNCTION(BlueprintCallable, Category = "Inventory|Equipment")
+	void EquipItem(UZItemInstance* Item, FZEquipmentSlot EquipmentSlot);
+
+	/** Takes an equipped item off (it stays in the inventory) */
+	UFUNCTION(BlueprintCallable, Category = "Inventory|Equipment")
+	void UnequipItem(UZItemInstance* Item);
+
+	/** True if the item goes in this equipment slot */
+	UFUNCTION(BlueprintPure, Category = "Inventory|Equipment")
+	bool CanEquip(const UZItemInstance* Item, const FZEquipmentSlot& EquipmentSlot) const;
+
+	UFUNCTION(BlueprintPure, Category = "Inventory|Equipment")
+	bool IsEquipped(const UZItemInstance* Item) const;
 
 	/** Drops items from this stack on the ground in front of the character; Count 0 drops the whole stack */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
@@ -122,6 +144,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	UZCharacterPanelWidget* GetCharacterPanel() const { return CharacterPanel; }
 
+	/** The equipment slots (null if the screen's Widget Blueprint has no EquipmentPanel) */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	UZEquipmentPanelWidget* GetEquipmentPanel() const { return EquipmentPanel; }
+
 	/** "6 stacks (ID_Rifle, ...); selected: ID_Rifle; combine: ID_Cloth x9; ..." for logs and tests */
 	FString GetDebugString() const;
 
@@ -138,7 +164,7 @@ protected:
 	/** Builds the built-in look, used when the Widget Blueprint has no widgets of its own */
 	virtual void BuildDefaultLayout();
 
-	/** Where an item goes in the list, lower first: weapons, mods, ammo, consumables, tools, materials, salvage */
+	/** Where an item goes in the list, lower first: weapons, armor, jewelry, mods, ammo, consumables, tools, materials, salvage */
 	virtual int32 GetItemSortOrder(const UZItemInstance* Item) const;
 
 	/** A Blueprint can react here, e.g. play a sound */
@@ -157,6 +183,9 @@ protected:
 
 	UFUNCTION()
 	void HandleCraftingProgressChanged(UZCraftingComponent* ChangedCrafting);
+
+	UFUNCTION()
+	void HandleEquipmentChanged(UZEquipmentComponent* ChangedEquipment);
 
 	UFUNCTION()
 	void HandleUseClicked();
@@ -191,7 +220,7 @@ protected:
 
 	/** Size of the built-in window; the UI scale shrinks it on smaller screens */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Appearance")
-	FVector2D DefaultWindowSize = FVector2D(1320.f, 760.f);
+	FVector2D DefaultWindowSize = FVector2D(1648.f, 760.f);
 
 	/** --- WIDGETS (all optional, found by name) --- */
 
@@ -280,6 +309,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory", meta = (BindWidgetOptional))
 	TObjectPtr<UZCharacterPanelWidget> CharacterPanel;
 
+	/** The equipment slots: weapons, armor and jewelry */
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory", meta = (BindWidgetOptional))
+	TObjectPtr<UZEquipmentPanelWidget> EquipmentPanel;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory", meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CloseButton;
 
@@ -289,7 +322,7 @@ protected:
 
 private:
 
-	/** Listens to the owning player's inventory and crafting */
+	/** Listens to the owning player's inventory, equipment and crafting */
 	void BindToPlayer();
 
 	void UnbindFromPlayer();
@@ -318,6 +351,7 @@ private:
 	int32 GetStackCount(const UZItemInstance* Item) const;
 
 	TWeakObjectPtr<UZInventoryComponent> Inventory;
+	TWeakObjectPtr<UZEquipmentComponent> Equipment;
 	TWeakObjectPtr<UZCraftingComponent> Crafting;
 
 	UPROPERTY(Transient)

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AttributeSet.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "AbilitySystem/ZGameplayTags.h"
@@ -12,6 +13,21 @@ class APawn;
 class UStaticMesh;
 class UTexture2D;
 class UZItemInstance;
+
+/** One stat an item changes while it's equipped, e.g. Armor +10 or MaxHealth +15 */
+USTRUCT(BlueprintType)
+struct FZStatModifier
+{
+	GENERATED_BODY()
+
+	/** The stat, e.g. Armor, MaxHealth or RecoilMultiplier (the ones traits can change: see UZAttributeSet::GetTraitAttributes) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item")
+	FGameplayAttribute Attribute;
+
+	/** Added to it, e.g. 10 for armor or health, or -0.1 for -10% on a multiplier */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item")
+	float Value = 0.f;
+};
 
 /**
  *  A piece an item is built from (weapon, consumable, ...). An item gets a feature by adding the fragment for it,
@@ -44,6 +60,15 @@ public:
 
 	/** Lines for inventory screens about what this fragment does, e.g. "Heals 25" or "Durability 18 / 20" (Instance may be null: the item in general) */
 	virtual void GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const {}
+
+	/** The kind of equipment slot the item goes in (e.g. Equipment.Slot.LongGun); empty if this fragment doesn't make it equippable */
+	virtual FGameplayTag GetEquipmentSlotType() const { return FGameplayTag(); }
+
+	/** Stats the item changes while it's equipped (the server adds up every equipped item's) */
+	virtual void GetEquippedStatModifiers(TArray<FZStatModifier>& OutModifiers) const {}
+
+	/** Server: the player put the item in an equipment slot themselves (not when a save is loaded), e.g. to play a sound */
+	virtual void OnEquippedByPlayer(UZItemInstance* Instance, APawn* User) const {}
 
 #if WITH_EDITOR
 	/** Checks the fragment fits its item (called when the item is saved or validated) */
@@ -150,6 +175,16 @@ public:
 	/** Its quality as a tool (from its Tool fragment); 0 if it isn't a tool */
 	UFUNCTION(BlueprintPure, Category = "Item")
 	int32 GetToolQuality() const;
+
+	/** The kind of equipment slot it goes in (from its fragments, e.g. a weapon's weapon data); empty if it can't be equipped */
+	UFUNCTION(BlueprintPure, Category = "Item")
+	FGameplayTag GetEquipmentSlotType() const;
+
+	UFUNCTION(BlueprintPure, Category = "Item")
+	bool IsEquippable() const { return GetEquipmentSlotType().IsValid(); }
+
+	/** Stats it changes while equipped, from all its fragments */
+	TArray<FZStatModifier> GetEquippedStatModifiers() const;
 
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;

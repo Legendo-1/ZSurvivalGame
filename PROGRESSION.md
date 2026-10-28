@@ -2,7 +2,7 @@
 
 How character levels, trait points and traits work, and how to add new traits.
 
-**Last updated:** 2026-10-27 (levels and traits are saved with the character, see SAVING.md)
+**Last updated:** 2026-10-28 (the Armor stat; equipment changes the same stats as traits)
 
 ## The idea
 
@@ -48,10 +48,10 @@ All go up to rank 10. The bonus is per rank.
 
 - **Traits are Data Assets** (`ZTraitDefinition`) in `Content/Progression/Traits`. The game finds them by itself (Asset Manager).
 - **Each trait has Modifiers:** a stat (an attribute) and how much one rank adds.
-- **All of a player's trait bonuses are one gameplay effect** on their ability system, put on by the server whenever their traits change.
+- **All of a player's trait bonuses are one gameplay effect** on their ability system, put on by the server whenever their traits change. Equipment has its own effect the same way, so traits and equipment add up.
 - **When max health or max stamina goes up, the current value goes up by the same share** (full health stays full).
 
-The stats traits can change. They're attributes in `ZAttributeSet`, and 1 means normal:
+The stats traits can change (armor and jewelry change the same ones while they're worn, see ITEMS.md → Equipment). They're attributes in `ZAttributeSet`, and 1 means normal:
 
 | Stat | What it does |
 |---|---|
@@ -63,6 +63,7 @@ The stats traits can change. They're attributes in `ZAttributeSet`, and 1 means 
 | `StaminaRegenMultiplier` | How fast stamina comes back |
 | `CraftingYieldChance` | Chance (0 to 1) that a craft gives its results twice (normally 0) |
 | `TradeskillExperienceMultiplier` | Tradeskill experience from crafting |
+| `Armor` | Lowers the damage taken (normally 0): damage × 100 / (100 + Armor), so 100 armor halves it. Mostly from worn armor |
 
 ## How to add things
 
@@ -100,6 +101,5 @@ Open the console with the key under Esc. Commands marked *host* only work in the
 
 ## Plan: what isn't built yet
 
-- **Saving** progression.
 - **Unlocking traits** by doing things (e.g. a trait that appears after beating a boss).
 - **Where resets happen:** maybe only at the hub, or with a rare item.

@@ -34,6 +34,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
 	EZWeaponType WeaponType = EZWeaponType::Rifle;
 
+	/** Which weapon slot it goes in: short gun (pistols, submachine guns, sawn-offs), long gun (rifles, shotguns, snipers) or melee. A player equips one of each */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon", meta = (Categories = "Equipment.Slot"))
+	FGameplayTag EquipmentSlot = ZGameplayTags::Equipment_Slot_LongGun;
+
 	/** --- LOOKS --- */
 
 	/** The weapon's mesh: set this or Static Mesh (none is fine for testing; the weapon is then invisible) */

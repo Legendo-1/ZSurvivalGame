@@ -29,6 +29,8 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Tool, "Item.Type.Tool", "Tools that recipes need; kept when crafting");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Salvage, "Item.Type.Salvage", "Things found in the world that can be taken apart or combined");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_WeaponMod, "Item.Type.WeaponMod", "Mods that are installed on weapons");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Armor, "Item.Type.Armor", "Armor and clothing, worn on the head, torso or legs");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Type_Jewelry, "Item.Type.Jewelry", "Rings and necklaces");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Tool_Screwdriver, "Item.Tool.Screwdriver", "Counts as a screwdriver for recipes");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Item_Tool_AmmoPress, "Item.Tool.AmmoPress", "Counts as an ammo press for recipes");
@@ -41,6 +43,16 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_ModSlot_Barrel, "Weapon.ModSlot.Barrel", "Barrel mods: compensators, longer barrels");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_ModSlot_Sight, "Weapon.ModSlot.Sight", "Sights");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_ModSlot_Magazine, "Weapon.ModSlot.Magazine", "Magazines and loaders");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Equipment_Slot, "Equipment.Slot", "Parent of every kind of equipment slot");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Equipment_Slot_ShortGun, "Equipment.Slot.ShortGun", "Short guns: pistols, submachine guns, sawn-off shotguns");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Equipment_Slot_LongGun, "Equipment.Slot.LongGun", "Long guns: rifles, long shotguns, sniper rifles");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Equipment_Slot_Melee, "Equipment.Slot.Melee", "Melee weapons");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Equipment_Slot_Head, "Equipment.Slot.Head", "Helmets, hats and masks");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Equipment_Slot_Torso, "Equipment.Slot.Torso", "Jackets, vests and body armor");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Equipment_Slot_Legs, "Equipment.Slot.Legs", "Trousers and leg armor");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Equipment_Slot_Neck, "Equipment.Slot.Neck", "Necklaces and amulets");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Equipment_Slot_Ring, "Equipment.Slot.Ring", "Rings");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Crafting_Station_Workbench, "Crafting.Station.Workbench", "A workbench, e.g. in the hub");
 
@@ -61,11 +73,12 @@ namespace ZGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Impact, "GameplayCue.Weapon.Impact", "A shot hit something (Location = impact point, Normal = surface normal, Physical Material = the surface)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Reload, "GameplayCue.Weapon.Reload", "A reload started (Raw Magnitude = seconds it takes, Source Object = the weapon data)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Weapon_Equip, "GameplayCue.Weapon.Equip", "A weapon was taken out (Source Object = the weapon data; its Equip Montage plays too)");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_Hit, "GameplayCue.Character.Hit", "A character took damage (Location = hit point, Raw Magnitude = damage)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_Hit, "GameplayCue.Character.Hit", "A character took damage (Location = hit point, Raw Magnitude = damage after armor)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_Death, "GameplayCue.Character.Death", "A character died (Instigator = the killer)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Character_LevelUp, "GameplayCue.Character.LevelUp", "A player reached a new level (Raw Magnitude = the level)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Item_Pickup, "GameplayCue.Item.Pickup", "A player picked something up (Source Object = the item, Raw Magnitude = how many)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Item_Use, "GameplayCue.Item.Use", "A player used up an item, e.g. a bandage (Source Object = the item)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Item_Equip, "GameplayCue.Item.Equip", "A player put on armor or jewelry (Source Object = the item; weapons have their weapon data's Equip Cue)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Crafting_Working, "GameplayCue.Crafting.Working", "Lasts while a player crafts (Location = the station, if the recipe needs one; Source Object = the recipe)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Crafting_Done, "GameplayCue.Crafting.Done", "A combine made something (Source Object = the recipe, Raw Magnitude = how many crafts)");
 }

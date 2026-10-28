@@ -5,6 +5,7 @@
 #include "AbilitySystem/ZAbilitySystemComponent.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "Crafting/ZCraftingComponent.h"
+#include "Items/ZEquipmentComponent.h"
 #include "Items/ZInventoryComponent.h"
 #include "Progression/ZProgressionComponent.h"
 
@@ -19,6 +20,7 @@ AZSurvivalGamePlayerState::AZSurvivalGamePlayerState()
 	AttributeSet = CreateDefaultSubobject<UZAttributeSet>(TEXT("AttributeSet"));
 
 	Inventory = CreateDefaultSubobject<UZInventoryComponent>(TEXT("Inventory"));
+	Equipment = CreateDefaultSubobject<UZEquipmentComponent>(TEXT("Equipment"));
 	Crafting = CreateDefaultSubobject<UZCraftingComponent>(TEXT("Crafting"));
 	Progression = CreateDefaultSubobject<UZProgressionComponent>(TEXT("Progression"));
 

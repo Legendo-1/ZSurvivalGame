@@ -59,9 +59,24 @@ public:
 	UFUNCTION(Exec)
 	void ZWeaponStats();
 
+	/** --- EQUIPMENT --- */
+
+	/** Equips one of your items, e.g. ZEquip ID_Jewelry_IronRing, or in the third ring slot: ZEquip ID_Jewelry_IronRing 3 (a request, like the equipment window) */
+	UFUNCTION(Exec)
+	void ZEquip(const FString& ItemName, int32 SlotNumber = 0);
+
+	/** Takes off one of your equipped items, e.g. ZUnequip ID_Rifle */
+	UFUNCTION(Exec)
+	void ZUnequip(const FString& ItemName);
+
+	/** Writes what you have equipped, what's in your hands and your armor to the Output Log (as this window sees it) */
+	UFUNCTION(Exec)
+	void ZEquipment();
+
 	/**
 	 *  Works the inventory screen like the mouse does, and writes what it shows to the Output Log (for automated tests). ZInventoryUI on its own opens or closes it.
-	 *  open, close, show, select <item>, use <item>, drop <item>, add <item> (to the combine slots), remove <item>, clear, count <n>, combine, drag <item> <onto item>, raise <trait>, reset
+	 *  open, close, show, select <item>, use <item>, drop <item>, add <item> (to the combine slots), remove <item>, clear, count <n>, combine, drag <item> <onto item>, raise <trait>, reset,
+	 *  equip <item> <slot kind> <number> (drag onto an equipment slot, e.g. equip ID_Rifle LongGun 1), unequip <item> (right-click in the equipment window)
 	 */
 	UFUNCTION(Exec)
 	void ZInventoryUI(const FString& Command = TEXT(""));

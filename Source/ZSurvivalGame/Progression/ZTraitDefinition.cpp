@@ -75,7 +75,7 @@ EDataValidationResult UZTraitDefinition::IsDataValid(FDataValidationContext& Con
 		if (!TraitAttributes.Contains(Modifier.Attribute))
 		{
 			Context.AddError(FText::Format(LOCTEXT("TraitBadAttribute", "The modifier for '{0}' can't work: traits can only change {1}."),
-				FText::FromString(Modifier.Attribute.GetName()), FText::FromString(TEXT("MaxHealth, MaxStamina and the stats in ZAttributeSet (Damage, Recoil, Reload Speed, Dodge Distance, Stamina Regen, Crafting Yield Chance, Tradeskill Experience)"))));
+				FText::FromString(Modifier.Attribute.GetName()), FText::FromString(TEXT("MaxHealth, MaxStamina, Armor and the stats in ZAttributeSet (Damage, Recoil, Reload Speed, Dodge Distance, Stamina Regen, Crafting Yield Chance, Tradeskill Experience)"))));
 		}
 	}
 

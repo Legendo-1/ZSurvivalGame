@@ -17,6 +17,7 @@
 #include "Crafting/ZCraftingComponent.h"
 #include "Crafting/ZCraftingRecipe.h"
 #include "Crafting/ZCraftingSubsystem.h"
+#include "Items/ZEquipmentComponent.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemDefinition.h"
 #include "Items/ZItemFragments.h"
@@ -256,7 +257,8 @@ void UZPlayerSaveComponent::SaveOnOwner()
 
 	// only the character this save sent and the host loaded (not a new one played because it arrived too late), once all of it is here
 	const FZCharacterSaveData& Saved = Saves->GetActiveCharacter();
-	if (!SentCharacterId.IsValid() || Saved.CharacterId != SentCharacterId || !PlayerState->GetProgression()->WasRestored() || !PlayerState->GetInventory()->HaveAllItemsArrived())
+	if (!SentCharacterId.IsValid() || Saved.CharacterId != SentCharacterId || !PlayerState->GetProgression()->WasRestored() || !PlayerState->GetInventory()->HaveAllItemsArrived()
+		|| !PlayerState->GetEquipment()->HaveAllItemsArrived())
 	{
 		UE_LOG(LogZSurvivalGame, Log, TEXT("Save: not saved on leaving: the host hasn't loaded this slot's character (yet)"));
 		return;
@@ -336,6 +338,7 @@ void UZPlayerSaveComponent::ApplyCharacter(const FZCharacterSaveData& Character)
 
 	const UZCraftingSubsystem* CraftingSubsystem = UZCraftingSubsystem::Get(this);
 	UZItemInstance* EquippedItem = nullptr;
+	TArray<TPair<UZItemInstance*, FZEquipmentSlot>> SavedEquipment;
 	int32 NumStacks = 0;
 
 	for (const FZSavedItem& Saved : Character.Inventory)
@@ -422,7 +425,17 @@ void UZPlayerSaveComponent::ApplyCharacter(const FZCharacterSaveData& Character)
 		{
 			EquippedItem = Instance;
 		}
+
+		// the slot it was in (a save from before there was equipment only knows the weapon in the hands: it goes in its slot)
+		if (Saved.EquipmentSlot.IsValid() || (Saved.bEquipped && Weapon))
+		{
+			SavedEquipment.Emplace(Instance, FZEquipmentSlot(Saved.EquipmentSlot, Saved.EquipmentIndex));
+		}
 	}
+
+	// --- EQUIPMENT: each item back in its slot, if it still goes there ---
+
+	PlayerState->GetEquipment()->RestoreEquipment(SavedEquipment, Fixes);
 
 	// the weapon that was in the hands comes out when the character spawns
 	PlayerState->PendingEquipItem = EquippedItem;
@@ -508,6 +521,7 @@ FZCharacterSaveData UZPlayerSaveComponent::BuildCharacterData() const
 	const AZSurvivalGameCharacter* Pawn = Cast<AZSurvivalGameCharacter>(PlayerState->GetPawn());
 	const UZItemInstance* EquippedItem = Pawn ? Pawn->GetEquippedItem() : PlayerState->PendingEquipItem.Get();
 	const AZWeapon* EquippedWeapon = Pawn ? Pawn->GetEquippedWeapon() : nullptr;
+	const UZEquipmentComponent* Equipment = PlayerState->GetEquipment();
 
 	for (const FZInventoryItem& Stack : PlayerState->GetInventory()->GetItems())
 	{
@@ -521,6 +535,10 @@ FZCharacterSaveData UZPlayerSaveComponent::BuildCharacterData() const
 		Saved.Item = Item->GetPrimaryAssetId();
 		Saved.Count = Stack.Count;
 		Saved.bEquipped = Stack.Instance == EquippedItem;
+
+		const FZEquipmentSlot EquipmentSlot = Equipment->GetSlotOfItem(Stack.Instance);
+		Saved.EquipmentSlot = EquipmentSlot.Type;
+		Saved.EquipmentIndex = EquipmentSlot.IsValid() ? EquipmentSlot.Index : 0;
 
 		TMap<FGameplayTag, int32> Stats = Stack.Instance->GetStats();
 		if (Saved.bEquipped && EquippedWeapon && EquippedWeapon->GetItemInstance() == Stack.Instance)
@@ -717,6 +735,11 @@ void UZPlayerSaveComponent::HandleRecipeDiscovered(UZCraftingComponent* Crafting
 	MarkDirty();
 }
 
+void UZPlayerSaveComponent::HandleEquipmentChanged(UZEquipmentComponent* Equipment)
+{
+	MarkDirty();
+}
+
 void UZPlayerSaveComponent::BindToChanges()
 {
 	AZSurvivalGamePlayerState* PlayerState = GetZPlayerState();
@@ -732,6 +755,7 @@ void UZPlayerSaveComponent::BindToChanges()
 	PlayerState->GetProgression()->OnProgressionChanged.AddUniqueDynamic(this, &UZPlayerSaveComponent::HandleProgressionChanged);
 	PlayerState->GetCrafting()->OnTradeskillsChanged.AddUniqueDynamic(this, &UZPlayerSaveComponent::HandleTradeskillsChanged);
 	PlayerState->GetCrafting()->OnRecipeDiscovered.AddUniqueDynamic(this, &UZPlayerSaveComponent::HandleRecipeDiscovered);
+	PlayerState->GetEquipment()->OnEquipmentChanged.AddUniqueDynamic(this, &UZPlayerSaveComponent::HandleEquipmentChanged);
 }
 
 void UZPlayerSaveComponent::UnbindFromChanges()
@@ -742,6 +766,7 @@ void UZPlayerSaveComponent::UnbindFromChanges()
 		PlayerState->GetProgression()->OnProgressionChanged.RemoveDynamic(this, &UZPlayerSaveComponent::HandleProgressionChanged);
 		PlayerState->GetCrafting()->OnTradeskillsChanged.RemoveDynamic(this, &UZPlayerSaveComponent::HandleTradeskillsChanged);
 		PlayerState->GetCrafting()->OnRecipeDiscovered.RemoveDynamic(this, &UZPlayerSaveComponent::HandleRecipeDiscovered);
+		PlayerState->GetEquipment()->OnEquipmentChanged.RemoveDynamic(this, &UZPlayerSaveComponent::HandleEquipmentChanged);
 	}
 
 	BoundPlayerState.Reset();

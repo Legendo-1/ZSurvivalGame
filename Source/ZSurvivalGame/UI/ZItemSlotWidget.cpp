@@ -15,6 +15,7 @@
 #include "Components/VerticalBox.h"
 #include "InputCoreTypes.h"
 #include "ZSurvivalGameCharacter.h"
+#include "Items/ZEquipmentComponent.h"
 #include "Items/ZItemDefinition.h"
 #include "Items/ZItemInstance.h"
 #include "UI/ZInventoryScreenWidget.h"
@@ -31,6 +32,11 @@ void UZItemSlotWidget::NativeOnInitialized()
 	}
 
 	Super::NativeOnInitialized();
+
+	if (NameText)
+	{
+		NameTextColor = NameText->GetColorAndOpacity();
+	}
 
 	// gamepad and keyboard move between slots; the mouse needs it to be hit
 	SetIsFocusable(true);
@@ -101,6 +107,13 @@ void UZItemSlotWidget::SetScreen(UZInventoryScreenWidget* InScreen, EZItemSlotRo
 {
 	Screen = InScreen;
 	Role = InRole;
+	Refresh();
+}
+
+void UZItemSlotWidget::SetEquipmentSlot(const FZEquipmentSlot& InEquipmentSlot)
+{
+	EquipmentSlot = InEquipmentSlot;
+	Refresh();
 }
 
 void UZItemSlotWidget::SetSelected(bool bInSelected)
@@ -118,7 +131,11 @@ void UZItemSlotWidget::Refresh()
 
 	if (NameText)
 	{
-		NameText->SetText(Definition ? Definition->GetItemName() : FText::GetEmpty());
+		// an empty equipment slot says which slot it is
+		const bool bEmptyEquipmentSlot = !Definition && Role == EZItemSlotRole::Equipment;
+		const FText SlotName = EmptyText.IsEmpty() && EquipmentSlot.IsValid() ? EquipmentSlot.GetDisplayName() : EmptyText;
+		NameText->SetText(Definition ? Definition->GetItemName() : bEmptyEquipmentSlot ? SlotName : FText::GetEmpty());
+		NameText->SetColorAndOpacity(bEmptyEquipmentSlot ? FSlateColor(EmptyTextColor) : NameTextColor);
 	}
 
 	if (CountText)
@@ -148,9 +165,17 @@ void UZItemSlotWidget::Refresh()
 
 	if (EquippedMarker)
 	{
+		// in the equipment window everything is equipped, so only the weapon in the hands is marked
 		const AZSurvivalGameCharacter* Character = Cast<AZSurvivalGameCharacter>(GetOwningPlayerPawn());
-		const bool bEquipped = Item && Character && Character->GetEquippedItem() == Item;
-		EquippedMarker->SetVisibility(bEquipped ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		const UZEquipmentComponent* Equipment = UZEquipmentComponent::FindEquipmentComponent(GetOwningPlayer());
+		const bool bInHands = Item && Character && Character->GetEquippedItem() == Item;
+		const bool bEquipped = Item && Equipment && Equipment->IsEquipped(Item) && Role != EZItemSlotRole::Equipment;
+		EquippedMarker->SetVisibility(bInHands || bEquipped ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+
+		if (UTextBlock* MarkerText = Cast<UTextBlock>(EquippedMarker))
+		{
+			MarkerText->SetText(bInHands ? LOCTEXT("InHands", "In hands") : LOCTEXT("Equipped", "Equipped"));
+		}
 	}
 
 	UpdateBackground();
@@ -170,6 +195,10 @@ FReply UZItemSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 		{
 			Screen->RemoveFromCombine(Item);
 		}
+		else if (Role == EZItemSlotRole::Equipment)
+		{
+			Screen->UnequipItem(Item);
+		}
 		else
 		{
 			Screen->UseItem(Item);
@@ -180,7 +209,7 @@ FReply UZItemSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		if (Role == EZItemSlotRole::Inventory)
+		if (Role != EZItemSlotRole::Combine)
 		{
 			Screen->SelectItem(Item);
 		}
@@ -206,9 +235,17 @@ FReply UZItemSlotWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 
 FReply UZItemSlotWidget::NativeOnMouseButtonDoubleClick(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	if (Role == EZItemSlotRole::Inventory && Item && Screen.IsValid() && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	if (Role != EZItemSlotRole::Combine && Item && Screen.IsValid() && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		Screen->UseItem(Item);
+		if (Role == EZItemSlotRole::Equipment)
+		{
+			Screen->UnequipItem(Item);
+		}
+		else
+		{
+			Screen->UseItem(Item);
+		}
+
 		return FReply::Handled();
 	}
 
@@ -248,6 +285,7 @@ void UZItemSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry, const F
 	Operation->Item = Item;
 	Operation->Count = Count;
 	Operation->bFromCombineSlot = Role == EZItemSlotRole::Combine;
+	Operation->bFromEquipmentSlot = Role == EZItemSlotRole::Equipment;
 	Operation->Pivot = EDragPivot::CenterCenter;
 
 	// a copy of this slot follows the mouse
@@ -265,9 +303,8 @@ void UZItemSlotWidget::NativeOnDragEnter(const FGeometry& InGeometry, const FDra
 {
 	Super::NativeOnDragEnter(InGeometry, InDragDropEvent, InOperation);
 
-	// another item from the inventory over this one: dropping it here combines them (or puts it in the combine slots)
-	const UZItemDragDropOperation* ItemOperation = Cast<UZItemDragDropOperation>(InOperation);
-	SetVisualState(bHovered, ItemOperation && !ItemOperation->bFromCombineSlot && Item && ItemOperation->Item != Item);
+	// another item over this one: dropping it here combines them (or puts it in the combine slots, or equips it in this slot)
+	SetVisualState(bHovered, IsDropTargetFor(Cast<UZItemDragDropOperation>(InOperation)));
 }
 
 void UZItemSlotWidget::NativeOnDragLeave(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
@@ -290,7 +327,7 @@ bool UZItemSlotWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 	if (ItemOperation->bFromCombineSlot)
 	{
 		// taken back out of the combine slots (dropped on another combine slot: it stays)
-		if (Role == EZItemSlotRole::Inventory)
+		if (Role != EZItemSlotRole::Combine)
 		{
 			Screen->RemoveFromCombine(ItemOperation->Item);
 		}
@@ -299,6 +336,23 @@ bool UZItemSlotWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 	{
 		Screen->AddToCombine(ItemOperation->Item);
 	}
+	else if (Role == EZItemSlotRole::Equipment)
+	{
+		// into this slot if it goes there (what's here comes out, or swaps places); otherwise tried together with what's here, e.g. a mod onto the weapon
+		if (Screen->CanEquip(ItemOperation->Item, EquipmentSlot))
+		{
+			Screen->EquipItem(ItemOperation->Item, EquipmentSlot);
+		}
+		else if (Item && ItemOperation->Item != Item && !ItemOperation->bFromEquipmentSlot)
+		{
+			Screen->CombineItems(ItemOperation->Item, Item);
+		}
+	}
+	else if (ItemOperation->bFromEquipmentSlot)
+	{
+		// out of the equipment window onto the items: taken off
+		Screen->UnequipItem(ItemOperation->Item);
+	}
 	else if (ItemOperation->Item != Item)
 	{
 		// one item onto another: try them together
@@ -306,6 +360,21 @@ bool UZItemSlotWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 	}
 
 	return true;
+}
+
+bool UZItemSlotWidget::IsDropTargetFor(const UZItemDragDropOperation* Operation) const
+{
+	if (!Operation || !Operation->Item || Operation->bFromCombineSlot || !Screen.IsValid())
+	{
+		return false;
+	}
+
+	if (Role == EZItemSlotRole::Equipment)
+	{
+		return Screen->CanEquip(Operation->Item, EquipmentSlot) || (Item && Operation->Item != Item && !Operation->bFromEquipmentSlot);
+	}
+
+	return Item && Operation->Item != Item && !Operation->bFromEquipmentSlot;
 }
 
 FReply UZItemSlotWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
@@ -327,13 +396,21 @@ FReply UZItemSlotWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKey
 			return FReply::Handled();
 		}
 
-		if (Role == EZItemSlotRole::Inventory && Key == EKeys::Gamepad_FaceButton_Left)
+		if (Role != EZItemSlotRole::Combine && Key == EKeys::Gamepad_FaceButton_Left)
 		{
-			Screen->UseItem(Item);
+			if (Role == EZItemSlotRole::Equipment)
+			{
+				Screen->UnequipItem(Item);
+			}
+			else
+			{
+				Screen->UseItem(Item);
+			}
+
 			return FReply::Handled();
 		}
 
-		if (Role == EZItemSlotRole::Inventory && Key == EKeys::Gamepad_FaceButton_Top)
+		if (Role != EZItemSlotRole::Combine && Key == EKeys::Gamepad_FaceButton_Top)
 		{
 			Screen->AddToCombine(Item);
 			return FReply::Handled();

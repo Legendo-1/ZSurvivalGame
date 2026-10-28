@@ -2,6 +2,7 @@
 
 #include "Items/ZItemDefinition.h"
 #include "AbilitySystem/ZGameplayTags.h"
+#include "Items/ZEquipmentSettings.h"
 #include "Items/ZItemFragments.h"
 
 #if WITH_EDITOR
@@ -110,6 +111,35 @@ int32 UZItemDefinition::GetToolQuality() const
 	return Tool ? Tool->Quality : 0;
 }
 
+FGameplayTag UZItemDefinition::GetEquipmentSlotType() const
+{
+	// the first fragment that makes it equippable says where it goes
+	for (const UZItemFragment* Fragment : Fragments)
+	{
+		const FGameplayTag SlotType = Fragment ? Fragment->GetEquipmentSlotType() : FGameplayTag();
+		if (SlotType.IsValid())
+		{
+			return SlotType;
+		}
+	}
+
+	return FGameplayTag();
+}
+
+TArray<FZStatModifier> UZItemDefinition::GetEquippedStatModifiers() const
+{
+	TArray<FZStatModifier> Modifiers;
+	for (const UZItemFragment* Fragment : Fragments)
+	{
+		if (Fragment)
+		{
+			Fragment->GetEquippedStatModifiers(Modifiers);
+		}
+	}
+
+	return Modifiers;
+}
+
 #if WITH_EDITOR
 EDataValidationResult UZItemDefinition::IsDataValid(FDataValidationContext& Context) const
 {
@@ -134,6 +164,28 @@ EDataValidationResult UZItemDefinition::IsDataValid(FDataValidationContext& Cont
 		}
 
 		Fragment->ValidateForItem(this, Context);
+	}
+
+	// equippable: players need a slot of its kind, and only one fragment says which
+	TSet<FGameplayTag> SlotTypes;
+	for (const UZItemFragment* Fragment : Fragments)
+	{
+		const FGameplayTag SlotType = Fragment ? Fragment->GetEquipmentSlotType() : FGameplayTag();
+		if (SlotType.IsValid())
+		{
+			SlotTypes.Add(SlotType);
+		}
+	}
+
+	if (SlotTypes.Num() > 1)
+	{
+		Context.AddWarning(LOCTEXT("SeveralSlotTypes", "More than one fragment says which equipment slot the item goes in; the first one counts."));
+	}
+
+	const FGameplayTag SlotType = GetEquipmentSlotType();
+	if (SlotType.IsValid() && UZEquipmentSettings::Get()->GetSlotCount(SlotType) <= 0)
+	{
+		Context.AddWarning(FText::Format(LOCTEXT("NoSuchSlot", "Players have no '{0}' slot (Project Settings → Game → Equipment), so the item can't be equipped."), FText::FromString(SlotType.ToString())));
 	}
 
 	if (Context.GetNumErrors() > 0)

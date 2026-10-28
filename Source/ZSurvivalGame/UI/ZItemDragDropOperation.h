@@ -10,7 +10,7 @@ class UZItemInstance;
 
 /**
  *  An item stack being dragged in the inventory screen
- *  Dropped on another item it combines them, on the combine slots it's added there, outside the inventory window it's dropped on the ground
+ *  Dropped on another item it combines them, on the combine slots it's added there, on an equipment slot it's equipped there, outside the inventory window it's dropped on the ground
  */
 UCLASS()
 class UZItemDragDropOperation : public UDragDropOperation
@@ -30,4 +30,8 @@ public:
 	/** True if it was dragged out of the combine slots: dropped anywhere else, it's just taken out of them */
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
 	bool bFromCombineSlot = false;
+
+	/** True if it was dragged out of an equipment slot: onto another slot of its kind it moves there, anywhere else it's taken off (never dropped on the ground) */
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
+	bool bFromEquipmentSlot = false;
 };

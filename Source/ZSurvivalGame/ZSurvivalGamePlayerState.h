@@ -10,12 +10,13 @@
 class UAbilitySystemComponent;
 class UZAttributeSet;
 class UZCraftingComponent;
+class UZEquipmentComponent;
 class UZInventoryComponent;
 class UZItemInstance;
 class UZProgressionComponent;
 
 /**
- *  PlayerState that owns the player's ability system, attributes (health, stamina, stats), inventory, crafting and progression (level, traits)
+ *  PlayerState that owns the player's ability system, attributes (health, stamina, stats), inventory, equipment, crafting and progression (level, traits)
  *  They live here instead of on the character so they survive respawns
  */
 UCLASS()
@@ -34,6 +35,10 @@ class AZSurvivalGamePlayerState : public APlayerState, public IAbilitySystemInte
 	/** The player's items; only the player sees what's in it */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZInventoryComponent> Inventory;
+
+	/** Which items are equipped: weapons, armor and jewelry */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZEquipmentComponent> Equipment;
 
 	/** Crafting by combining items, tradeskills and discoveries */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Crafting", meta = (AllowPrivateAccess = "true"))
@@ -54,6 +59,8 @@ public:
 	UZAttributeSet* GetAttributeSet() const { return AttributeSet; }
 
 	UZInventoryComponent* GetInventory() const { return Inventory; }
+
+	UZEquipmentComponent* GetEquipment() const { return Equipment; }
 
 	UZCraftingComponent* GetCrafting() const { return Crafting; }
 

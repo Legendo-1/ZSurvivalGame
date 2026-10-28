@@ -2,7 +2,7 @@
 
 How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
 
-**Last updated:** 2026-10-27 (players bring their saved character into the game; the world is the host's)
+**Last updated:** 2026-10-28 (equipment: weapon slots with keys 1/2/3, armor and jewelry)
 
 ## The basic idea
 
@@ -14,7 +14,7 @@ How the player's actions, weapons, enemies, health and death work in multiplayer
 
 | What | Lives on | Why |
 |---|---|---|
-| Ability system, health, stamina, stats, inventory, crafting, tradeskills, level and traits | **PlayerState** (`AZSurvivalGamePlayerState`) | Every player has one on every machine, and it survives respawns |
+| Ability system, health, stamina, stats, inventory, equipment, crafting, tradeskills, level and traits | **PlayerState** (`AZSurvivalGamePlayerState`) | Every player has one on every machine, and it survives respawns |
 | Body, camera, input, the weapon in the hands | **Character** (`AZSurvivalGameCharacter`, BP_ThirdPersonCharacter) | The part you control and see |
 | Sprint, aim and speed limit states | **Movement component** (`UZCharacterMovementComponent`) | Sent to the server with every move, so the server moves you at the same speed |
 | Weapon stats | **Weapon Data Assets** (`UZWeaponData`: DA_Pistol, DA_Rifle) | One asset per weapon, easy to tune |
@@ -75,14 +75,15 @@ Every ability is blocked while dead.
 ## Weapons
 
 - **Weapon Data Assets** are in `Content/Weapons`: **DA_Pistol** (semi-automatic, 12 rounds) and **DA_Rifle** (automatic, 30 rounds). Open one to change its damage, fire rate, spread, range, recoil, magazine size, reload time and **Ammo Item** (which inventory item reloading uses).
-- **Weapons are items** (`ID_Pistol`, `ID_Rifle`): the player carries them in the inventory, and the server spawns the weapon in the hands when one is equipped. See ITEMS.md.
-- **Your weapon keys (1/2/3)** call `Set Weapon Type`. It takes out the inventory's weapon of that type. Without a matching weapon (e.g. Unarmed) only the animation set changes.
+- **Weapons are items** (`ID_Pistol`, `ID_Rifle`): the player carries them in the inventory and equips one per weapon slot (short gun, long gun, melee; ITEMS.md → Equipment). The server spawns the weapon in the hands when one is taken out.
+- **The weapon keys** (1 = short gun, 2 = long gun, 3 = melee) call `SelectWeaponSlot`: your machine switches the animation set at once, and the server takes the weapon in that slot out (or puts it away, if it's already in the hands). A key for an empty slot does nothing.
+- **Set Weapon Type** (Blueprints and tests) still works: it takes out a weapon of that animation type, an equipped one first (an unequipped one is equipped first).
 - **The weapons are invisible for now:** there are no weapon meshes in the project yet. Set a Skeletal Mesh or Static Mesh in the data asset to show one. **Attach Socket** says where it goes on the character (default `weapon_r`, or `hand_r` if the mesh doesn't have it), **Attach Offset** lines it up, and **Muzzle Socket** marks where the shots start.
 - **Fire and reload animations** are optional: set **Fire Montage** / **Reload Montage** in the data asset.
 - **Upgrades and mods** (CRAFTING.md) change a weapon item's stats. The weapon in the hands works its stats out from its data, its item (upgrade level and mods) and the holder's traits. It sends its item to its owner only (`COND_OwnerOnly`), so the owner's machine predicts spread, recoil, the magazine and reload time with the same numbers as the server.
 - **When a magazine gets smaller** (e.g. an Extended Magazine comes off while the weapon is in the hands), the server moves the extra rounds back into the reserve ammo.
 
-**A new weapon:** right-click in `Content/Weapons` → **Miscellaneous → Data Asset** → **ZWeaponData** and fill it in. Then make an item with a **Weapon** fragment pointing to it (ITEMS.md → How to add things). Its **Weapon Type** decides which animation set it uses and which key equips it.
+**A new weapon:** right-click in `Content/Weapons` → **Miscellaneous → Data Asset** → **ZWeaponData** and fill it in. Then make an item with a **Weapon** fragment pointing to it (ITEMS.md → How to add things). Its **Weapon Type** decides which animation set it uses, its **Equipment Slot** which slot (and key) it goes in.
 
 ## Enemies
 
@@ -99,6 +100,7 @@ Every ability is blocked while dead.
 
 - **All damage goes through `UZCombatLibrary::ApplyDamage`**, which Blueprints can use too (e.g. traps). It checks the teams, lowers the target's health through a GameplayEffect on **IncomingDamage**, and plays the hit effect.
 - **Health and stamina** are attributes in `UZAttributeSet`: Health, MaxHealth, Stamina, MaxStamina. **Only the server changes them.** Health is sent to everyone, stamina only to its own player (for the HUD).
+- **Armor** (an attribute too, mostly from worn armor) lowers all damage on the server: damage × 100 / (100 + Armor). Enemies have 0, so later armored bosses only need a value.
 - **A player at 0 health** falls as a ragdoll and puts the weapon away; the items stay in the inventory. After **5 seconds** they respawn at a Player Start with full health and stamina. The body disappears 10 seconds later.
 - **An enemy at 0 health** falls as a ragdoll, stops its AI, drops its loot (its **Loot Table**) and disappears after 10 seconds. Every player gets its **Experience Reward** and **Trait Point Reward** (for bosses), see PROGRESSION.md. Its Blueprint can react with the **On Died** event, which also says who killed it (e.g. to count kills later).
 - **Player Starts:** each level needs at least one; one per player is best. If they're all crowded, the character is moved to a free spot nearby instead of failing to spawn.
@@ -130,7 +132,8 @@ The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are expl
 | Movement and rotation | The engine sends it |
 | Looking up/down (aim offset) | The engine sends the aim pitch |
 | Aiming (aim walk/idle) | `bIsAiming`, sent by the server |
-| Weapon type and the weapon in the hands | `CurrentWeaponType` and `EquippedWeapon`, set through `SetWeaponType` |
+| Weapon type and the weapon in the hands | `CurrentWeaponType` and `EquippedWeapon`, set by the server (weapon keys, equipping) |
+| Armor and jewelry | Nothing yet: only the owner gets what's equipped (armor isn't visible on the character yet) |
 | Shots, impacts, hits, deaths, reloads, taking out weapons, crafting, ... | GameplayCues, sent by the server (AUDIO.md) |
 | Attack, fire and reload animations | The ability system plays them for everyone |
 | The animation for taking out a weapon | It comes with the equip GameplayCue |
@@ -145,6 +148,9 @@ The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are expl
 | Jog, sprint, aim walk and walk speeds, max sprint angle | BP_ThirdPersonCharacter → Class Defaults → **Survival\|Movement** |
 | Stamina drain and regen per second | BP_ThirdPersonCharacter → Class Defaults → **Survival\|Stats** |
 | Starting items (weapons, ammo, ...) | BP_ThirdPersonCharacter → Class Defaults → **Survival\|Inventory** |
+| Equipment slots (how many rings, ...) and how strong armor is | **Project Settings → Game → Equipment** |
+| Which key takes out which weapon slot | BP_ThirdPersonCharacter → Class Defaults → **Input → Weapon Slot Inputs** (the keys themselves: `IMC_Default`) |
+| What armor and jewelry give | The item's **Wearable** fragment (`Content/Items/Armor`, `Content/Items/Jewelry`) |
 | What enemies drop | The loot table in `Content/Items/LootTables` (set on the enemy: **AI\|Loot**) |
 | Experience and trait points for a kill | The enemy's Class Defaults → **AI\|Rewards** |
 | Levels, trait points, tradeskill levels | **Project Settings → Game → Progression** |
@@ -178,7 +184,7 @@ The **Server** window is the host. The **Client** window is the second player.
 | `Z.Weapon.DrawDebug 0` / `1` | Hides / shows the shot debug lines |
 | `log LogZSurvivalGame Verbose` | Writes every shot, reload, pickup and inventory change to the Output Log |
 
-The item commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZUseItem`, `ZSpawnPickup`) are in ITEMS.md, the crafting commands (`ZCombine`, `ZSkills`, ...) in CRAFTING.md, the progression commands (`ZTraits`, `ZRaiseTrait`, ...) in PROGRESSION.md, the save commands (`ZSave`, `ZSaveSlots`, `ZNewCharacter`, ...) in SAVING.md.
+The item and equipment commands (`ZGiveItem`, `ZShowInventory`, `ZDropItem`, `ZUseItem`, `ZSpawnPickup`, `ZEquip`, `ZEquipment`) are in ITEMS.md, the crafting commands (`ZCombine`, `ZSkills`, ...) in CRAFTING.md, the progression commands (`ZTraits`, `ZRaiseTrait`, ...) in PROGRESSION.md, the save commands (`ZSave`, `ZSaveSlots`, `ZNewCharacter`, ...) in SAVING.md.
 
 **Saves while testing:** each Play continues your saved character, and the Client window keeps its own (in `Saved/SaveGames/PIE1`). For a new character every Play: Project Settings → Game → Saving → untick **Use Saves In Editor**.
 
@@ -193,7 +199,8 @@ Not decided in detail. This is the direction, so new systems fit what's already 
 - **Downed and revive:** players go down first and teammates can revive them, before dying for real.
 - **Smarter AI:** AI perception (sight and hearing) instead of distance, monsters and human NPCs fighting each other, patrols and ranged attacks, possibly with a StateTree.
 - **Damage types** (acid, electric), e.g. from weapon mods: GameplayEffects with tags (Blueprint children of `UZGameplayEffect_Damage`). Effects everyone sees are GameplayCues.
-- **Armor weight tiers:** attributes changed by the armor's GameplayEffect, e.g. slower dodges for heavy armor.
+- **Armor weight tiers:** e.g. slower dodges for heavy armor: a weight stat on the Wearable fragment, added up by the equipment component like the other stats.
+- **Armor you can see:** a list of what's worn sent to everyone (item names only, not the items), and meshes on the character.
 - **Harvesting and storage:** built on the item system (plans in ITEMS.md and CRAFTING.md).
 - **Spawn protection:** a few seconds without damage after respawning, so enemies at a Player Start can't kill a player again right away.
 - **Hub noise/heat and sieges:** values only the server keeps, sent to everyone through the GameState. Spawners can be started by a siege.

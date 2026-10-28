@@ -87,8 +87,10 @@ Tie base defense directly to the expedition loop:
 * \[x\] Character progression, Remnant style: levels from kills give trait points (also from bosses and hidden Tomes of Knowledge), spent on traits that change stats (health, stamina, damage, recoil, reload, dodge, crafting) and can be reset (see PROGRESSION.md).  
 * \[x\] Weapon mod slots and upgrades: crafted mods (Barrel, Sight, Magazine) that change a weapon's stats, installed and taken off with a screwdriver; upgrade levels that each need more Weaponsmithing (see CRAFTING.md).  
 * \[x\] Inventory screen: items, combining by dragging or with combine slots, the character panel with traits and tradeskills; opened with I/Tab or at a crafting station (see UI.md).  
+* \[x\] Equipment, Remnant style: one short gun, one long gun and one melee weapon (keys 1, 2, 3), head, torso and leg armor, a necklace and four rings, in an equipment window next to the inventory; armor lowers damage, and armor and jewelry change stats like traits; saved with the character (see ITEMS.md).  
 * \[x\] Saving, Remnant style: each player's character (level, traits, items with their stats and mods, tradeskills, recipes found) on their own PC, taken into any game and checked by the host; the world's progress in the host's save; save slots ready for a menu; crash-safe files with a backup (see SAVING.md).  
-* \[ \] Mods that change fire modes and damage types (e.g. an Acid Core from an elite), and mods you can see on the weapon.
+* \[ \] Mods that change fire modes and damage types (e.g. an Acid Core from an elite), and mods you can see on the weapon.  
+* \[ \] Melee weapons for the melee slot, armor you can see on the character, and armor weight (light, medium and heavy dodges).
 
 ### **Phase 3: Loot, Harvest, & Crafting Loops**
 

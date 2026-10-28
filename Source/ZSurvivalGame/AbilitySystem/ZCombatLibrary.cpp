@@ -7,6 +7,7 @@
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
+#include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "AbilitySystem/ZGameplayEffect_Damage.h"
 #include "AbilitySystem/ZGameplayEffect_Heal.h"
@@ -89,7 +90,7 @@ bool UZCombatLibrary::ApplyDamage(AActor* Source, AActor* Target, float Damage, 
 	FGameplayCueParameters CueParams;
 	CueParams.Location = Hit.bBlockingHit ? FVector(Hit.ImpactPoint) : Target->GetActorLocation();
 	CueParams.Normal = Hit.ImpactNormal;
-	CueParams.RawMagnitude = Damage;
+	CueParams.RawMagnitude = UZAttributeSet::GetDamageAfterArmor(Damage, TargetASC->GetNumericAttribute(UZAttributeSet::GetArmorAttribute()));
 	CueParams.Instigator = Source;
 	CueParams.EffectCauser = Source;
 	CueParams.PhysicalMaterial = Hit.PhysMaterial.Get();

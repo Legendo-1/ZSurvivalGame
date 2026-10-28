@@ -27,6 +27,7 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_Fire.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Reload.h"
 #include "Interaction/ZInteractionComponent.h"
+#include "Items/ZEquipmentComponent.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemFragments.h"
 #include "Items/ZItemInstance.h"
@@ -212,12 +213,13 @@ float AZSurvivalGameCharacter::TakeDamage(float DamageAmount, FDamageEvent const
 {
 	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	// health only changes on the server; the new value replicates to everyone (UZAttributeSet keeps it in range)
+	// health only changes on the server; the new value replicates to everyone (UZAttributeSet keeps it in range). Armor lowers it, as for every other damage
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
 	if (HasAuthority() && ASC && ActualDamage > 0.f && !bIsDead)
 	{
 		const FGameplayAttribute HealthAttribute = UZAttributeSet::GetHealthAttribute();
-		ASC->SetNumericAttributeBase(HealthAttribute, ASC->GetNumericAttributeBase(HealthAttribute) - ActualDamage);
+		const float DamageTaken = UZAttributeSet::GetDamageAfterArmor(ActualDamage, ASC->GetNumericAttribute(UZAttributeSet::GetArmorAttribute()));
+		ASC->SetNumericAttributeBase(HealthAttribute, ASC->GetNumericAttributeBase(HealthAttribute) - DamageTaken);
 	}
 
 	return ActualDamage;
@@ -232,11 +234,18 @@ void AZSurvivalGameCharacter::PossessedBy(AController* NewController)
 	GiveDefaultAbilities();
 	GiveStartingItems();
 
-	// put the weapon away when its item leaves the inventory (e.g. dropped)
+	// put the weapon away when its item leaves the inventory (e.g. dropped) or its slot; take out a weapon the player equips
 	if (UZInventoryComponent* Inventory = GetInventory())
 	{
 		Inventory->OnItemRemoving.RemoveAll(this);
 		Inventory->OnItemRemoving.AddUObject(this, &AZSurvivalGameCharacter::OnInventoryItemRemoving);
+	}
+
+	if (UZEquipmentComponent* Equipment = GetEquipment())
+	{
+		Equipment->OnEquipmentChanged.AddUniqueDynamic(this, &AZSurvivalGameCharacter::HandleEquipmentChanged);
+		Equipment->OnItemEquippedByPlayer.RemoveAll(this);
+		Equipment->OnItemEquippedByPlayer.AddUObject(this, &AZSurvivalGameCharacter::HandleItemEquippedByPlayer);
 	}
 
 	// take out the weapon that was in the hands when the game was saved, or else the one for the starting animation set (e.g. set in Class Defaults)
@@ -264,6 +273,8 @@ void AZSurvivalGameCharacter::UnPossessed()
 	{
 		ZPlayerState->GetAttributeSet()->OnOutOfHealth.RemoveAll(this);
 		ZPlayerState->GetInventory()->OnItemRemoving.RemoveAll(this);
+		ZPlayerState->GetEquipment()->OnEquipmentChanged.RemoveDynamic(this, &AZSurvivalGameCharacter::HandleEquipmentChanged);
+		ZPlayerState->GetEquipment()->OnItemEquippedByPlayer.RemoveAll(this);
 	}
 
 	Super::UnPossessed();
@@ -413,9 +424,14 @@ void AZSurvivalGameCharacter::GiveStartingItems()
 	// only once per player: after a respawn the inventory still has everything
 	ZPlayerState->bReceivedStartingItems = true;
 
+	UZInventoryComponent* Inventory = ZPlayerState->GetInventory();
 	for (const FZItemStack& Stack : StartingItems)
 	{
-		ZPlayerState->GetInventory()->AddItem(Stack.Item, Stack.Count);
+		if (Inventory->AddItem(Stack.Item, Stack.Count) > 0 && Stack.Item && Stack.Item->IsEquippable())
+		{
+			// starting weapons and clothes are equipped, as long as their slot is free
+			ZPlayerState->GetEquipment()->EquipInFreeSlot(Inventory->FindFirstInstance(Stack.Item));
+		}
 	}
 }
 
@@ -423,6 +439,12 @@ UZInventoryComponent* AZSurvivalGameCharacter::GetInventory() const
 {
 	const AZSurvivalGamePlayerState* ZPlayerState = GetPlayerState<AZSurvivalGamePlayerState>();
 	return ZPlayerState ? ZPlayerState->GetInventory() : nullptr;
+}
+
+UZEquipmentComponent* AZSurvivalGameCharacter::GetEquipment() const
+{
+	const AZSurvivalGamePlayerState* ZPlayerState = GetPlayerState<AZSurvivalGamePlayerState>();
+	return ZPlayerState ? ZPlayerState->GetEquipment() : nullptr;
 }
 
 UZItemInstance* AZSurvivalGameCharacter::FindWeaponItemOfType(EZWeaponType WeaponType) const
@@ -433,11 +455,58 @@ UZItemInstance* AZSurvivalGameCharacter::FindWeaponItemOfType(EZWeaponType Weapo
 		return nullptr;
 	}
 
-	return Inventory->FindFirstInstanceMatching([WeaponType](const UZItemInstance* Item)
+	const auto IsOfType = [WeaponType](const UZItemInstance* Item)
+	{
+		const UZItemFragment_Weapon* WeaponFragment = Item ? Item->FindFragment<UZItemFragment_Weapon>() : nullptr;
+		return WeaponFragment && WeaponFragment->WeaponData && WeaponFragment->WeaponData->WeaponType == WeaponType;
+	};
+
+	// an equipped weapon first, then any in the inventory
+	if (const UZEquipmentComponent* Equipment = GetEquipment())
+	{
+		for (const FZEquippedItem& Entry : Equipment->GetEquippedItems())
+		{
+			if (IsOfType(Entry.Item))
+			{
+				return Entry.Item;
+			}
+		}
+	}
+
+	return Inventory->FindFirstInstanceMatching(IsOfType);
+}
+
+UZItemInstance* AZSurvivalGameCharacter::GetNextWeaponInSlotType(const FGameplayTag& SlotType, bool& bOutPutAway) const
+{
+	bOutPutAway = false;
+
+	const UZEquipmentComponent* Equipment = GetEquipment();
+	if (!Equipment)
+	{
+		return nullptr;
+	}
+
+	TArray<UZItemInstance*> Weapons = Equipment->GetItemsOfSlotType(SlotType);
+	Weapons.RemoveAll([](const UZItemInstance* Item)
 	{
 		const UZItemFragment_Weapon* WeaponFragment = Item->FindFragment<UZItemFragment_Weapon>();
-		return WeaponFragment && WeaponFragment->WeaponData && WeaponFragment->WeaponData->WeaponType == WeaponType;
+		return !WeaponFragment || !WeaponFragment->WeaponData;
 	});
+
+	// the first one, the next one after the one in the hands, or (after the last one) none: the key pressed again puts the weapon away
+	const int32 InHands = Weapons.IndexOfByKey(EquippedItem);
+	if (InHands == INDEX_NONE)
+	{
+		return Weapons.Num() > 0 ? Weapons[0] : nullptr;
+	}
+
+	if (Weapons.IsValidIndex(InHands + 1))
+	{
+		return Weapons[InHands + 1];
+	}
+
+	bOutPutAway = true;
+	return nullptr;
 }
 
 void AZSurvivalGameCharacter::EquipWeaponOfType(EZWeaponType WeaponType)
@@ -459,6 +528,13 @@ void AZSurvivalGameCharacter::EquipWeaponItem(UZItemInstance* Item)
 {
 	const UZItemFragment_Weapon* WeaponFragment = Item ? Item->FindFragment<UZItemFragment_Weapon>() : nullptr;
 	if (!HasAuthority() || !WeaponFragment || !WeaponFragment->WeaponData || Item == EquippedItem)
+	{
+		return;
+	}
+
+	// only equipped weapons are taken out: in its slot first (what was there comes out, and is put away if it was in the hands)
+	UZEquipmentComponent* Equipment = GetEquipment();
+	if (!Equipment || (!Equipment->IsEquipped(Item) && !Equipment->EquipItem(Item, FZEquipmentSlot())))
 	{
 		return;
 	}
@@ -542,6 +618,25 @@ void AZSurvivalGameCharacter::OnInventoryItemRemoving(UZInventoryComponent* Inve
 	{
 		UnequipWeapon();
 		CurrentWeaponType = EZWeaponType::Unarmed;
+	}
+}
+
+void AZSurvivalGameCharacter::HandleEquipmentChanged(UZEquipmentComponent* Equipment)
+{
+	// a weapon is only in the hands while it's in a weapon slot
+	if (HasAuthority() && EquippedItem && Equipment && !Equipment->IsEquipped(EquippedItem))
+	{
+		UnequipWeapon();
+		CurrentWeaponType = EZWeaponType::Unarmed;
+	}
+}
+
+void AZSurvivalGameCharacter::HandleItemEquippedByPlayer(UZEquipmentComponent* Equipment, UZItemInstance* Item)
+{
+	// a weapon the player just equipped comes out (armor and jewelry are just worn)
+	if (!bIsDead && Item && Item->FindFragment<UZItemFragment_Weapon>())
+	{
+		EquipWeaponItem(Item);
 	}
 }
 
@@ -634,6 +729,15 @@ void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		{
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AZSurvivalGameCharacter::DoInteractStart);
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Completed, this, &AZSurvivalGameCharacter::DoInteractEnd);
+		}
+
+		// Weapon slots: each key takes out the weapon in its slot
+		for (const FZWeaponSlotInput& SlotInput : WeaponSlotInputs)
+		{
+			if (SlotInput.InputAction && SlotInput.Slot.IsValid())
+			{
+				EnhancedInputComponent->BindAction(SlotInput.InputAction.Get(), ETriggerEvent::Started, this, &AZSurvivalGameCharacter::SelectWeaponSlot, SlotInput.Slot);
+			}
 		}
 	}
 	else
@@ -855,6 +959,51 @@ void AZSurvivalGameCharacter::ServerSetWeaponType_Implementation(EZWeaponType Ne
 	if (!bIsDead)
 	{
 		EquipWeaponOfType(NewWeaponType);
+	}
+}
+
+void AZSurvivalGameCharacter::SelectWeaponSlot(FGameplayTag SlotType)
+{
+	if (bIsDead)
+	{
+		return;
+	}
+
+	if (HasAuthority())
+	{
+		ServerSelectWeaponSlot_Implementation(SlotType);
+		return;
+	}
+
+	// this player sees the animation set change right away (from their copy of the equipment); the server swaps the weapon for everyone
+	bool bPutAway = false;
+	const UZItemInstance* NextWeapon = GetNextWeaponInSlotType(SlotType, bPutAway);
+	const UZItemFragment_Weapon* WeaponFragment = NextWeapon ? NextWeapon->FindFragment<UZItemFragment_Weapon>() : nullptr;
+	if (WeaponFragment || bPutAway)
+	{
+		CancelWeaponAbilities();
+		CurrentWeaponType = WeaponFragment ? WeaponFragment->WeaponData->WeaponType : EZWeaponType::Unarmed;
+	}
+
+	ServerSelectWeaponSlot(SlotType);
+}
+
+void AZSurvivalGameCharacter::ServerSelectWeaponSlot_Implementation(FGameplayTag SlotType)
+{
+	if (bIsDead)
+	{
+		return;
+	}
+
+	bool bPutAway = false;
+	if (UZItemInstance* NextWeapon = GetNextWeaponInSlotType(SlotType, bPutAway))
+	{
+		EquipWeaponItem(NextWeapon);
+	}
+	else if (bPutAway)
+	{
+		UnequipWeapon();
+		CurrentWeaponType = EZWeaponType::Unarmed;
 	}
 }
 

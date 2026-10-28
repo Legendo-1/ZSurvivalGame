@@ -21,6 +21,11 @@ EDataValidationResult UZWeaponData::IsDataValid(FDataValidationContext& Context)
 			FText::FromString(EquipMontage->GetName())));
 	}
 
+	if (!EquipmentSlot.IsValid())
+	{
+		Context.AddError(LOCTEXT("NoEquipmentSlot", "The weapon has no Equipment Slot (Short Gun, Long Gun or Melee), so it can't be equipped or taken out."));
+	}
+
 	if (Context.GetNumErrors() > 0)
 	{
 		Result = EDataValidationResult::Invalid;

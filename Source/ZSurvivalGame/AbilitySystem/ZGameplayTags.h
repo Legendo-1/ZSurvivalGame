@@ -36,6 +36,8 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Tool);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Salvage);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_WeaponMod);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Armor);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Jewelry);
 
 	// Tools: what kind of tool an item is, so a recipe can ask for any tool of a kind (its quality is on the Tool fragment)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Tool_Screwdriver);
@@ -51,6 +53,17 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Weapon_ModSlot_Barrel);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Weapon_ModSlot_Sight);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Weapon_ModSlot_Magazine);
+
+	// Equipment slots: the kinds of slot a player equips items in (how many of each: Project Settings → Game → Equipment), and which one an item goes in (weapon data, Wearable fragment)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equipment_Slot);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equipment_Slot_ShortGun);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equipment_Slot_LongGun);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equipment_Slot_Melee);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equipment_Slot_Head);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equipment_Slot_Torso);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equipment_Slot_Legs);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equipment_Slot_Neck);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Equipment_Slot_Ring);
 
 	// Crafting stations: what a station is (on AZCraftingStation) and what a recipe needs nearby
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Crafting_Station_Workbench);
@@ -82,6 +95,7 @@ namespace ZGameplayTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Character_LevelUp);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Item_Pickup);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Item_Use);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Item_Equip);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Crafting_Working);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Crafting_Done);
 }

@@ -7,10 +7,14 @@
 #include "ZSurvivalGameCharacter.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZCombatLibrary.h"
+#include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
+#include "Items/ZEquipmentComponent.h"
+#include "Items/ZEquipmentSettings.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemInstance.h"
 #include "Progression/ZProgressionComponent.h"
+#include "Progression/ZTraitDefinition.h"
 #include "Weapons/ZWeaponData.h"
 
 #if WITH_EDITOR
@@ -84,6 +88,7 @@ bool UZItemFragment_Weapon::OnUse(UZItemInstance* Instance, APawn* User) const
 		return false;
 	}
 
+	// the character puts it in its weapon slot (if it isn't there yet) and takes it out
 	Character->EquipItem(Instance);
 	return true;
 }
@@ -93,11 +98,21 @@ FText UZItemFragment_Weapon::GetUseActionName() const
 	return LOCTEXT("EquipAction", "Equip");
 }
 
+FGameplayTag UZItemFragment_Weapon::GetEquipmentSlotType() const
+{
+	return WeaponData ? WeaponData->EquipmentSlot : FGameplayTag();
+}
+
 void UZItemFragment_Weapon::GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const
 {
 	if (!WeaponData)
 	{
 		return;
+	}
+
+	if (WeaponData->EquipmentSlot.IsValid())
+	{
+		OutLines.Add(FText::Format(LOCTEXT("WeaponSlotTypeLine", "Weapon slot: {0}"), UZEquipmentSettings::Get()->GetSlotTypeName(WeaponData->EquipmentSlot)));
 	}
 
 	// the item's own stats: its data with its upgrades and mods (the holder's traits come on top)
@@ -324,6 +339,71 @@ void UZItemFragment_Tool::ValidateForItem(const UZItemDefinition* Item, FDataVal
 	if (!Item->ItemTags.HasTag(ToolParent))
 	{
 		Context.AddWarning(LOCTEXT("ToolNoKindTag", "The item has a Tool fragment but no Item.Tool.* tag (e.g. Item.Tool.Screwdriver), so recipes can only ask for this exact item."));
+	}
+}
+#endif
+
+void UZItemFragment_Wearable::GetEquippedStatModifiers(TArray<FZStatModifier>& OutModifiers) const
+{
+	OutModifiers.Append(Modifiers);
+}
+
+void UZItemFragment_Wearable::OnEquippedByPlayer(UZItemInstance* Instance, APawn* User) const
+{
+	// e.g. the rustle of a jacket, for everyone nearby
+	FGameplayCueParameters Cue;
+	Cue.SourceObject = Instance ? Instance->GetItemDefinition() : nullptr;
+	UZGameplayCueLibrary::ExecuteCue(User, EquipCue, Cue);
+}
+
+bool UZItemFragment_Wearable::OnUse(UZItemInstance* Instance, APawn* User) const
+{
+	UZEquipmentComponent* Equipment = UZEquipmentComponent::FindEquipmentComponent(User);
+	return Equipment && !Equipment->IsEquipped(Instance) && Equipment->EquipItemByPlayer(Instance, FZEquipmentSlot());
+}
+
+FText UZItemFragment_Wearable::GetUseActionName() const
+{
+	return LOCTEXT("EquipAction", "Equip");
+}
+
+void UZItemFragment_Wearable::GetDescriptionLines(const UZItemInstance* Instance, TArray<FText>& OutLines) const
+{
+	if (Slot.IsValid())
+	{
+		OutLines.Add(FText::Format(LOCTEXT("WornOnLine", "Worn on: {0}"), UZEquipmentSettings::Get()->GetSlotTypeName(Slot)));
+	}
+
+	for (const FZStatModifier& Modifier : Modifiers)
+	{
+		if (Modifier.Attribute.IsValid())
+		{
+			OutLines.Add(UZTraitDefinition::DescribeBonus(Modifier.Attribute, Modifier.Value));
+		}
+	}
+}
+
+#if WITH_EDITOR
+void UZItemFragment_Wearable::ValidateForItem(const UZItemDefinition* Item, FDataValidationContext& Context) const
+{
+	if (!Slot.IsValid())
+	{
+		Context.AddError(LOCTEXT("WearableNoSlot", "The Wearable fragment has no Slot, so it can't be worn."));
+	}
+
+	if (Item->IsStackable())
+	{
+		Context.AddError(LOCTEXT("WearableStackable", "Worn items are equipped one by one, so they can't stack: set Max Stack Size to 1."));
+	}
+
+	const TArray<FGameplayAttribute> StatAttributes = UZAttributeSet::GetTraitAttributes();
+	for (const FZStatModifier& Modifier : Modifiers)
+	{
+		if (!StatAttributes.Contains(Modifier.Attribute))
+		{
+			Context.AddError(FText::Format(LOCTEXT("WearableBadAttribute", "The modifier for '{0}' can't work: worn items can change Armor, MaxHealth, MaxStamina and the stats in ZAttributeSet (Damage, Recoil, Reload Speed, Dodge Distance, Stamina Regen, Crafting Yield Chance, Tradeskill Experience)."),
+				FText::FromString(Modifier.Attribute.GetName())));
+		}
 	}
 }
 #endif

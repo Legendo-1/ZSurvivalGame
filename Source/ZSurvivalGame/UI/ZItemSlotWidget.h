@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Items/ZEquipmentComponent.h"
 #include "UI/ZWidgetLayout.h"
 #include "ZItemSlotWidget.generated.h"
 
@@ -12,6 +13,7 @@ class UImage;
 class UProgressBar;
 class UTextBlock;
 class UZInventoryScreenWidget;
+class UZItemDragDropOperation;
 class UZItemInstance;
 
 /** Where a slot is in the inventory screen */
@@ -21,14 +23,16 @@ enum class EZItemSlotRole : uint8
 	/** One of the player's stacks */
 	Inventory,
 	/** An item put in the combine slots */
-	Combine
+	Combine,
+	/** An equipment slot: the item in it, or empty */
+	Equipment
 };
 
 /**
- *  One item stack in the inventory screen
- *  Mouse: click selects, right-click or double-click uses (equip, read, ...), drag onto another item combines them, drag onto the combine slots adds it there,
- *  drag outside the window drops it on the ground. In the combine slots a click takes it out again
- *  Gamepad/keyboard: A/Enter selects (takes it out of the combine slots), X uses, Y puts it in the combine slots
+ *  One item stack in the inventory screen, or one equipment slot in the equipment window
+ *  Mouse: click selects, right-click or double-click uses (equip, read, ...; on an equipped item: takes it off), drag onto another item combines them, drag onto the combine slots adds it there,
+ *  drag onto an equipment slot equips it there, drag outside the window drops it on the ground. In the combine slots a click takes it out again
+ *  Gamepad/keyboard: A/Enter selects (takes it out of the combine slots), X uses (takes off what's in an equipment slot), Y puts it in the combine slots
  *  Your own look: a Widget Blueprint with this parent class; widgets with these names are filled in (all optional): Background, IconImage, NameText, CountText, DurabilityBar, EquippedMarker
  */
 UCLASS()
@@ -48,8 +52,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetCount() const { return Count; }
 
-	/** The screen this slot belongs to, and whether it's an inventory or a combine slot (set by the screen) */
+	/** The screen this slot belongs to, and whether it's an inventory, combine or equipment slot (set by the screen) */
 	void SetScreen(UZInventoryScreenWidget* InScreen, EZItemSlotRole InRole);
+
+	/** Which equipment slot it shows, in the equipment window (the built-in window sets it; in your own, set it in the slot's Details) */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	void SetEquipmentSlot(const FZEquipmentSlot& InEquipmentSlot);
+
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	const FZEquipmentSlot& GetEquipmentSlot() const { return EquipmentSlot; }
 
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	EZItemSlotRole GetRole() const { return Role; }
@@ -115,9 +126,21 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory", meta = (BindWidgetOptional))
 	TObjectPtr<UProgressBar> DurabilityBar;
 
-	/** Shown while the item is in the character's hands (optional) */
+	/** Shown while the item is equipped; a Text says "Equipped", or "In hands" for the weapon in the hands (in the equipment window: only "In hands") (optional) */
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory", meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> EquippedMarker;
+
+	/** In the equipment window: which slot this is (the kind, and which one of that kind from 0). Set it on each slot you put in your own equipment window */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Equipment")
+	FZEquipmentSlot EquipmentSlot;
+
+	/** Shown in NameText while the equipment slot is empty; the slot's name (e.g. "Ring 2") if left empty */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Equipment")
+	FText EmptyText;
+
+	/** NameText's color while the equipment slot is empty */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Appearance")
+	FLinearColor EmptyTextColor = ZWidgetLayout::MutedTextColor;
 
 	/** Background colors for each state */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Appearance")
@@ -141,6 +164,12 @@ private:
 
 	/** Sends the state to UpdateBackground and the Blueprint event */
 	void SetVisualState(bool bInHovered, bool bInDropTarget);
+
+	/** True if dropping this here does something worth highlighting: combines with this item, or equips it in this equipment slot */
+	bool IsDropTargetFor(const UZItemDragDropOperation* Operation) const;
+
+	/** NameText's own color, put back when an empty equipment slot gets an item */
+	FSlateColor NameTextColor;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UZItemInstance> Item;

@@ -22,10 +22,12 @@
 #include "Crafting/ZCraftingComponent.h"
 #include "Crafting/ZCraftingRecipe.h"
 #include "Crafting/ZCraftingStation.h"
+#include "Items/ZEquipmentComponent.h"
 #include "Items/ZInventoryComponent.h"
 #include "Items/ZItemDefinition.h"
 #include "Items/ZItemInstance.h"
 #include "UI/ZCharacterPanelWidget.h"
+#include "UI/ZEquipmentPanelWidget.h"
 #include "UI/ZItemDetailsWidget.h"
 #include "UI/ZItemDragDropOperation.h"
 #include "UI/ZWidgetLayout.h"
@@ -104,6 +106,12 @@ void UZInventoryScreenWidget::NativeOnInitialized()
 	{
 		CloseButton->OnClicked.AddUniqueDynamic(this, &UZInventoryScreenWidget::HandleCloseClicked);
 	}
+
+	// its slots select, describe and equip through this screen
+	if (EquipmentPanel)
+	{
+		EquipmentPanel->SetScreen(this);
+	}
 }
 
 void UZInventoryScreenWidget::NativeConstruct()
@@ -165,6 +173,11 @@ void UZInventoryScreenWidget::RefreshPeriodic()
 		{
 			ItemSlot->Refresh();
 		}
+
+		if (EquipmentPanel)
+		{
+			EquipmentPanel->Refresh();
+		}
 	}
 }
 
@@ -203,6 +216,17 @@ bool UZInventoryScreenWidget::NativeOnDrop(const FGeometry& InGeometry, const FD
 		if (!ItemOperation->bFromCombineSlot)
 		{
 			AddToCombine(ItemOperation->Item);
+		}
+
+		return true;
+	}
+
+	// out of an equipment slot: taken off, never on the ground by accident (between the slots of the equipment window, nothing happens)
+	if (ItemOperation->bFromEquipmentSlot)
+	{
+		if (!IsOverWidget(EquipmentPanel, Position))
+		{
+			UnequipItem(ItemOperation->Item);
 		}
 
 		return true;
@@ -270,6 +294,15 @@ void UZInventoryScreenWidget::BuildDefaultLayout()
 	UHorizontalBox* Body = MakeHorizontalBox(*WidgetTree, TEXT("Body"));
 	AddToVerticalBox(WindowColumn, Body, FMargin(0.f), true);
 
+	// --- far left: the equipment slots (three to a row)
+	UBorder* EquipmentSection = MakeBorder(*WidgetTree, TEXT("EquipmentSection"), SectionColor, FMargin(10.f));
+	USizeBox* EquipmentSize = MakeSizeBox(*WidgetTree, TEXT("EquipmentSize"), 316.f, 0.f);
+	EquipmentSize->SetContent(EquipmentSection);
+	AddToHorizontalBox(Body, EquipmentSize, FMargin(0.f, 0.f, 12.f, 0.f), 0.f, VAlign_Fill);
+
+	EquipmentPanel = WidgetTree->ConstructWidget<UZEquipmentPanelWidget>(UZEquipmentPanelWidget::StaticClass(), TEXT("EquipmentPanel"));
+	EquipmentSection->SetContent(EquipmentPanel);
+
 	// --- left: the items
 	UVerticalBox* ItemsColumn = MakeVerticalBox(*WidgetTree, TEXT("ItemsColumn"));
 	AddToHorizontalBox(Body, ItemsColumn, FMargin(0.f, 0.f, 12.f, 0.f), 1.45f, VAlign_Fill);
@@ -288,7 +321,7 @@ void UZInventoryScreenWidget::BuildDefaultLayout()
 	ItemsPanel = Items;
 
 	UTextBlock* ItemsHint = MakeText(*WidgetTree, TEXT("ItemsHint"), 10, MutedTextColor, false, true);
-	ItemsHint->SetText(LOCTEXT("ItemsHint", "Right-click to use. Drag an item onto another to try them together, or out of the window to drop it."));
+	ItemsHint->SetText(LOCTEXT("ItemsHint", "Right-click to use or equip. Drag an item onto another to try them together, onto an equipment slot to equip it, or out of the window to drop it."));
 	AddToVerticalBox(ItemsColumn, ItemsHint, FMargin(0.f, 6.f, 0.f, 0.f));
 
 	// --- middle: details, item buttons and the combine slots
@@ -394,21 +427,28 @@ void UZInventoryScreenWidget::BuildDefaultLayout()
 
 void UZInventoryScreenWidget::BindToPlayer()
 {
-	// both live on the PlayerState, so they're the same after dying and respawning
+	// they live on the PlayerState, so they're the same after dying and respawning
 	UZInventoryComponent* NewInventory = UZInventoryComponent::FindInventoryComponent(GetOwningPlayer());
+	UZEquipmentComponent* NewEquipment = UZEquipmentComponent::FindEquipmentComponent(GetOwningPlayer());
 	UZCraftingComponent* NewCrafting = UZCraftingComponent::FindCraftingComponent(GetOwningPlayer());
-	if (NewInventory == Inventory.Get() && NewCrafting == Crafting.Get())
+	if (NewInventory == Inventory.Get() && NewEquipment == Equipment.Get() && NewCrafting == Crafting.Get())
 	{
 		return;
 	}
 
 	UnbindFromPlayer();
 	Inventory = NewInventory;
+	Equipment = NewEquipment;
 	Crafting = NewCrafting;
 
 	if (NewInventory)
 	{
 		NewInventory->OnInventoryChanged.AddUniqueDynamic(this, &UZInventoryScreenWidget::HandleInventoryChanged);
+	}
+
+	if (NewEquipment)
+	{
+		NewEquipment->OnEquipmentChanged.AddUniqueDynamic(this, &UZInventoryScreenWidget::HandleEquipmentChanged);
 	}
 
 	if (NewCrafting)
@@ -427,6 +467,11 @@ void UZInventoryScreenWidget::UnbindFromPlayer()
 		OldInventory->OnInventoryChanged.RemoveDynamic(this, &UZInventoryScreenWidget::HandleInventoryChanged);
 	}
 
+	if (UZEquipmentComponent* OldEquipment = Equipment.Get())
+	{
+		OldEquipment->OnEquipmentChanged.RemoveDynamic(this, &UZInventoryScreenWidget::HandleEquipmentChanged);
+	}
+
 	if (UZCraftingComponent* OldCrafting = Crafting.Get())
 	{
 		OldCrafting->OnCraftingResult.RemoveDynamic(this, &UZInventoryScreenWidget::HandleCraftingResult);
@@ -434,6 +479,7 @@ void UZInventoryScreenWidget::UnbindFromPlayer()
 	}
 
 	Inventory.Reset();
+	Equipment.Reset();
 	Crafting.Reset();
 }
 
@@ -444,6 +490,11 @@ void UZInventoryScreenWidget::SelectItem(UZItemInstance* Item)
 	for (UZItemSlotWidget* ItemSlot : ItemSlots)
 	{
 		ItemSlot->SetSelected(SelectedItem && ItemSlot->GetItem() == SelectedItem);
+	}
+
+	if (EquipmentPanel)
+	{
+		EquipmentPanel->SetSelectedItem(SelectedItem);
 	}
 
 	RefreshDetails();
@@ -468,11 +519,44 @@ void UZInventoryScreenWidget::ClearHoveredItem(UZItemInstance* Item)
 
 void UZInventoryScreenWidget::UseItem(UZItemInstance* Item)
 {
+	// what's equipped comes off again, so the same click puts things on and takes them off
+	if (IsEquipped(Item))
+	{
+		UnequipItem(Item);
+		return;
+	}
+
 	const UZItemDefinition* Definition = Item ? Item->GetItemDefinition() : nullptr;
 	if (UZInventoryComponent* PlayerInventory = Inventory.Get(); PlayerInventory && Definition && Definition->IsUsable() && GetStackCount(Item) > 0)
 	{
 		PlayerInventory->UseItem(Item);
 	}
+}
+
+void UZInventoryScreenWidget::EquipItem(UZItemInstance* Item, FZEquipmentSlot EquipmentSlot)
+{
+	if (UZEquipmentComponent* PlayerEquipment = Equipment.Get(); PlayerEquipment && GetStackCount(Item) > 0)
+	{
+		PlayerEquipment->RequestEquip(Item, EquipmentSlot);
+	}
+}
+
+void UZInventoryScreenWidget::UnequipItem(UZItemInstance* Item)
+{
+	if (UZEquipmentComponent* PlayerEquipment = Equipment.Get(); PlayerEquipment && PlayerEquipment->IsEquipped(Item))
+	{
+		PlayerEquipment->RequestUnequip(Item);
+	}
+}
+
+bool UZInventoryScreenWidget::CanEquip(const UZItemInstance* Item, const FZEquipmentSlot& EquipmentSlot) const
+{
+	return Equipment.IsValid() && Equipment->CanEquip(Item, EquipmentSlot);
+}
+
+bool UZInventoryScreenWidget::IsEquipped(const UZItemInstance* Item) const
+{
+	return Item && Equipment.IsValid() && Equipment->IsEquipped(Item);
 }
 
 void UZInventoryScreenWidget::DropItem(UZItemInstance* Item, int32 Count)
@@ -610,6 +694,12 @@ void UZInventoryScreenWidget::RefreshItems()
 			: FText::Format(LOCTEXT("ItemCount", "{0} {0}|plural(one=item,other=items)"), Stacks.Num()));
 	}
 
+	// an equipped item can arrive a moment after the list says where it is
+	if (EquipmentPanel)
+	{
+		EquipmentPanel->Refresh();
+	}
+
 	RefreshCombineSlots();
 	RefreshDetails();
 	RefreshButtons();
@@ -683,7 +773,8 @@ void UZInventoryScreenWidget::RefreshDetails()
 void UZInventoryScreenWidget::RefreshButtons()
 {
 	const UZItemDefinition* Selected = SelectedItem ? SelectedItem->GetItemDefinition() : nullptr;
-	const bool bUsable = Selected && Selected->IsUsable();
+	const bool bSelectedIsEquipped = IsEquipped(SelectedItem);
+	const bool bUsable = Selected && (Selected->IsUsable() || bSelectedIsEquipped);
 	const bool bCrafting = Crafting.IsValid() && Crafting->IsCrafting();
 	const int32 MaxItems = Crafting.IsValid() ? Crafting->GetMaxCombineItems() : FallbackMaxCombineItems;
 
@@ -694,7 +785,7 @@ void UZInventoryScreenWidget::RefreshButtons()
 
 	if (UseButtonText)
 	{
-		UseButtonText->SetText(bUsable ? Selected->GetUseActionName() : LOCTEXT("UseLabel", "Use"));
+		UseButtonText->SetText(bSelectedIsEquipped ? LOCTEXT("UnequipLabel", "Unequip") : bUsable ? Selected->GetUseActionName() : LOCTEXT("UseLabel", "Use"));
 	}
 
 	if (DropButton)
@@ -833,8 +924,8 @@ int32 UZInventoryScreenWidget::GetItemSortOrder(const UZItemInstance* Item) cons
 	const FGameplayTag Type = Definition ? Definition->GetItemTypeTag() : FGameplayTag();
 
 	static const TArray<FGameplayTag> Order = {
-		ZGameplayTags::Item_Type_Weapon, ZGameplayTags::Item_Type_WeaponMod, ZGameplayTags::Item_Type_Ammo, ZGameplayTags::Item_Type_Consumable,
-		ZGameplayTags::Item_Type_Tool, ZGameplayTags::Item_Type_Material, ZGameplayTags::Item_Type_Salvage
+		ZGameplayTags::Item_Type_Weapon, ZGameplayTags::Item_Type_Armor, ZGameplayTags::Item_Type_Jewelry, ZGameplayTags::Item_Type_WeaponMod, ZGameplayTags::Item_Type_Ammo,
+		ZGameplayTags::Item_Type_Consumable, ZGameplayTags::Item_Type_Tool, ZGameplayTags::Item_Type_Material, ZGameplayTags::Item_Type_Salvage
 	};
 
 	// anything else goes last
@@ -857,6 +948,18 @@ void UZInventoryScreenWidget::HandleInventoryChanged(UZInventoryComponent* Chang
 			}
 		}));
 	}
+}
+
+void UZInventoryScreenWidget::HandleEquipmentChanged(UZEquipmentComponent* ChangedEquipment)
+{
+	// the items show "Equipped", and the Use button says Unequip for an equipped item (the equipment window listens by itself)
+	for (UZItemSlotWidget* ItemSlot : ItemSlots)
+	{
+		ItemSlot->Refresh();
+	}
+
+	RefreshDetails();
+	RefreshButtons();
 }
 
 void UZInventoryScreenWidget::HandleCraftingResult(UZCraftingComponent* ChangedCrafting, EZCraftingResult Result, UZCraftingRecipe* Recipe, const FText& Message, bool bNewDiscovery)
@@ -938,11 +1041,13 @@ FString UZInventoryScreenWidget::GetDebugString() const
 	}
 
 	const UZItemInstance* DetailsItem = ItemDetails ? ItemDetails->GetItem() : nullptr;
-	return FString::Printf(TEXT("%d stacks (%s); selected: %s; combine: [%s] x%d; details: %s (%s); station: %s; result: %s"),
+	return FString::Printf(TEXT("%d stacks (%s); selected: %s; use button: %s; combine: [%s] x%d; details: %s (%s); station: %s; result: %s; equipment window: %s"),
 		Shown.Num(), *FString::Join(Shown, TEXT(", ")), *GetNameSafe(SelectedItem ? SelectedItem->GetItemDefinition() : nullptr),
+		UseButtonText ? *UseButtonText->GetText().ToString() : TEXT("-"),
 		*FString::Join(Chosen, TEXT(", ")), CraftCount, *GetNameSafe(DetailsItem ? DetailsItem->GetItemDefinition() : nullptr),
 		ItemDetails ? *ItemDetails->GetStatsText().ToString().Replace(TEXT("\n"), TEXT(" | ")) : TEXT(""),
-		StationText ? *StationText->GetText().ToString() : TEXT("-"), ResultText ? *ResultText->GetText().ToString() : TEXT("-"));
+		StationText ? *StationText->GetText().ToString() : TEXT("-"), ResultText ? *ResultText->GetText().ToString() : TEXT("-"),
+		EquipmentPanel ? *EquipmentPanel->GetDebugString() : TEXT("none"));
 }
 
 #undef LOCTEXT_NAMESPACE

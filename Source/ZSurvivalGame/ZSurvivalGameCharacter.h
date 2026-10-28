@@ -20,6 +20,7 @@ class UInputAction;
 class UAbilitySystemComponent;
 class UZGameplayAbility;
 class UZCharacterMovementComponent;
+class UZEquipmentComponent;
 class UZInteractionComponent;
 class UZInventoryComponent;
 class UZItemInstance;
@@ -28,6 +29,20 @@ struct FInputActionValue;
 struct FGameplayAttribute;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
+
+/** A key (Input Action) that takes out the weapon in one kind of weapon slot, e.g. 2 for the long gun */
+USTRUCT(BlueprintType)
+struct FZWeaponSlotInput
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> InputAction;
+
+	/** The kind of weapon slot, e.g. Equipment.Slot.LongGun */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input", meta = (Categories = "Equipment.Slot"))
+	FGameplayTag Slot;
+};
 
 /**
  *  A simple player-controllable third person character
@@ -96,6 +111,10 @@ protected:
 	/** Interact Input Action (hold for interactions that take time) */
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* InteractAction;
+
+	/** Keys that take out the weapon in a weapon slot (pressed again, they put it away), e.g. 1 = short gun, 2 = long gun, 3 = melee */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TArray<FZWeaponSlotInput> WeaponSlotInputs;
 
 	/** --- ABILITIES --- */
 
@@ -256,11 +275,25 @@ protected:
 	/** Server: gives the StartingItems, once per player */
 	void GiveStartingItems();
 
-	/** Server: takes out the inventory's weapon of this type (or puts the weapon away, e.g. for Unarmed) */
+	/** Server: takes out the inventory's weapon of this type, an equipped one first (or puts the weapon away, e.g. for Unarmed) */
 	void EquipWeaponOfType(EZWeaponType WeaponType);
 
-	/** Server: puts this weapon item in the hands */
+	/** Server: puts this weapon item in the hands (and in its weapon slot first, if it isn't there yet) */
 	void EquipWeaponItem(UZItemInstance* Item);
+
+	/** The weapon a weapon slot key takes out next: the first one in those slots, or the next one after the one in the hands. Null with bOutPutAway: put the weapon away (it was the last one) */
+	UZItemInstance* GetNextWeaponInSlotType(const FGameplayTag& SlotType, bool& bOutPutAway) const;
+
+	/** Asks the server to take out the weapon in a weapon slot */
+	UFUNCTION(Server, Reliable)
+	void ServerSelectWeaponSlot(FGameplayTag SlotType);
+
+	/** Server: the weapon in the hands came out of its slot (taken off, swapped, dropped): put it away */
+	UFUNCTION()
+	void HandleEquipmentChanged(UZEquipmentComponent* Equipment);
+
+	/** Server: the player equipped a weapon themselves (inventory screen): take it out */
+	void HandleItemEquippedByPlayer(UZEquipmentComponent* Equipment, UZItemInstance* Item);
 
 	/** Server: puts the weapon in the hands away (its ammo stays on the item) */
 	void UnequipWeapon();
@@ -353,11 +386,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	void SetSpeedLimit(EZSpeedLimit NewLimit);
 
-	/** Switches to the inventory's weapon of this type (or just the animation set if there's none), right away for this player and through the server for everyone */
+	/** Switches to the inventory's weapon of this type, an equipped one first (or just the animation set if there's none), right away for this player and through the server for everyone */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
 	void SetWeaponType(EZWeaponType NewWeaponType);
 
-	/** Puts this inventory item in the hands (e.g. from an inventory screen); only weapons for now */
+	/** Takes out the weapon in a kind of weapon slot (e.g. Equipment.Slot.LongGun), or puts it away if it's already in the hands; does nothing if the slot is empty. What the weapon keys do */
+	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
+	void SelectWeaponSlot(FGameplayTag SlotType);
+
+	/** Puts this inventory weapon in its weapon slot and in the hands (e.g. from an inventory screen) */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
 	void EquipItem(UZItemInstance* Item);
 
@@ -379,6 +416,10 @@ public:
 	/** The player's inventory (on their PlayerState), or null before it has arrived */
 	UFUNCTION(BlueprintPure, Category = "Survival|Inventory")
 	UZInventoryComponent* GetInventory() const;
+
+	/** What the player has equipped (on their PlayerState), or null before it has arrived */
+	UFUNCTION(BlueprintPure, Category = "Survival|Inventory")
+	UZEquipmentComponent* GetEquipment() const;
 
 	/** Finds and uses interactables */
 	UZInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }

@@ -2,7 +2,7 @@
 
 How to give the game its sounds, particles and character animations: shots, reloads, deaths, taking out a weapon, crafting, footsteps and the rest, so they work for every player.
 
-**Last updated:** 2026-10-27 (the pistol's own shot, take-out sounds, reload sounds in the reload montages)
+**Last updated:** 2026-10-28 (a sound for putting on armor and jewelry)
 
 ## Who does what
 
@@ -29,6 +29,7 @@ C++ never names a sound file. It only sends an **event** with a **tag**, e.g. `G
 | `GameplayCue.Character.LevelUp` | A player reaches a new level | On the player | (one for everyone) |
 | `GameplayCue.Item.Pickup` | A player picks something up | On the player | The item's Data Asset → **Effects → Pickup Cue** |
 | `GameplayCue.Item.Use` | A player uses an item up (a bandage, a tome) | On the player | Item → **Use Cue** |
+| `GameplayCue.Item.Equip` | A player puts on armor or jewelry (Source Object = the item; weapons have their own Equip Cue) | On the player | The item's **Wearable** fragment → **Effects → Equip Cue** |
 | `GameplayCue.Crafting.Working` | **Lasts** while a player crafts | At the station (if the recipe needs one), else on the player | The recipe → **Effects → Working Cue** |
 | `GameplayCue.Crafting.Done` | A combine made something | On the player | Recipe → **Done Cue** |
 

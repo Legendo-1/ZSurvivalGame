@@ -13,6 +13,7 @@ class UNetDriver;
 class AZSurvivalGamePlayerState;
 class UZCraftingComponent;
 class UZCraftingRecipe;
+class UZEquipmentComponent;
 class UZInventoryComponent;
 class UZProgressionComponent;
 
@@ -99,6 +100,9 @@ protected:
 
 	UFUNCTION()
 	void HandleRecipeDiscovered(UZCraftingComponent* Crafting, UZCraftingRecipe* Recipe);
+
+	UFUNCTION()
+	void HandleEquipmentChanged(UZEquipmentComponent* Equipment);
 
 private:
 

@@ -2,38 +2,43 @@
 
 How the inventory screen and the HUD work, how to change their keys, and how to give them your own look.
 
-**Last updated:** 2026-10-26 (UI sounds for the inventory screen and crafting results)
+**Last updated:** 2026-10-28 (the equipment window, on the left of the inventory screen)
 
 ## The inventory screen
 
 - **Open and close it** with **I** or **Tab** (gamepad: the **View** button). It also opens when you use a crafting station with the interact key. **Esc** and gamepad **B** close it too (in the editor, Esc may stop Play instead; I and Tab always work).
 - **While it's open** the character stands still and can't shoot, and the mouse cursor shows. The game doesn't pause (it's co-op).
-- **Left:** your items, sorted by type (weapons, mods, ammo, consumables, tools, materials, salvage). **In hands** marks the weapon you're holding, and the bar at the bottom of a slot is its durability.
-- **Middle:** what the item under the mouse (or the selected one) is: its description and stats, e.g. a weapon's damage and what's in its mod slots, a mod's bonuses, durability, healing. Below that, buttons for the selected item (**Use** / **Equip** / **Read**, **Drop**, **Add to combine**) and the **combine area**.
+- **Far left, the equipment window:** a slot for each thing you can equip, in groups: **Weapons** (short gun, long gun, melee), **Armor** (head, torso, legs) and **Jewelry** (neck, 4 rings). An empty slot shows its name in grey. At the top: your armor and how much damage gets through. How equipment works: ITEMS.md → Equipment.
+- **Left:** your items, sorted by type (weapons, armor, jewelry, mods, ammo, consumables, tools, materials, salvage). **Equipped** marks what you have equipped, **In hands** the weapon you're holding, and the bar at the bottom of a slot is its durability.
+- **Middle:** what the item under the mouse (or the selected one) is: its description and stats, e.g. a weapon's damage and what's in its mod slots, a mod's bonuses, where armor is worn and what it gives, durability, healing. Below that, buttons for the selected item (**Use** / **Equip** / **Unequip** / **Read**, **Drop**, **Add to combine**) and the **combine area**.
 - **Right:** the character: level and experience, trait points, every trait with a **+** button, **Reset traits**, the tradeskills, and how many recipes you've found.
 
 | Mouse | What it does |
 |---|---|
 | Click an item | Selects it (the buttons work on it) |
-| Right-click or double-click | Uses it: equips a weapon, uses a bandage, reads a tome |
+| Right-click or double-click | Uses it: equips a weapon or armor, uses a bandage, reads a tome. On something equipped: takes it off |
+| Drag onto an equipment slot | Equips it in that slot (only where it fits: the slot lights up green). Onto a slot with a weapon in it, a mod is tried with the weapon |
+| Drag out of an equipment slot | Takes it off (dropped onto another slot of its kind, e.g. ring 1 onto ring 3: the two swap). It's never dropped on the ground from there |
 | Drag onto another item | Tries the two together |
 | Drag onto the combine area | Puts it in the combine slots |
 | Drag outside the window | Drops the whole stack on the ground |
 | Click an item in the combine slots | Takes it out again |
 
-**Gamepad:** the D-pad or left stick moves between items, **A** selects, **X** uses, **Y** puts the item in the combine slots, **B** closes.
+**Gamepad:** the D-pad or left stick moves between items and equipment slots, **A** selects, **X** uses (in the equipment window: takes it off), **Y** puts the item in the combine slots, **B** closes.
 
 **Combining:** put up to 6 items in the combine slots, choose how many with **−** and **+**, and press **Combine**. Recipes stay secret: the screen never says what goes together, only what happened ("Nothing comes of combining these.", "You need Electronics 20 for this. You have 8."). The items stay in the slots, so the same combination can be made again; the ones that were used up drop out. A craft that takes time shows a progress bar and can be stopped with **Stop**. **At the Workbench** shows when a crafting station is close enough.
 
 ## Multiplayer
 
 - **It only shows the player's own things:** their items, traits and tradeskills are sent to that player only.
-- **Everything it does is a request the server checks:** using, dropping, combining, raising and resetting traits. The answer comes back like any other change, and the screen updates by itself.
+- **Everything it does is a request the server checks:** using, equipping, dropping, combining, raising and resetting traits. The answer comes back like any other change, and the screen updates by itself.
 - **Each player has their own screen.** Nothing on it is shared.
 
 ## Changing the keys
 
 `Content/Input/IMC_Default` → **IA_Inventory**: add, remove or change keys there. The **Close** button shows the first keyboard key, e.g. "Close (I)", and the screen closes on every key mapped to it.
+
+The weapon keys are there too: **IA_ShortGun** (1), **IA_LongGun** (2) and **IA_Melee** (3). Which slot each one takes out is set in `BP_ThirdPersonCharacter` → **Class Defaults → Input → Weapon Slot Inputs**.
 
 ## Your own look
 
@@ -43,7 +48,7 @@ The screen is made in C++ (`UZInventoryScreenWidget`) and has a complete built-i
 2. Design it. The code finds widgets by their names (below); all of them are optional, so leave out what you don't want.
 3. `BP_ThirdPersonPlayerController` → **Class Defaults** → **UI** → **Inventory Screen Class** → `WBP_Inventory`.
 
-The same works for the parts: a Widget Blueprint with **ZItemSlotWidget**, **ZItemDetailsWidget**, **ZCharacterPanelWidget**, **ZTraitRowWidget** or **ZTradeskillRowWidget** as its parent class, set in **Item Slot Class**, **Trait Row Class** or **Tradeskill Row Class**. A Widget Blueprint without any widgets of its own gets the built-in look, so one can also just change settings (e.g. the slot colors).
+The same works for the parts: a Widget Blueprint with **ZItemSlotWidget**, **ZItemDetailsWidget**, **ZEquipmentPanelWidget**, **ZCharacterPanelWidget**, **ZTraitRowWidget** or **ZTradeskillRowWidget** as its parent class, set in **Item Slot Class**, **Trait Row Class** or **Tradeskill Row Class**. A Widget Blueprint without any widgets of its own gets the built-in look, so one can also just change settings (e.g. the slot colors).
 
 **ZInventoryScreenWidget** (the screen)
 
@@ -64,10 +69,16 @@ The same works for the parts: a Widget Blueprint with **ZItemSlotWidget**, **ZIt
 | `CraftingProgressBar`, `CraftingStatusText`, `CancelCraftingButton` | Progress Bar, Text, Button | While crafting: "Crafting Bandage (2 left)" and Stop |
 | `StationText` | Text | "At the Workbench" or "No crafting station nearby" |
 | `ResultText` | Text | What the last combine did |
+| `EquipmentPanel` | ZEquipmentPanelWidget | The equipment slots |
 | `CharacterPanel` | ZCharacterPanelWidget | Level, traits, tradeskills |
 | `CloseButton`, `CloseButtonText` | Button, Text | "Close (I)" |
 
-**ZItemSlotWidget** (one item): `Background` (Border, tinted for hovered/selected/drop target), `IconImage`, `NameText`, `CountText`, `DurabilityBar`, `EquippedMarker`. The colors are in its Class Defaults → **Appearance**.
+**ZItemSlotWidget** (one item): `Background` (Border, tinted for hovered/selected/drop target), `IconImage`, `NameText`, `CountText`, `DurabilityBar`, `EquippedMarker` (shown while it's equipped; if it's a Text, it says "Equipped" or "In hands"). The colors are in its Class Defaults → **Appearance**.
+
+**ZEquipmentPanelWidget** (the equipment window): `ArmorText` ("Armor 33: you take 75% damage"). The slots are Item Slot widgets you place yourself, so you can lay them out like a body (head at the top, rings at the hands):
+1. In your Widget Blueprint, drag in a **Z Item Slot Widget** (Palette → search "Z Item Slot") for each slot.
+2. Select one → Details → **Equipment → Equipment Slot**: **Type** (e.g. `Equipment.Slot.Ring`) and **Index** (which one of that kind, from 0: the third ring is 2). **Empty Text** is what an empty slot says (its name if left empty).
+3. Without any widgets of its own, the window builds every slot from **Project Settings → Game → Equipment** by itself, in groups.
 
 **ZItemDetailsWidget:** `NameText`, `TypeText`, `IconImage`, `DescriptionText`, `StatsText`. What's in `StatsText` comes from the item's fragments, so a new kind of item describes itself.
 
@@ -79,7 +90,7 @@ The same works for the parts: a Widget Blueprint with **ZItemSlotWidget**, **ZIt
 
 **Icons:** an item's Data Asset has an **Icon**; slots and details show it once it's set (no item has one yet).
 
-**From Blueprints** the screen can do everything the mouse does: **Select Item**, **Use Item**, **Drop Item**, **Combine Items**, **Add To Combine**, **Combine Chosen Items**, **Set Craft Count**, **Close Screen**. The player controller has **Open Inventory**, **Close Inventory**, **Toggle Inventory** and **Is Inventory Open**.
+**From Blueprints** the screen can do everything the mouse does: **Select Item**, **Use Item**, **Equip Item**, **Unequip Item**, **Drop Item**, **Combine Items**, **Add To Combine**, **Combine Chosen Items**, **Set Craft Count**, **Close Screen**. The player controller has **Open Inventory**, **Close Inventory**, **Toggle Inventory** and **Is Inventory Open**.
 
 ## Sounds
 
@@ -120,7 +131,7 @@ Open the console with the key under Esc while playing.
 | Command | What it does |
 |---|---|
 | `ZInventoryUI` | Opens or closes the inventory screen, like its key |
-| `ZInventoryUI select ID_Rifle` | Works the open screen like the mouse and writes what it shows to the Output Log (for automated tests). Also `use`, `drop`, `add`, `remove`, `clear`, `count 3`, `combine`, `drag ID_BrokenRadio ID_Screwdriver`, `raise Vigor`, `reset`, `show` |
+| `ZInventoryUI select ID_Rifle` | Works the open screen like the mouse and writes what it shows to the Output Log (for automated tests). Also `use`, `drop`, `add`, `remove`, `clear`, `count 3`, `combine`, `drag ID_BrokenRadio ID_Screwdriver`, `equip ID_Jewelry_IronRing Ring 3` (dropping it on the third ring slot), `unequip ID_Jewelry_IronRing`, `raise Vigor`, `reset`, `show` |
 
 ## Plan: what isn't built yet
 

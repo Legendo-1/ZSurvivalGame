@@ -4,6 +4,7 @@
 #include "AbilitySystemGlobals.h"
 #include "GameplayEffectExtension.h"
 #include "Net/UnrealNetwork.h"
+#include "Items/ZEquipmentSettings.h"
 
 UZAttributeSet::UZAttributeSet()
 {
@@ -20,6 +21,7 @@ UZAttributeSet::UZAttributeSet()
 	InitStaminaRegenMultiplier(1.f);
 	InitCraftingYieldChance(0.f);
 	InitTradeskillExperienceMultiplier(1.f);
+	InitArmor(0.f);
 }
 
 TArray<FGameplayAttribute> UZAttributeSet::GetTraitAttributes()
@@ -33,8 +35,16 @@ TArray<FGameplayAttribute> UZAttributeSet::GetTraitAttributes()
 		GetDodgeDistanceMultiplierAttribute(),
 		GetStaminaRegenMultiplierAttribute(),
 		GetCraftingYieldChanceAttribute(),
-		GetTradeskillExperienceMultiplierAttribute()
+		GetTradeskillExperienceMultiplierAttribute(),
+		GetArmorAttribute()
 	};
+}
+
+float UZAttributeSet::GetDamageAfterArmor(float Damage, float ArmorValue)
+{
+	// each bit of armor helps a little less than the one before, and damage never reaches 0
+	const float HalfDamageArmor = UZEquipmentSettings::Get()->ArmorForHalfDamage;
+	return ArmorValue > 0.f && HalfDamageArmor > 0.f ? Damage * HalfDamageArmor / (HalfDamageArmor + ArmorValue) : Damage;
 }
 
 float UZAttributeSet::GetAttributeValue(const AActor* Actor, const FGameplayAttribute& Attribute, float Default)
@@ -67,6 +77,7 @@ void UZAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME_CONDITION_NOTIFY(UZAttributeSet, StaminaRegenMultiplier, COND_OwnerOnly, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UZAttributeSet, CraftingYieldChance, COND_OwnerOnly, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UZAttributeSet, TradeskillExperienceMultiplier, COND_OwnerOnly, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UZAttributeSet, Armor, COND_OwnerOnly, REPNOTIFY_Always);
 }
 
 void UZAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
@@ -114,10 +125,10 @@ void UZAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackD
 {
 	Super::PostGameplayEffectExecute(Data);
 
-	// damage effects add to IncomingDamage; turn it into lost health
+	// damage effects add to IncomingDamage; turn it into lost health (less with armor)
 	if (Data.EvaluatedData.Attribute == GetIncomingDamageAttribute())
 	{
-		const float DamageTaken = GetIncomingDamage();
+		const float DamageTaken = GetDamageAfterArmor(GetIncomingDamage(), GetArmor());
 		SetIncomingDamage(0.f);
 
 		if (DamageTaken > 0.f)
@@ -159,6 +170,10 @@ void UZAttributeSet::ClampAttribute(const FGameplayAttribute& Attribute, float& 
 	else if (Attribute == GetCraftingYieldChanceAttribute())
 	{
 		NewValue = FMath::Clamp(NewValue, 0.f, 1.f);
+	}
+	else if (Attribute == GetArmorAttribute())
+	{
+		NewValue = FMath::Max(NewValue, 0.f);
 	}
 	else if (Attribute == GetDamageMultiplierAttribute() || Attribute == GetRecoilMultiplierAttribute() || Attribute == GetReloadSpeedMultiplierAttribute() || Attribute == GetDodgeDistanceMultiplierAttribute() || Attribute == GetStaminaRegenMultiplierAttribute() || Attribute == GetTradeskillExperienceMultiplierAttribute())
 	{
@@ -219,4 +234,9 @@ void UZAttributeSet::OnRep_CraftingYieldChance(const FGameplayAttributeData& Old
 void UZAttributeSet::OnRep_TradeskillExperienceMultiplier(const FGameplayAttributeData& OldValue)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UZAttributeSet, TradeskillExperienceMultiplier, OldValue);
+}
+
+void UZAttributeSet::OnRep_Armor(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UZAttributeSet, Armor, OldValue);
 }

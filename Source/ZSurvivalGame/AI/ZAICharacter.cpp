@@ -115,11 +115,12 @@ float AZAICharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEv
 {
 	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	// health only changes on the server (UZAttributeSet keeps it in range)
+	// health only changes on the server (UZAttributeSet keeps it in range); armor lowers it, as for every other damage
 	if (HasAuthority() && ActualDamage > 0.f && !bIsDead)
 	{
 		const FGameplayAttribute HealthAttribute = UZAttributeSet::GetHealthAttribute();
-		AbilitySystemComponent->SetNumericAttributeBase(HealthAttribute, AbilitySystemComponent->GetNumericAttributeBase(HealthAttribute) - ActualDamage);
+		const float DamageTaken = UZAttributeSet::GetDamageAfterArmor(ActualDamage, AbilitySystemComponent->GetNumericAttribute(UZAttributeSet::GetArmorAttribute()));
+		AbilitySystemComponent->SetNumericAttributeBase(HealthAttribute, AbilitySystemComponent->GetNumericAttributeBase(HealthAttribute) - DamageTaken);
 	}
 
 	return ActualDamage;

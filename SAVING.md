@@ -2,11 +2,11 @@
 
 How the game saves, Remnant style: each player keeps their character on their own PC and takes it into any game, and the host's save also holds the world. Also: save slots, a save menu later, world progress, renaming things saves use, and what's still needed for a Steam release.
 
-**Last updated:** 2026-10-27 (first version: characters and the world saved Remnant style, save slots, the host's checks; a joined player's machine saves when they leave or the host ends the game; the plan for a Steam release)
+**Last updated:** 2026-10-28 (what's equipped, and in which slot, is saved too)
 
 ## How it works
 
-- **Your character is saved on your PC:** level and experience, trait points and traits, every item (with its durability, magazine, upgrade level and mods), the weapon in your hands, tradeskills and the recipes you found.
+- **Your character is saved on your PC:** level and experience, trait points and traits, every item (with its durability, magazine, upgrade level and mods), what's equipped and in which slot (e.g. the third ring slot), the weapon in your hands, tradeskills and the recipes you found.
 - **The host's save also holds the world:** what's been done in it (**world progress**, e.g. a boss beaten) and the level it's in.
 - **Joining a friend:** your character comes with you. The host checks it against the game's rules first and changes what doesn't fit (see "What the host checks"). What you gain there is saved into your own save on your PC. Your own world stays as it was.
 - **When it saves:** a few seconds after something changes (10 by default: picking up an item, experience, a trait, crafting, ...), when you save by hand (a menu later; for now the console command `ZSave`), when the game closes or the level changes, and for a player in someone else's game also when they leave or the host ends the game.
@@ -93,6 +93,7 @@ A character from a save could come from an older version of the game, or be edit
 - tradeskill experience up to the highest level; only real tradeskills
 - only items the game has (others are kept in the save), at most a stack of each, at most 500 stacks
 - durability up to the max, magazine ammo up to what the magazine holds with its mods, upgrades only as high as an upgrade recipe goes, and only mods that fit (others go back to the inventory)
+- equipment: only items in a slot they go in, one per slot, and only slots players have (an item that doesn't fit its saved slot goes in a free one of its kind, or is just in the inventory). A save from before there was equipment: the weapon that was in the hands is equipped
 
 If anything was changed, the player gets a message, and the host's Output Log lists what.
 
