@@ -86,10 +86,11 @@ public:
 	UFUNCTION(Exec)
 	void ZAIStrafe(bool bStrafe = true);
 
-	/** Spawns a zombie with its AI, Distance cm from your character and Angle degrees to the right of straight ahead; 1 at the end: it looks away from you (host),
-	 *  e.g. ZSpawnEnemyAt 900 180 1 puts one behind you that doesn't see you */
+	/** Spawns an enemy (a zombie unless named) with its AI, Distance cm from your character and Angle degrees to the right of straight ahead; 1 at the end: it looks away from you (host),
+	 *  e.g. ZSpawnEnemyAt 900 180 1 puts one behind you that doesn't see you. Another kind of enemy: its Blueprint's name at the end,
+	 *  e.g. ZSpawnEnemyAt 600 0 0 BP_Enemy_StoneGolem */
 	UFUNCTION(Exec)
-	void ZSpawnEnemyAt(float Distance = 600.f, float Angle = 0.f, bool bFacingAway = false);
+	void ZSpawnEnemyAt(float Distance = 600.f, float Angle = 0.f, bool bFacingAway = false, const FString& EnemyClass = TEXT(""));
 
 	/** Pretends every living enemy dodged (the dodge state for 0.3 s, without moving), to try the DodgeRecovering state (host) */
 	UFUNCTION(Exec)

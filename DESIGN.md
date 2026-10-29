@@ -71,7 +71,9 @@ Built around a modular C++ system rather than separate class files per gun:
 * \[x\] Fire, reload and take-out animations on the upper body (the legs keep walking), and sounds for the shots (the pistol has its own), taking out the weapons and reloading (see ANIMATION.md and AUDIO.md).
 * \[x\] Souls-like melee combat: melee weapons (a machete for now) with light and heavy combos from a shared moveset, hitboxes that follow the blade during the swing, poise and staggers for players and enemies, invulnerable dodge frames, and locked-in actions with an input buffer for attacks, dodges, shots, reloads and weapon switches (see COMBAT.md).
 * \[x\] Lock-on with target switching, hit feedback (hit-stop, hit flash, camera shake) and spacing between players and enemies (see COMBAT.md).
-* \[x\] Enemy AI foundation: senses (sight, up close, being hit), co-op targeting by distance and threat, and combat states (Idle, Approaching, Strafing, Attacking, DodgeRecovering, Staggered) that everyone sees for animations (see AI.md).  
+* \[x\] Enemy AI foundation: senses (sight, up close, being hit), co-op targeting by distance and threat, and combat states (Idle, Approaching, Strafing, Attacking, DodgeRecovering, Staggered) that everyone sees for animations (see AI.md).
+* \[x\] The Stone Golem: a big, tough enemy with a hammer and a shield that circles you between swings (its sideways walk still to animate; see AI.md).
+* \[x\] Enemies choose between several attacks by distance, cooldown and weight, and their hits follow their weapon (Weapon Hitbox notifies, like the players'); the golem has five (see AI.md).  
 * \[ \] **Open Phase 1 Items:**  
   * Pistol aim strafe animations and aim offset.  
   * Weapon meshes, and the remaining sounds and effects (impacts, melee hits, staggers, deaths, pickups, crafting).

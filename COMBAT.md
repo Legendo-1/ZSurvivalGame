@@ -2,7 +2,7 @@
 
 How melee combat works (light and heavy combos, hitboxes, hit feedback, spacing, poise and staggers), the souls-like rules for when you can act (being locked into an action, and the input buffer), dodging, lock-on, and how to make melee weapons and attack animations. Guns are in ITEMS.md, sounds and effects in AUDIO.md.
 
-**Last updated:** 2026-10-29 (lock-on; hit feedback: hit-stop, hit flash, camera shake; spacing between players and enemies)
+**Last updated:** 2026-10-29 (enemies' attacks use Weapon Hitbox notifies too)
 
 ## Controls
 
@@ -48,7 +48,8 @@ Like in Dark Souls, once you start something you're locked into it.
 - **Each enemy is hit once per hitbox.** An animation with two Weapon Hitbox notifies (e.g. a double slash) can hit the same enemy twice.
 - **It hits bodies, not the invisible capsule around them**, so the hit knows the bone (e.g. the head). Several enemies in the swing are all hit. Walls don't stop a swing.
 - **Kicks and punches:** a Weapon Hitbox notify can also hit with other bones, e.g. `foot_r` for a kick: select the notify → Details → **Extra Sockets**. Untick **Use Weapon** for a kick without the weapon.
-- **To see the hitboxes:** console `Z.Melee.DrawDebug 1` draws them green and the hits red (on your own screen).
+- **To see the hitboxes:** console `Z.Melee.DrawDebug 1` draws them green and the hits red (on your own screen; enemies' in the host's window).
+- **Enemies use the same notifies** in their attack montages: their weapon is the Attached Mesh marked **Is Weapon** (AI.md → Attacks). An enemy attack without them hits once, straight in front, at a set time.
 
 ## Hit feedback: how a hit feels
 
@@ -225,6 +226,7 @@ The target's own **Hit Cue** plays with every hit too. How to make the sounds an
 
 - **Your attacks start right away on your own machine** and on the host a moment later. Your machine finds what you hit and tells the host, which checks it (close enough, not hit too often by this attack) and decides the damage and poise damage.
 - **The host decides staggers.** Your machine learns about a stagger a moment after it happened.
+- **Enemies' hits are found by the host**, along their weapon, while their attack's Weapon Hitbox notifies are active. Everyone sees their attack animations.
 - **The host checks every combo:** an attack only counts if it can follow the attack before. Timing is left to your machine, which sees the windows exactly.
 - Everyone sees your attacks, dodges and staggers (the animations come from the host).
 - **Spacing** is collision like any other, so your machine and the host agree on where you stop.
@@ -260,5 +262,4 @@ To replace them, follow "Making a melee weapon" and "Making an attack animation"
 - **Hyper armor:** a window in heavy attacks where a stagger doesn't interrupt them (a new marker and a check in the stagger).
 - **Charged heavy attacks:** hold the right mouse button to charge.
 - **Blocking, parrying, backstabs.**
-- **Enemies with melee weapons:** AI attacks still use a simple sweep in front of them; the hitbox attacks can be used by AI later (they already work on the server).
 - **A poise bar** on the HUD, and **armor weight** making dodges slower.

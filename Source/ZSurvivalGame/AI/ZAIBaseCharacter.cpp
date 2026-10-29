@@ -4,6 +4,8 @@
 #include "Animation/AnimInstance.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
@@ -20,6 +22,7 @@
 #include "Combat/ZCharacterSpacingComponent.h"
 #include "Combat/ZHitFlashComponent.h"
 #include "Combat/ZLockOnTargetComponent.h"
+#include "Combat/ZMeleeTraceComponent.h"
 #include "Items/ZLootTable.h"
 #include "Items/ZPickup.h"
 #include "Progression/ZProgressionComponent.h"
@@ -44,6 +47,11 @@ AZAIBaseCharacter::AZAIBaseCharacter()
 
 	SpacingComponent = CreateDefaultSubobject<UZCharacterSpacingComponent>(TEXT("Spacing"));
 	SpacingComponent->SetupAttachment(GetCapsuleComponent());
+
+	MeleeTraceComponent = CreateDefaultSubobject<UZMeleeTraceComponent>(TEXT("MeleeTrace"));
+
+	// one plain attack until an enemy type sets its own (a hit 1.2 m in front, 0.4 s in)
+	Attacks.AddDefaulted();
 
 	// AI characters don't need as many updates as players
 	SetNetUpdateFrequency(30.f);
@@ -110,6 +118,7 @@ void AZAIBaseCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	AbilitySystemComponent->InitAbilityActorInfo(this, this);
+	CreateAttachedMeshes();
 
 	// the AI chases at this speed and slows down for other things (strafing)
 	DefaultWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
@@ -146,6 +155,27 @@ void AZAIBaseCharacter::BeginPlay()
 	}
 }
 
+void AZAIBaseCharacter::CreateAttachedMeshes()
+{
+	// looks only: every machine makes the same ones from the class defaults, so there's nothing to replicate
+	for (const FZAttachedMesh& Attached : AttachedMeshes)
+	{
+		if (!Attached.Mesh)
+		{
+			continue;
+		}
+
+		UStaticMeshComponent* Component = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
+		Component->SetStaticMesh(Attached.Mesh);
+		Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Component->SetGenerateOverlapEvents(false);
+		Component->SetupAttachment(GetMesh(), Attached.Socket);
+		Component->SetRelativeTransform(Attached.Offset);
+		Component->RegisterComponent();
+		AttachedMeshComponents.Add(Component);
+	}
+}
+
 void AZAIBaseCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
@@ -169,15 +199,117 @@ float AZAIBaseCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Dama
 	return ActualDamage;
 }
 
+TArray<FZAttackOption> AZAIBaseCharacter::MakeAttackOptions() const
+{
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+	TArray<FZAttackOption> Options;
+	Options.Reserve(Attacks.Num());
+	for (int32 Index = 0; Index < Attacks.Num(); ++Index)
+	{
+		FZAttackOption& Option = Options.AddDefaulted_GetRef();
+		Option.MinRange = Attacks[Index].MinRange;
+		Option.MaxRange = Attacks[Index].MaxRange;
+		Option.Weight = Attacks[Index].Weight;
+		Option.bReady = !AttackReadyTimes.IsValidIndex(Index) || Now >= AttackReadyTimes[Index];
+	}
+
+	return Options;
+}
+
 bool AZAIBaseCharacter::IsAttackReady() const
 {
-	return !bIsDead && AttackAbility && GetWorld() && GetWorld()->GetTimeSeconds() - LastAttackTime >= AttackCooldown;
+	if (bIsDead || !AttackAbility || !GetWorld() || GetWorld()->GetTimeSeconds() - LastAttackTime < AttackCooldown)
+	{
+		return false;
+	}
+
+	return MakeAttackOptions().ContainsByPredicate([](const FZAttackOption& Option) { return Option.bReady && Option.Weight > 0.f; });
+}
+
+namespace
+{
+	/** The attack can still be used from this distance: ready, and the target isn't too close for it */
+	bool IsPlanStillGood(const FZAttackOption& Option, float DistanceToTarget)
+	{
+		return Option.bReady && Option.Weight > 0.f && DistanceToTarget >= Option.MinRange;
+	}
+}
+
+void AZAIBaseCharacter::UpdateAttackPlan(float DistanceToTarget)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// it sticks to its plan (so it doesn't keep changing its mind while it walks in), until that attack can't be used
+	const TArray<FZAttackOption> Options = MakeAttackOptions();
+	if (Options.IsValidIndex(PlannedAttackIndex) && IsPlanStillGood(Options[PlannedAttackIndex], DistanceToTarget))
+	{
+		return;
+	}
+
+	PlannedAttackIndex = ZAICombatRules::PlanAttack(Options, DistanceToTarget, FMath::FRand());
+}
+
+float AZAIBaseCharacter::GetApproachRange(float DistanceToTarget) const
+{
+	const TArray<FZAttackOption> Options = MakeAttackOptions();
+	return Options.IsValidIndex(PlannedAttackIndex) ? ZAICombatRules::GetApproachRangeFor(Options[PlannedAttackIndex], DistanceToTarget)
+		: ZAICombatRules::GetApproachRange(Options, DistanceToTarget);
 }
 
 bool AZAIBaseCharacter::IsPlayingAttackAnimation() const
 {
+	const FZEnemyAttack* Attack = GetCurrentAttack();
 	const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
-	return AttackMontage && AnimInstance && AnimInstance->Montage_IsPlaying(AttackMontage);
+	return Attack && Attack->Montage && AnimInstance && AnimInstance->Montage_IsPlaying(Attack->Montage);
+}
+
+bool AZAIBaseCharacter::GetMeleeBlade(FZMeleeBlade& OutBlade) const
+{
+	for (int32 Index = 0; Index < AttachedMeshes.Num(); ++Index)
+	{
+		const UStaticMeshComponent* Component = AttachedMeshComponents.IsValidIndex(Index) ? AttachedMeshComponents[Index].Get() : nullptr;
+		const UStaticMesh* StaticMesh = Component ? Component->GetStaticMesh() : nullptr;
+		if (!AttachedMeshes[Index].bIsWeapon || !StaticMesh)
+		{
+			continue;
+		}
+
+		const float Scale = Component->GetComponentScale().GetAbsMax();
+		OutBlade = FZMeleeBlade();
+		OutBlade.Mesh = const_cast<UStaticMeshComponent*>(Component);
+
+		// its own sockets mark the part that hits
+		static const FName BladeStart(TEXT("BladeStart"));
+		static const FName BladeEnd(TEXT("BladeEnd"));
+		if (Component->DoesSocketExist(BladeStart) && Component->DoesSocketExist(BladeEnd))
+		{
+			OutBlade.StartSocket = BladeStart;
+			OutBlade.EndSocket = BladeEnd;
+			OutBlade.Radius = (AttachedMeshes[Index].BladeRadius > 0.f ? AttachedMeshes[Index].BladeRadius : 10.f) * Scale;
+			return true;
+		}
+
+		// otherwise the whole mesh: a line through the middle of its box along its longest side, as thick as the box's next-largest side
+		const FBox Bounds = StaticMesh->GetBoundingBox();
+		const FVector Extent = Bounds.GetExtent();
+		const int32 LongAxis = Extent.X >= Extent.Y && Extent.X >= Extent.Z ? 0 : (Extent.Y >= Extent.Z ? 1 : 2);
+		const float Thickness = AttachedMeshes[Index].BladeRadius > 0.f ? AttachedMeshes[Index].BladeRadius
+			: FMath::Max(LongAxis == 0 ? 0.f : Extent.X, FMath::Max(LongAxis == 1 ? 0.f : Extent.Y, LongAxis == 2 ? 0.f : Extent.Z));
+
+		// the balls reach Thickness past the line's ends: stop the line that much short of the box's ends
+		FVector HalfLine = FVector::ZeroVector;
+		HalfLine[LongAxis] = FMath::Max(Extent[LongAxis] - Thickness, 0.f);
+		OutBlade.StartOffset = Bounds.GetCenter() - HalfLine;
+		OutBlade.EndOffset = Bounds.GetCenter() + HalfLine;
+		OutBlade.Radius = Thickness * Scale;
+		return true;
+	}
+
+	return false;
 }
 
 void AZAIBaseCharacter::SetCombatState(EZAICombatState NewState)
@@ -232,7 +364,7 @@ void AZAIBaseCharacter::HandleCombatStateChanged(EZAICombatState OldState)
 	BP_OnCombatStateChanged(CombatState, OldState);
 }
 
-bool AZAIBaseCharacter::TryAttack()
+bool AZAIBaseCharacter::TryAttack(float DistanceToTarget)
 {
 	if (bIsDead || !AttackAbility || !HasAuthority())
 	{
@@ -245,13 +377,33 @@ bool AZAIBaseCharacter::TryAttack()
 		return false;
 	}
 
-	if (AbilitySystemComponent->TryActivateAbilityByClass(AttackAbility))
+	// the attack it planned if it fits now, otherwise one of the ready attacks that fit, by weight
+	const TArray<FZAttackOption> Options = MakeAttackOptions();
+	const bool bPlanFits = Options.IsValidIndex(PlannedAttackIndex) && IsPlanStillGood(Options[PlannedAttackIndex], DistanceToTarget)
+		&& DistanceToTarget <= Options[PlannedAttackIndex].MaxRange;
+	const int32 AttackIndex = bPlanFits ? PlannedAttackIndex : ZAICombatRules::ChooseAttack(Options, DistanceToTarget, FMath::FRand());
+	if (AttackIndex == INDEX_NONE)
 	{
-		LastAttackTime = Now;
-		return true;
+		return false;
 	}
 
-	return false;
+	// the attack ability plays the attack it finds here
+	const int32 PreviousAttackIndex = CurrentAttackIndex;
+	CurrentAttackIndex = AttackIndex;
+	if (!AbilitySystemComponent->TryActivateAbilityByClass(AttackAbility))
+	{
+		UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' couldn't start attack %d: its attack ability didn't activate"), *GetNameSafe(this), AttackIndex + 1);
+		CurrentAttackIndex = PreviousAttackIndex;
+		return false;
+	}
+
+	// the next decision plans its next attack
+	LastAttackTime = Now;
+	PlannedAttackIndex = INDEX_NONE;
+	AttackReadyTimes.SetNumZeroed(Attacks.Num());
+	AttackReadyTimes[AttackIndex] = Now + Attacks[AttackIndex].Cooldown;
+	UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' attacks: attack %d '%s' from %.0f cm"), *GetNameSafe(this), AttackIndex + 1, *GetNameSafe(Attacks[AttackIndex].Montage), DistanceToTarget);
+	return true;
 }
 
 void AZAIBaseCharacter::HandleOutOfHealth(AActor* DamageInstigator)
@@ -311,7 +463,8 @@ void AZAIBaseCharacter::HandlePoiseBroken(AActor* StaggerInstigator)
 
 void AZAIBaseCharacter::PlayDeath()
 {
-	// stop moving and fall over as a ragdoll
+	// stop moving and fall over as a ragdoll; a swing it was making hits nothing more
+	MeleeTraceComponent->EndAllHitboxes();
 	GetCharacterMovement()->StopMovementImmediately();
 	GetCharacterMovement()->DisableMovement();
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);

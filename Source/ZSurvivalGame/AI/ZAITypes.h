@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "ZAITypes.generated.h"
 
+class UAnimMontage;
+
 /**
  *  What an enemy is doing in a fight (see AI.md). Its AI brain on the server (UZAICombatBrainComponent) decides it;
  *  the character replicates it, so animations on every machine can use it (e.g. a strafing blend space while Strafing)
@@ -86,6 +88,68 @@ struct FZAICombatSettings
 	float DodgeRecoveryTime = 0.4f;
 };
 
+/**
+ *  One attack an enemy can make (Class Defaults → AI|Attacks; see AI.md). It picks among the attacks that fit how far away its target is
+ *  Where it hits: the Weapon Hitbox notifies in its montage (they sweep the enemy's weapon, an Attached Mesh marked Is Weapon, along the swing,
+ *  like a player's weapon); a montage without them hits with the Fallback Hit below
+ */
+USTRUCT(BlueprintType)
+struct FZEnemyAttack
+{
+	GENERATED_BODY()
+
+	/** Its animation (in the slot its animation Blueprint plays montages in, usually DefaultSlot) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack")
+	TObjectPtr<UAnimMontage> Montage;
+
+	/** It starts this attack when its target is at least this far away (middle to middle, along the ground), in cm, e.g. for a lunge */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack", meta = (ClampMin = "0", Units = "cm"))
+	float MinRange = 0.f;
+
+	/** ...and at most this far */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack", meta = (ClampMin = "0", Units = "cm"))
+	float MaxRange = 150.f;
+
+	/** Damage of each hit */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack", meta = (ClampMin = "0"))
+	float Damage = 10.f;
+
+	/** How much each hit wears down the target's poise toward a stagger */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack", meta = (ClampMin = "0"))
+	float PoiseDamage = 15.f;
+
+	/** It waits at least this long before using this attack again (its other attacks can come sooner), in seconds */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack", meta = (ClampMin = "0", Units = "s"))
+	float Cooldown = 0.f;
+
+	/** How often it picks this one among the attacks that fit: 2 = twice as often as an attack with 1; 0 = never */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack", meta = (ClampMin = "0"))
+	float Weight = 1.f;
+
+	/** Only for a montage without Weapon Hitbox notifies: when it hits, in seconds after the start */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Fallback Hit", meta = (ClampMin = "0", Units = "s"))
+	float HitDelay = 0.4f;
+
+	/** ...how far in front of its middle the hit reaches, in cm */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Fallback Hit", meta = (ClampMin = "0", Units = "cm"))
+	float Reach = 120.f;
+
+	/** ...and how wide it is, in cm */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Fallback Hit", meta = (ClampMin = "0", Units = "cm"))
+	float Radius = 50.f;
+};
+
+/** What the brain knows about one of its attacks when it picks one (so the picking can be tested without a world) */
+struct FZAttackOption
+{
+	float MinRange = 0.f;
+	float MaxRange = 0.f;
+	float Weight = 1.f;
+
+	/** Its own cooldown is over */
+	bool bReady = true;
+};
+
 /** What the AI brain knows when it decides; the rules below only use this, so they can be tested without a world */
 struct FZAICombatSnapshot
 {
@@ -100,6 +164,7 @@ struct FZAICombatSnapshot
 	/** How much higher the target's feet are than its own, in cm (negative: lower) */
 	float HeightToTarget = 0.f;
 
+	/** How close it wants to be: within it, it holds its ground and attacks once ready (ZAICombatRules::GetApproachRange) */
 	float AttackRange = 150.f;
 	float MaxAttackHeight = 100.f;
 
@@ -127,6 +192,20 @@ namespace ZAICombatRules
 
 	/** Close enough to attack: within Attack Range on the ground plane, and level with the target */
 	ZSURVIVALGAME_API bool IsInAttackRange(const FZAICombatSnapshot& Snapshot);
+
+	/** How close it wants to be to a target this far away: Distance itself if a ready attack fits it (or the target is too close for all of them:
+	 *  it waits there), otherwise the farthest reach of a ready attack it can still walk into (the gap between a lunge and a charge, say).
+	 *  With none of them ready it goes by all of them, so it waits nearby */
+	ZSURVIVALGAME_API float GetApproachRange(TConstArrayView<FZAttackOption> Options, float Distance);
+
+	/** Picks one of the ready attacks whose range holds Distance, by their weights (Roll: a random number from 0 to 1); INDEX_NONE if none fits */
+	ZSURVIVALGAME_API int32 ChooseAttack(TConstArrayView<FZAttackOption> Options, float Distance, float Roll);
+
+	/** Picks the attack it goes for next: one of the ready attacks it can reach from Distance (now, or by walking closer), by weight; INDEX_NONE if none */
+	ZSURVIVALGAME_API int32 PlanAttack(TConstArrayView<FZAttackOption> Options, float Distance, float Roll);
+
+	/** How close it wants to be for one attack it plans: Distance if the attack fits it (or the target is too close for it), otherwise the attack's Max Range */
+	ZSURVIVALGAME_API float GetApproachRangeFor(const FZAttackOption& Option, float Distance);
 
 	/** Approaching: attack when in range and ready; circle while waiting if it's a strafer; otherwise keep closing in (Attacking means "try an attack now") */
 	ZSURVIVALGAME_API EZAICombatState WhileApproaching(const FZAICombatSnapshot& Snapshot);

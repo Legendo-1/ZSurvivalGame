@@ -71,8 +71,8 @@ public:
 	/** Strafers: after an attack, circle for a random Strafe Time before the next one */
 	void StartStrafeTimer();
 
-	/** Tries to start an attack on the target; true if one started */
-	bool TryStartAttack();
+	/** Tries to start one of its attacks that fits a target this far away; true if one started */
+	bool TryStartAttack(float DistanceToTarget);
 
 protected:
 

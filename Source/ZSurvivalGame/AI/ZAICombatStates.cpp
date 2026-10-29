@@ -54,7 +54,7 @@ EZAICombatState UZAICombatState_Approaching::Update(UZAICombatBrainComponent& Br
 	if (Next == EZAICombatState::Attacking)
 	{
 		// the attack ability runs right away (server only), or something blocked it: then it waits here
-		if (Brain.TryStartAttack())
+		if (Brain.TryStartAttack(Snapshot.DistanceToTarget))
 		{
 			return EZAICombatState::Attacking;
 		}

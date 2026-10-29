@@ -195,27 +195,28 @@ void UZMeleeTraceComponent::BuildPoints(const UZAnimNotifyState_WeaponHitbox* No
 		const UZMeleeWeaponData* MeleeData = Weapon ? Weapon->GetMeleeData() : nullptr;
 		UMeshComponent* WeaponMesh = Weapon ? Weapon->GetWeaponMesh() : nullptr;
 
+		FZMeleeBlade OwnBlade;
 		if (MeleeData && WeaponMesh && WeaponMesh->DoesSocketExist(MeleeData->BladeStartSocket) && WeaponMesh->DoesSocketExist(MeleeData->BladeEndSocket))
 		{
-			// balls along the blade, close enough together that nothing slips between them
-			const float BladeLength = FVector::Dist(WeaponMesh->GetSocketLocation(MeleeData->BladeStartSocket), WeaponMesh->GetSocketLocation(MeleeData->BladeEndSocket));
-			const int32 NumPoints = FMath::Clamp(FMath::CeilToInt32(BladeLength / (MeleeData->BladeRadius * 1.5f)) + 1, 2, MaxBladePoints);
-			for (int32 Index = 0; Index < NumPoints; ++Index)
-			{
-				FHitboxPoint& Point = OutPoints.AddDefaulted_GetRef();
-				Point.Component = WeaponMesh;
-				Point.SocketA = MeleeData->BladeStartSocket;
-				Point.SocketB = MeleeData->BladeEndSocket;
-				Point.Alpha = static_cast<float>(Index) / (NumPoints - 1);
-				Point.Radius = MeleeData->BladeRadius;
-			}
+			// the held weapon's blade
+			FZMeleeBlade Blade;
+			Blade.Mesh = WeaponMesh;
+			Blade.StartSocket = MeleeData->BladeStartSocket;
+			Blade.EndSocket = MeleeData->BladeEndSocket;
+			Blade.Radius = MeleeData->BladeRadius;
+			AddBladePoints(Blade, OutPoints);
+		}
+		else if (!Weapon && Combatant && Combatant->GetMeleeBlade(OwnBlade) && OwnBlade.Mesh.IsValid())
+		{
+			// a weapon of its own, e.g. an enemy's hammer
+			AddBladePoints(OwnBlade, OutPoints);
 		}
 		else
 		{
 			// no blade to follow (no mesh yet, or it has no blade sockets): a ball at the hand
 			FHitboxPoint& Point = OutPoints.AddDefaulted_GetRef();
 			Point.Component = CharacterMesh;
-			Point.SocketA = MeleeData ? MeleeData->FallbackHitboxSocket : DefaultFallbackSocket;
+			Point.StartSocket = MeleeData ? MeleeData->FallbackHitboxSocket : DefaultFallbackSocket;
 			Point.Radius = MeleeData ? MeleeData->FallbackHitboxRadius : DefaultFallbackRadius;
 		}
 	}
@@ -224,8 +225,32 @@ void UZMeleeTraceComponent::BuildPoints(const UZAnimNotifyState_WeaponHitbox* No
 	{
 		FHitboxPoint& Point = OutPoints.AddDefaulted_GetRef();
 		Point.Component = CharacterMesh;
-		Point.SocketA = Socket;
+		Point.StartSocket = Socket;
 		Point.Radius = Notify->ExtraSocketRadius;
+	}
+}
+
+void UZMeleeTraceComponent::AddBladePoints(const FZMeleeBlade& Blade, TArray<FHitboxPoint>& OutPoints)
+{
+	FHitboxPoint Point;
+	Point.Component = Blade.Mesh;
+	Point.StartSocket = Blade.StartSocket;
+	Point.StartOffset = Blade.StartOffset;
+	Point.EndSocket = Blade.EndSocket;
+	Point.EndOffset = Blade.EndOffset;
+	Point.bAlongLine = true;
+	Point.Radius = FMath::Max(Blade.Radius, 1.f);
+
+	// balls along the blade, close enough together that nothing slips between them
+	Point.Alpha = 0.f;
+	const FVector Start = GetPointLocation(Point);
+	Point.Alpha = 1.f;
+	const FVector End = GetPointLocation(Point);
+	const int32 NumPoints = FMath::Clamp(FMath::CeilToInt32(FVector::Dist(Start, End) / (Point.Radius * 1.5f)) + 1, 2, MaxBladePoints);
+	for (int32 Index = 0; Index < NumPoints; ++Index)
+	{
+		Point.Alpha = static_cast<float>(Index) / (NumPoints - 1);
+		OutPoints.Add(Point);
 	}
 }
 
@@ -255,8 +280,9 @@ FVector UZMeleeTraceComponent::GetPointLocation(const FHitboxPoint& Point)
 		return FVector::ZeroVector;
 	}
 
-	const FVector LocationA = Component->GetSocketLocation(Point.SocketA);
-	return Point.SocketB.IsNone() ? LocationA : FMath::Lerp(LocationA, Component->GetSocketLocation(Point.SocketB), Point.Alpha);
+	// a socket (or the component itself, for None) moved by the offset in its own space
+	const FVector Start = Component->GetSocketTransform(Point.StartSocket).TransformPosition(Point.StartOffset);
+	return Point.bAlongLine ? FMath::Lerp(Start, Component->GetSocketTransform(Point.EndSocket).TransformPosition(Point.EndOffset), Point.Alpha) : Start;
 }
 
 void UZMeleeTraceComponent::SweepHitbox(int32 HitboxIndex)

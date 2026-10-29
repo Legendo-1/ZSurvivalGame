@@ -110,6 +110,91 @@ bool FZAICombatRulesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+/** How an enemy picks among its attacks and how close it goes for them (ZAICombatRules::ChooseAttack, GetApproachRange) */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FZAIAttackChoiceTest, "ZSurvivalGame.AI.AttackChoice", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FZAIAttackChoiceTest::RunTest(const FString& Parameters)
+{
+	using namespace ZAICombatRules;
+
+	const auto MakeOption = [](float MinRange, float MaxRange, float Weight, bool bReady)
+	{
+		FZAttackOption Option;
+		Option.MinRange = MinRange;
+		Option.MaxRange = MaxRange;
+		Option.Weight = Weight;
+		Option.bReady = bReady;
+		return Option;
+	};
+
+	// a golem-like set: two close swings (one picked 3 times as often), a lunge from 1.5 to 3.3 m, a charge from 3 to 6.5 m
+	TArray<FZAttackOption> Options = {
+		MakeOption(0.f, 220.f, 3.f, true),
+		MakeOption(0.f, 220.f, 1.f, true),
+		MakeOption(150.f, 330.f, 2.f, true),
+		MakeOption(300.f, 650.f, 1.f, true)
+	};
+
+	// close: only the swings fit; the roll goes through them by weight (3 + 1 = 4: the first 3/4 is the first swing)
+	TestEqual(TEXT("Close, low roll: the first swing"), ChooseAttack(Options, 100.f, 0.1f), 0);
+	TestEqual(TEXT("Close, roll just under 3/4: still the first swing"), ChooseAttack(Options, 100.f, 0.74f), 0);
+	TestEqual(TEXT("Close, high roll: the second swing"), ChooseAttack(Options, 100.f, 0.9f), 1);
+	TestEqual(TEXT("Close, a roll of 1: the last that fits"), ChooseAttack(Options, 100.f, 1.f), 1);
+
+	// in between: the swings and the lunge overlap from 1.5 to 2.2 m (weights 3 + 1 + 2 = 6)
+	TestEqual(TEXT("1.8 m, high roll: the lunge"), ChooseAttack(Options, 180.f, 0.95f), 2);
+	TestEqual(TEXT("2.5 m: only the lunge"), ChooseAttack(Options, 250.f, 0.1f), 2);
+	TestEqual(TEXT("5 m: only the charge"), ChooseAttack(Options, 500.f, 0.5f), 3);
+	TestEqual(TEXT("8 m: nothing reaches"), ChooseAttack(Options, 800.f, 0.5f), static_cast<int32>(INDEX_NONE));
+
+	// planning the next attack: from far away any ready attack can be planned (it walks in for it), close in only those the target isn't too close for
+	// (all four by weight at 10 m: 3 + 1 + 2 + 1 = 7; a roll of 0.6 is 4.2 of them: past the first swing and the second, into the lunge)
+	TestEqual(TEXT("Plan from 10 m, low roll: the first swing (walk in for it)"), PlanAttack(Options, 1000.f, 0.1f), 0);
+	TestEqual(TEXT("Plan from 10 m, middle roll: the lunge"), PlanAttack(Options, 1000.f, 0.6f), 2);
+	TestEqual(TEXT("Plan from 1 m, high roll: no lunge or charge that close"), PlanAttack(Options, 100.f, 0.99f), 1);
+	TestEqual(TEXT("Approach for a swing from 10 m: its 2.2 m"), GetApproachRangeFor(Options[0], 1000.f), 220.f);
+	TestEqual(TEXT("Approach for a swing that fits: stay"), GetApproachRangeFor(Options[0], 150.f), 150.f);
+
+	// how close it wants to be without a plan: where an attack fits, it stays; otherwise it walks into the reach of the farthest one it can
+	TestEqual(TEXT("1 m: a swing fits, stay"), GetApproachRange(Options, 100.f), 100.f);
+	TestEqual(TEXT("5 m: the charge fits, stay"), GetApproachRange(Options, 500.f), 500.f);
+	TestEqual(TEXT("10 m: walk into the charge's reach"), GetApproachRange(Options, 1000.f), 650.f);
+
+	// a lunge that only reaches 2.6 m leaves a gap before the charge (from 3 m): from the gap it walks into the lunge's reach
+	TArray<FZAttackOption> Gap = Options;
+	Gap[2].MaxRange = 260.f;
+	TestEqual(TEXT("2.9 m in the gap between lunge and charge: walk into the lunge's reach"), GetApproachRange(Gap, 290.f), 260.f);
+
+	// attacks on their own cooldown don't count
+	Options[3].bReady = false;
+	TestEqual(TEXT("5 m with the charge on cooldown: nothing"), ChooseAttack(Options, 500.f, 0.5f), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("5 m with the charge on cooldown: walk into the lunge's reach"), GetApproachRange(Options, 500.f), 330.f);
+
+	// only the charge ready and the target right in front: too close for it, it waits where it is
+	TArray<FZAttackOption> OnlyCharge = Options;
+	for (FZAttackOption& Option : OnlyCharge)
+	{
+		Option.bReady = false;
+	}
+	OnlyCharge[3].bReady = true;
+	TestEqual(TEXT("Only the charge ready, target at 1 m: stay"), GetApproachRange(OnlyCharge, 100.f), 100.f);
+
+	// a weight of 0: never picked
+	Options[0].Weight = 0.f;
+	TestEqual(TEXT("Close with the first swing at weight 0: the second"), ChooseAttack(Options, 100.f, 0.1f), 1);
+
+	// nothing ready: it waits within the reach of all of them
+	for (FZAttackOption& Option : Options)
+	{
+		Option.bReady = false;
+	}
+	TestEqual(TEXT("Nothing ready, 10 m: it still comes within reach to wait"), GetApproachRange(Options, 1000.f), 650.f);
+	TestEqual(TEXT("Nothing ready: no attack"), ChooseAttack(Options, 100.f, 0.5f), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("No attacks at all: it stays"), GetApproachRange(TArray<FZAttackOption>(), 400.f), 400.f);
+
+	return true;
+}
+
 /** How the AI weighs the enemies it knows about (UZAITargetingComponent::ScoreEnemy) */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FZAITargetScoringTest, "ZSurvivalGame.AI.TargetScoring", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 

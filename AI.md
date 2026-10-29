@@ -2,7 +2,7 @@
 
 How enemies think: how they notice you, how they pick whom to fight in co-op, their combat states, and how to set up a new kind of enemy. Their attacks, poise and staggers are in COMBAT.md; how all of it works in multiplayer is also in MULTIPLAYER.md.
 
-**Last updated:** 2026-10-29 (enemies don't swing at you from below a ledge: Max Attack Height)
+**Last updated:** 2026-10-29 (several attacks per enemy, hitboxes along an enemy's weapon, the Stone Golem's four attacks)
 
 ## The parts
 
@@ -38,9 +38,9 @@ To change the weights: make a Blueprint of `AZAIBaseController` (see "An enemy t
 | State | What it does | When it leaves |
 |---|---|---|
 | **Idle** | Stands still, no target | It notices someone: Approaching |
-| **Approaching** | Goes for its target at full speed (to where it last noticed it, if it can't see it). If you're up on a ledge, it looks for a way up (a ramp, stairs) | In attack range and ready: it attacks. A circling enemy that has to wait: Strafing. Target gone: Idle |
+| **Approaching** | Picks the attack it goes for next, and walks at full speed until you're in that attack's range (to where it last noticed you, if it can't see you). If you're up on a ledge, it looks for a way up (a ramp, stairs) | In range and ready: it attacks. A circling enemy that has to wait: Strafing. Target gone: Idle |
 | **Strafing** | Circles its target at **Strafe Distance**, facing it, at **Strafe Speed**; turns around when something blocks it | Done waiting (**Strafe Time Min/Max** after its last attack) and ready: Approaching, to go in for the attack. The target gets away: Approaching |
-| **Attacking** | Stands and swings; it's locked into the swing until it's over | Then: a circling enemy circles, a zombie goes for you again |
+| **Attacking** | Makes the attack; it's locked into it until its animation is over | Then: a circling enemy circles, a zombie goes for you again |
 | **DodgeRecovering** | After a dodge, waits **Dodge Recovery Time** before doing anything | Then like after an attack |
 | **Staggered** | Its poise broke: it doesn't move or turn until the stagger is over | Then like after an attack |
 
@@ -66,17 +66,75 @@ In the enemy's Blueprint (or C++ class): **Class Defaults → AI|Combat → Comb
 | **Strafe Speed** | How fast it walks while circling (it chases at the movement's **Max Walk Speed**) | 150 cm/s |
 | **Dodge Recovery Time** | How long after a dodge before it acts again | 0.4 s |
 
-The attack itself (range, cooldown, damage, reach) is under **AI** and **AI|Melee** as before.
+## Attacks
+
+Each kind of enemy has a list of attacks: **Class Defaults → AI|Attacks → Attacks**. How it uses them:
+1. **It plans one:** among its attacks that are ready (off their own **Cooldown**) and that it can reach from where it stands (you're not closer than the attack's **Min Range**), it picks one at random, more often the ones with a higher **Weight**.
+2. **It walks in** until you're within that attack's **Max Range**.
+3. **It attacks.** Then it plans the next one. Between two attacks there's always at least **Attack Cooldown** (under **AI**).
+
+| Setting of an attack | What it does |
+|---|---|
+| **Montage** | Its animation |
+| **Min Range / Max Range** | It starts this attack when you're this far away (middle to middle, along the ground). A lunge or a charge has a Min Range, so it isn't used right in front of you |
+| **Damage**, **Poise Damage** | Of each hit |
+| **Cooldown** | Seconds before it uses this attack again (its other attacks can come sooner) |
+| **Weight** | How often it's picked: 2 = twice as often as an attack with 1; 0 = never |
+| **Fallback Hit** (Hit Delay, Reach, Radius) | Only for a montage without Weapon Hitbox notifies: one hit that many seconds in, a ball pushed straight forward from its middle |
+
+**Where an attack hits:** like a player's attack, through the **Weapon Hitbox** notifies in its montage (COMBAT.md → Hitboxes). While one is active, the enemy's weapon is swept along the swing, and whoever it touches is hit once per notify. The weapon is the first of its **Attached Meshes** with **Is Weapon** ticked: between the mesh's sockets `BladeStart` and `BladeEnd` if it has them, otherwise the whole mesh along its longest side, as thick as the mesh (**Blade Radius** changes that). A hit only counts where the weapon really is: step back, or dodge through it (the dodge's invulnerable moment works against enemies too). To see the hitboxes while playing: `Z.Melee.DrawDebug 1` (green trails, in the host's window).
+
+An attack without Weapon Hitbox notifies (the zombie's punch) hits with its **Fallback Hit** instead.
 
 ## A new kind of enemy
 
 1. Right-click in the Content Browser → **Blueprint Class** → search **ZZombieCharacter** (or **ZAIBaseCharacter** for something completely different, e.g. a knight).
-2. Change its mesh, animation Blueprint, attack montage and numbers (**Survival|Stats**, **AI**, **AI|Melee**).
+2. Change its mesh, animation Blueprint and numbers (**Survival|Stats**, **AI**), and give it its attacks (**AI|Attacks**, see Attacks above).
+   - **Things it carries** (a weapon, a shield): **Looks → Attached Meshes** → **+** → pick the **Mesh** and type the **Socket** of its body it hangs from, e.g. `weapon_rSocket` (the body mesh's skeleton lists its sockets). Tick **Is Weapon** on the one its attacks hit with. They show up when you play, not in the Blueprint's viewport. Bullets and swings pass through them.
+   - **Its attack montages:** add a **Weapon Hitbox** notify to each, over the frames where the weapon swings through (COMBAT.md → Hitboxes), so its hits follow the weapon.
 3. Set its **Combat Settings**. For a knight that circles you: tick **Can Strafe**, and maybe a smaller **Vision Half Angle** and **Proximity Radius** so you can sneak up on it.
 4. **A big enemy:** move its **LockOnTarget** up (COMBAT.md → Lock-on) and give its **Spacing** a larger **Extra Radius** (COMBAT.md → Spacing).
 5. **Where it can be hit:** bullets and melee swings only hit the body shapes in its mesh's **Physics Asset**, not the mesh you see. Where the mesh sticks out past the shapes (a big head, helmet, shoulder armor), shots go through. To check: while playing, console `show collision` draws the shapes (`show collision` again hides them), and `Z.Weapon.DrawDebug 1` draws each shot. To fix: open the Physics Asset (the mesh → **Physics Asset** field → double-click it) → click a shape → make it bigger with **Radius** and **Length** in **Details** (or press **R** and drag in the viewport), or right-click a bone → **Add Shape** for a part without one. Save it.
 
 **Changing settings during play** (e.g. a boss that starts circling in its second phase): the Blueprint node **Set Combat Settings** on the enemy (host only). Its AI picks them up right away.
+
+**To try it:** drag its Blueprint into the level, or type `ZSpawnEnemyAt 600 0 0 <its Blueprint's name>` while playing.
+
+## The Stone Golem
+
+The first enemy made this way, from the Stone Golem pack: `BP_Enemy_StoneGolem` in `Content/Enemies/StoneGolem`. A slow, tough knight of stone with a hammer and a shield, that circles you between its swings. To meet it: `ZSpawnEnemyAt 600 0 0 BP_Enemy_StoneGolem`.
+
+| | Golem | Zombie |
+|---|---|---|
+| Health | 500 (about 28 rifle shots) | 60 |
+| Poise | 100 (about 6 light machete hits, or 2 heavy ones, stagger it) | 30 |
+| Attacks | five hammer attacks (below) | a punch, 15 damage |
+| Size | 1.1 × the pack's golem, about 2.1 m tall | a mannequin |
+| Speed | walks at 240, turns slowly (200° a second): you can get behind it | 280 |
+| Circling | at 3.2 m, 1.5 to 3 s between attacks | never |
+| Reward | 50 experience | 10 |
+
+Its attacks (the hammer hits; at least 2 s from one attack to the next):
+
+| Attack | Range | Damage / poise damage | Cooldown | Weight | Notes |
+|---|---|---|---|---|---|
+| 1, sideways swing | 0–2.0 m | 35 / 50 | – | 3 | Passes at your head |
+| 2, double swing | 0–2.0 m | 30 / 40 | – | 2 | Hits the most often |
+| 3, lunge with a spin | 1.5–2.3 m | 40 / 60 | 6 s | 1 | Moves it 1.2 m; the spin passes at head height, so it often misses |
+| 4, charge | 2.7–5.7 m | 20 / 25 each | 12 s | 1 | Moves it 4.3 m with four swings; it opens fights with it from afar |
+
+Every hit but the charge's staggers you (your poise can't take 35 at once).
+
+The quick swing (`AM_StoneGolem_Attack3`: 0–1.5 m, 25 / 35, weight 1) was taken out of its list: it arcs up and behind the golem and rarely connected. Its montage is still in the folder; to bring it back, add an entry to **Attacks** with that montage.
+
+**Why 1.1 times and not bigger:** the pack's swings are made for its own size. At 1.25 times most of them passed over your head (in a test 3 of 11 swings hit, against 6 of 12 at 1.1).
+
+What's in its folder:
+- **AM_StoneGolem_Attack1** to **Attack5**: its attacks as montages (Attack3, the quick swing, isn't used now), each with **Weapon Hitbox** notifies (on a track named Hitbox) over the moments the hammer swings through the front, measured from the animations. Attack4 and Attack5 move the golem (root motion).
+- **AM_StoneGolem_Stagger**: its stagger.
+- **PHYS_StoneGolem_Enemy**: its hit shapes, a copy of the pack's with every shape grown to cover the part of the mesh it belongs to (so shots don't pass through its armor). The Blueprint uses it through the mesh's **Physics Asset Override**; the pack's own physics asset is unchanged.
+
+**Still to do (your part, EDITOR_TASKS task 11):** its animation Blueprint (the pack's demo one, `ABP_StoneGolem`) only walks forward, so the golem slides sideways when it circles. It has no loot yet (**AI|Loot → Loot Table**).
 
 ## An enemy that behaves differently (advanced)
 
@@ -104,7 +162,8 @@ Enemies find their way around walls, and up ramps and stairs to a ledge you're s
 
 ## Seeing what an enemy thinks
 
-- `ZAIStates` (console, host): every enemy's state, how long it's been in it, its target, the distance, whether it sees it, and how many players it knows about.
+- `ZAIStates` (console, host): every enemy's state, how long it's been in it, its target, the distance, whether it sees it, how many players it knows about, how much higher its target stands, how close it wants to get for its next attack (attack reach), and whether it may attack.
+- `log LogZSurvivalGame Verbose` also writes which attack it picks and from how far ("attacks: attack 2 ... from 180 cm"), and each hit with the bone it hit.
 - `Z.AI.Debug 1`: draws the state and target over each enemy, and a line to its target (green: it sees it, orange: it remembers where it was). Type it with the **1** (`Z.AI.Debug 0` turns it off); `Z.AI.Debug` alone only writes whether it's on. Shows in the host's window only.
 - **Gameplay debugger:** press the **'** key (apostrophe) while playing and look at an enemy. The text in the top left is the gameplay debugger's: its **AI** category is the engine's general AI info, not these combat states. Its **Perception** category (turn it on with the number shown next to it at the top of the screen) draws the enemy's field of view and what it sees.
 - `log LogZSurvivalGame Verbose`: every state change and target change in the Output Log.
@@ -116,6 +175,8 @@ Enemies find their way around walls, and up ramps and stairs to a ledge you're s
 | `ZAIStates` | Writes every enemy's AI state to the Output Log (*host*) |
 | `ZAIStrafe 1` | Makes every living enemy circle its target between attacks; `ZAIStrafe 0` turns it off (*host*) |
 | `ZSpawnEnemyAt 900 180 1` | A zombie with its AI 9 m away, 180° to the right (behind you), looking away from you (`0` at the end: looking at you) (*host*) |
+| `ZSpawnEnemyAt 600 0 0 BP_Enemy_StoneGolem` | The same with another kind of enemy: its Blueprint's name at the end (*host*) |
+| `Z.Melee.DrawDebug 1` | Draws the hitboxes of every melee attack, players' and enemies' (green), and their hits (red) |
 | `ZAIDodge` | Pretends every enemy dodged, to try DodgeRecovering (*host*) |
 | `ZHitEnemies 40 1` | Hurts every enemy for 40 as if player 1 (the first client) hit it; `0` is the host (*host*) |
 | `ZSpawnZombies 1 700` | A zombie 7 m in front of the camera (*host*) |
@@ -124,7 +185,6 @@ Enemies find their way around walls, and up ramps and stairs to a ledge you're s
 ## Plan: what isn't built yet
 
 - **Patrols** and **going back home** when it loses you (Idle stands still for now).
-- **Choosing between several attacks** by range and cooldown, and attacks that use the hitboxes like the players' (COMBAT.md).
 - **Enemies that dodge** (DodgeRecovering is ready) and block.
 - **Taking turns in co-op:** only a few enemies attacking the same player at once.
 - **Hearing:** gunshots drawing enemies from farther away.

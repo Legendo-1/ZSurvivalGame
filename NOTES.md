@@ -49,8 +49,21 @@ Things learned the hard way, and known issues. Remove a known issue once it's fi
 
 - **`Lvl_ThirdPerson` has no navmesh.** Enemies then walk straight at their target and get stuck behind walls (and behind other players), and at the foot of a ledge you jumped onto, even with a ramp next to it. AI.md → "Moving around" has the steps to add one.
 - **`Z.AI.Debug` needs the 1:** `Z.AI.Debug 1`. Typed alone it only writes `Z.AI.Debug = "false"`.
-- **Shots go through parts of a new enemy:** hits only count on the body shapes of the mesh's Physics Asset, not on the mesh you see. A bulky mesh (a golem's head, armor) sticks out past them. AI.md → "A new kind of enemy" step 5.
+- **A bigger enemy swings higher.** Scaling an enemy up scales its attack animations too: the Stone Golem's swings passed over the player's head at 1.25 times its size (3 of 11 hit), and hit the chest at 1.1 times (6 of 12). Before making a pack's enemy much bigger, try a few swings with `Z.Melee.DrawDebug 1`.
+- **Gaps between attack ranges:** if no attack covers a distance (e.g. a lunge to 2.6 m and a charge from 3 m), the enemy walks in until its planned attack fits; earlier it could stand in the gap forever. AI.md → Attacks.
+- **Shots go through parts of a new enemy:** hits only count on the body shapes of the mesh's Physics Asset, not on the mesh you see. A bulky mesh (a golem's head, armor) sticks out past them. AI.md → "A new kind of enemy" step 5. The Stone Golem has its own grown copy (`PHYS_StoneGolem_Enemy`).
 - **Enemies only fight what they sense:** they no longer find every player within a radius through walls. A zombie behind you that looks away stays Idle until you get close, hit it, or it turns and sees you.
+
+### Asset packs from Fab
+
+- **Their demo files can be broken.** The Stone Golem pack's copy of `CR_Mannequin_Body` pointed to rig functions from its maker's computer. It failed to compile every time the golem loaded (its foot IK rig previews on the pack's mannequin, which uses that rig), and Play showed "Blueprint failed to compile: CR_Mannequin_Body". It now points to the project's own `Characters/Mannequins/Rigs/CR_Mannequin_Body` (the pack's file is a redirector). The same fix for another pack: right-click the broken asset → **Delete** → under **Replace References** pick the project's working copy → **Replace References**.
+- **Walks that move the root bone.** The golem pack's demo walk and run (`MM_Walk_Fwd`, `MM_Run_Fwd`) move the root bone forward without root motion turned on, so the body walked away from its capsule and jumped back every loop. They have **Force Root Lock** on now. Check this on a pack's walks and runs (the animation's **Root Motion** settings).
+- **Foot IK needs animations that move the ik_foot bones.** The Stone Golem's own animations (attacks, walks) never move `ik_foot_l` / `ik_foot_r`, so the foot IK rig in its animation Blueprint (`CR_Mannequin_BasicFootIK`) pulled its feet into the standing pose during attacks (stiff, parallel legs). Fix: that Control Rig node's **Alpha** to 0 (or remove it). Check a pack's animations for this before using its foot IK.
+- **Keep your own versions out of the pack's folders** (e.g. `Content/Enemies/StoneGolem`), so updating a pack can't overwrite them.
+
+### Materials on characters
+
+- **They need Used with Skeletal Mesh** (material **Details → Usage**). `M_HitFlash` didn't have it: the editor turned it on by itself with a warning ("Overlay material with missing skel mesh usage flag"), but a packaged game would have shown the default checkered material instead. It's on now.
 
 ### Assets named only in settings
 
@@ -69,9 +82,7 @@ Things learned the hard way, and known issues. Remove a known issue once it's fi
   - Remove this note once a Fab update builds without the fix.
   - **A harmless error in the Output Log since that update:** "LogPython: Error: ... ToolsetRegistry ... init_unreal.py ... has no attribute 'PythonTestRunner'". It comes from an experimental engine plugin the Fab update switched on, and changes nothing in the game.
 
-- **"Blueprint failed to compile: CR_Mannequin_Body" when pressing Play** (since the Stone Golem is used): the error is in the Stone Golem pack's own copy, `StoneGolem/Demo/Characters/Mannequins/Rigs/CR_Mannequin_Body`. It points to rig functions from its maker's computer that didn't come with the pack. The golem's animation Blueprint uses the pack's foot IK rig, whose preview mesh is the pack's mannequin, which loads that broken rig; so it loads with the golem, although nothing in the game runs it. Pressing Play anyway is fine. To get rid of the message: right-click that `CR_Mannequin_Body` → **Delete** → in the window that opens, pick `CR_Mannequin_Body` from `Characters/Mannequins/Rigs` (the project's own, which works) under **Replace References** → **Replace References** → **Save All**.
-
 - **Pistol run, right knee on slopes:** the right knee bends outward when the right foot lands on a slope while running with the pistol. Something in the pistol animation causes it, not the IK settings.
 - **Small corrections at the start of a melee attack:** a client's position can be put back by 2 or 3 cm when an attack starts right after a combo step or a stagger. Normal for attacks that move the character with their animation, and hard to see.
-- **Zombies outreach the placeholder machete:** they attack from about 1.5 m and their punch reaches 1.7 m, while the placeholder punches with a stretched box reach about 1 m. Real machete animations swing farther; otherwise lower the zombie's **Attack Range** and **Melee Reach** (Class Defaults → **AI**, **AI|Melee**).
+- **Zombies outreach the placeholder machete:** they attack from about 1.5 m and their punch reaches 1.7 m, while the placeholder punches with a stretched box reach about 1 m. Real machete animations swing farther; otherwise lower the zombie's punch: **AI|Attacks → Attacks → 0 → Max Range** and **Fallback Hit → Reach** (it's set in C++, `AZZombieCharacter`, so a zombie Blueprint changes it).
 - **Rifle aim, left shoulder on backward walks:** the left shoulder moves oddly in `MF_Rifle_Walk_Bwd`, `Bwd_Left` and `Bwd_Right`. It's in the animations themselves. Probably the upper arm, but no single value in Sequencer stands out, and rotating one bone moves the others too.

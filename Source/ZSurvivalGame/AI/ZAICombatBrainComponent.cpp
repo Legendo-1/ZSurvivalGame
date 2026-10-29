@@ -297,6 +297,12 @@ void UZAICombatBrainComponent::Think()
 
 	Targeting->UpdateTarget();
 
+	// the attack it goes for next (the states walk into its range)
+	if (Targeting->GetTarget())
+	{
+		Character->UpdateAttackPlan(FVector::Dist2D(Character->GetActorLocation(), Targeting->GetTargetLocation()));
+	}
+
 	// what abilities do wins: staggered or dodging (also when it was missed as an event), or an attack that runs
 	EZAICombatState NextState;
 	const TCHAR* Reason = TEXT("decision");
@@ -365,7 +371,7 @@ FZAICombatSnapshot UZAICombatBrainComponent::MakeSnapshot() const
 		Snapshot.DistanceToTarget = FVector::Dist2D(Character->GetActorLocation(), TargetLocation);
 		Snapshot.HeightToTarget = GetFeetHeight(Targeting->GetTarget(), TargetLocation) - GetFeetHeight(Character, Character->GetActorLocation());
 	}
-	Snapshot.AttackRange = Character->GetAttackRange();
+	Snapshot.AttackRange = Character->GetApproachRange(Snapshot.DistanceToTarget);
 	Snapshot.MaxAttackHeight = Settings.MaxAttackHeight;
 	Snapshot.bAttackReady = Character->IsAttackReady() && !UZCombatLibrary::IsBusy(Character) && !UZCombatLibrary::IsStaggered(Character);
 	Snapshot.bCanStrafe = Settings.bCanStrafe;
@@ -384,17 +390,19 @@ void UZAICombatBrainComponent::StartStrafeTimer()
 	}
 }
 
-bool UZAICombatBrainComponent::TryStartAttack()
+bool UZAICombatBrainComponent::TryStartAttack(float DistanceToTarget)
 {
 	AZAIBaseCharacter* Character = GetCharacter();
-	return Character && Character->TryAttack();
+	return Character && Character->TryAttack(DistanceToTarget);
 }
 
 FString UZAICombatBrainComponent::GetDebugInfoString() const
 {
 	const UZAITargetingComponent* Targeting = GetTargeting();
-	return FString::Printf(TEXT("Combat: %s for %.1f s%s; %s"), LexToString(CurrentState), GetTimeInState(), bRunning ? (bPaused ? TEXT(" (paused)") : TEXT("")) : TEXT(" (stopped)"),
-		Targeting ? *Targeting->GetDebugString() : TEXT("no targeting"));
+	const FZAICombatSnapshot Snapshot = MakeSnapshot();
+	return FString::Printf(TEXT("Combat: %s for %.1f s%s; %s; height %+.1f m, attack reach %.1f m, may attack: %s"), LexToString(CurrentState), GetTimeInState(),
+		bRunning ? (bPaused ? TEXT(" (paused)") : TEXT("")) : TEXT(" (stopped)"), Targeting ? *Targeting->GetDebugString() : TEXT("no targeting"),
+		Snapshot.HeightToTarget / 100.f, Snapshot.AttackRange / 100.f, Snapshot.bAttackReady ? TEXT("yes") : TEXT("no"));
 }
 
 void UZAICombatBrainComponent::DrawDebug() const

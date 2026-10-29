@@ -3,8 +3,12 @@
 #include "ZCheatManager.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "AssetRegistry/ARFilter.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/AssetManager.h"
+#include "Engine/Blueprint.h"
+#include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
@@ -628,25 +632,67 @@ void UZCheatManager::ZAIStrafe(bool bStrafe)
 	UE_LOG(LogZSurvivalGame, Log, TEXT("ZAIStrafe: %d enemies %s"), Count, bStrafe ? TEXT("circle their target between attacks") : TEXT("walk straight in"));
 }
 
-void UZCheatManager::ZSpawnEnemyAt(float Distance, float Angle, bool bFacingAway)
+namespace
+{
+	/** An enemy class by its Blueprint's name (e.g. BP_Enemy_StoneGolem), the C++ zombie if Name is empty, or null */
+	UClass* FindEnemyClass(const FString& Name)
+	{
+		if (Name.IsEmpty())
+		{
+			return AZZombieCharacter::StaticClass();
+		}
+
+		// Blueprints only load when something uses them: find it by name in the asset registry (the Blueprint in the editor, its class in a packaged game)
+		FARFilter Filter;
+		Filter.PackagePaths.Add(FName(TEXT("/Game")));
+		Filter.bRecursivePaths = true;
+		Filter.ClassPaths.Add(UBlueprint::StaticClass()->GetClassPathName());
+		Filter.ClassPaths.Add(UBlueprintGeneratedClass::StaticClass()->GetClassPathName());
+
+		TArray<FAssetData> Assets;
+		IAssetRegistry::GetChecked().GetAssets(Filter, Assets);
+		for (const FAssetData& Asset : Assets)
+		{
+			const FString AssetName = Asset.AssetName.ToString();
+			const FString ClassName = AssetName.EndsWith(TEXT("_C")) ? AssetName : AssetName + TEXT("_C");
+			if (ClassName.Equals(Name, ESearchCase::IgnoreCase) || ClassName.Equals(Name + TEXT("_C"), ESearchCase::IgnoreCase))
+			{
+				return LoadClass<AZAIBaseCharacter>(nullptr, *(Asset.PackageName.ToString() + TEXT(".") + ClassName));
+			}
+		}
+
+		return nullptr;
+	}
+}
+
+void UZCheatManager::ZSpawnEnemyAt(float Distance, float Angle, bool bFacingAway, const FString& EnemyClass)
 {
 	const APlayerController* PlayerController = GetOuterAPlayerController();
-	const APawn* Pawn = PlayerController ? PlayerController->GetPawn() : nullptr;
-	if (!Pawn || !CheckIsHost(TEXT("ZSpawnEnemyAt")))
+	const ACharacter* Character = PlayerController ? Cast<ACharacter>(PlayerController->GetPawn()) : nullptr;
+	if (!Character || !CheckIsHost(TEXT("ZSpawnEnemyAt")))
 	{
 		return;
 	}
 
-	const FVector Direction = FRotator(0.f, Pawn->GetActorRotation().Yaw + Angle, 0.f).Vector();
-	const FVector SpawnLocation = Pawn->GetActorLocation() + Direction * FMath::Max(Distance, 100.f) + FVector(0.f, 0.f, 2.f);
+	UClass* Class = FindEnemyClass(EnemyClass);
+	if (!Class)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZSpawnEnemyAt: there's no enemy Blueprint named '%s'"), *EnemyClass);
+		return;
+	}
+
+	// standing on the same floor as your character, whatever its size
+	const float HeightDifference = Class->GetDefaultObject<ACharacter>()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() - Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	const FVector Direction = FRotator(0.f, Character->GetActorRotation().Yaw + Angle, 0.f).Vector();
+	const FVector SpawnLocation = Character->GetActorLocation() + Direction * FMath::Max(Distance, 100.f) + FVector(0.f, 0.f, HeightDifference + 2.f);
 	const FRotator SpawnRotation = (bFacingAway ? Direction : -Direction).Rotation();
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-	if (const AZZombieCharacter* Zombie = GetWorld()->SpawnActor<AZZombieCharacter>(AZZombieCharacter::StaticClass(), SpawnLocation, SpawnRotation, SpawnParams))
+	if (const AZAIBaseCharacter* Enemy = GetWorld()->SpawnActor<AZAIBaseCharacter>(Class, SpawnLocation, SpawnRotation, SpawnParams))
 	{
-		UE_LOG(LogZSurvivalGame, Log, TEXT("ZSpawnEnemyAt: '%s' %.0f cm away, %.0f deg to the right, looking %s you"), *GetNameSafe(Zombie),
-			FVector::Dist2D(Zombie->GetActorLocation(), Pawn->GetActorLocation()), Angle, bFacingAway ? TEXT("away from") : TEXT("at"));
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZSpawnEnemyAt: '%s' %.0f cm away, %.0f deg to the right, looking %s you"), *GetNameSafe(Enemy),
+			FVector::Dist2D(Enemy->GetActorLocation(), Character->GetActorLocation()), Angle, bFacingAway ? TEXT("away from") : TEXT("at"));
 	}
 }
 

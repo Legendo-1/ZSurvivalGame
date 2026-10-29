@@ -11,11 +11,13 @@ class USceneComponent;
 enum class EVisibilityBasedAnimTickOption : uint8;
 class USkeletalMeshComponent;
 class UZAnimNotifyState_WeaponHitbox;
+struct FZMeleeBlade;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FZOnMeleeHit, const FHitResult& /*Hit*/);
 
 /**
- *  Finds what a melee attack hits. While an attack's Weapon Hitbox notify is active, it sweeps the weapon's blade (or a ball at the hand) along the swing
+ *  Finds what a melee attack hits. While an attack's Weapon Hitbox notify is active, it sweeps the weapon's blade (or a ball at the hand) along the swing:
+ *  a player's held weapon, or a weapon of the character's own (IZCombatantInterface::GetMeleeBlade, e.g. an enemy's hammer)
  *  every frame, and reports each character it touches once per hitbox (characters' meshes, through each other; walls don't stop it)
  *  A swing cut short (its montage blending out under the next action) stops hitting at once. While a hitbox is active the character's bones keep
  *  moving even off screen (the engine only updates them when the character is drawn), so the server finds AI hits too
@@ -57,15 +59,22 @@ protected:
 
 private:
 
-	/** One ball swept along the swing: at a socket, or part way between two sockets (along the blade) */
+	/** One ball swept along the swing: at a spot, or part way (Alpha) along a line between two spots (the blade).
+	 *  A spot is a socket of the component (None: the component itself), moved by an offset in its space */
 	struct FHitboxPoint
 	{
 		TWeakObjectPtr<USceneComponent> Component;
-		FName SocketA;
-		FName SocketB;
+		FName StartSocket;
+		FVector StartOffset = FVector::ZeroVector;
+		FName EndSocket;
+		FVector EndOffset = FVector::ZeroVector;
+		bool bAlongLine = false;
 		float Alpha = 0.f;
 		float Radius = 10.f;
 	};
+
+	/** Balls along a blade, close enough together that nothing slips between them */
+	static void AddBladePoints(const FZMeleeBlade& Blade, TArray<FHitboxPoint>& OutPoints);
 
 	struct FActiveHitbox
 	{

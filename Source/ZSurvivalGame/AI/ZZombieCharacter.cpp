@@ -28,10 +28,16 @@ AZZombieCharacter::AZZombieCharacter()
 		GetMesh()->SetAnimInstanceClass(ZombieAnimation.Class);
 	}
 
-	if (ZombieAttack.Succeeded())
-	{
-		AttackMontage = ZombieAttack.Object;
-	}
+	// one attack: a punch that hits 1.2 m in front of it, 0.4 s in (the montage has no hitboxes)
+	FZEnemyAttack Punch;
+	Punch.Montage = ZombieAttack.Succeeded() ? ZombieAttack.Object : nullptr;
+	Punch.MaxRange = 150.f;
+	Punch.Damage = 15.f;
+	Punch.PoiseDamage = 15.f;
+	Punch.HitDelay = 0.4f;
+	Punch.Reach = 120.f;
+	Punch.Radius = 50.f;
+	Attacks = { Punch };
 
 	if (ZombieStagger.Succeeded())
 	{
@@ -53,8 +59,6 @@ AZZombieCharacter::AZZombieCharacter()
 	CombatSettings.ProximityRadius = 500.f;
 	CombatSettings.bCanStrafe = false;
 	AttackCooldown = 1.6f;
-	MeleeDamage = 15.f;
-	MeleePoiseDamage = 15.f;
 	MaxPoise = 30.f;
 	GetCharacterMovement()->MaxWalkSpeed = 280.f;
 }

@@ -12,6 +12,20 @@
 class AZWeapon;
 class UAbilitySystemComponent;
 class UAnimMontage;
+class USceneComponent;
+
+/** The part of a weapon a melee hitbox sweeps: a line on a mesh (from a socket or the mesh's origin, moved by an offset in its space, at each end) with a thickness */
+struct FZMeleeBlade
+{
+	TWeakObjectPtr<USceneComponent> Mesh;
+	FName StartSocket;
+	FVector StartOffset = FVector::ZeroVector;
+	FName EndSocket;
+	FVector EndOffset = FVector::ZeroVector;
+
+	/** In cm, in the world (the mesh's scale included) */
+	float Radius = 10.f;
+};
 
 UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))
 class UZCombatantInterface : public UInterface
@@ -31,6 +45,9 @@ public:
 
 	/** The weapon in its hands (its melee hitboxes follow its blade), or null */
 	virtual AZWeapon* GetHeldWeapon() const { return nullptr; }
+
+	/** Without a held weapon: a weapon of its own that its melee hitboxes follow (e.g. an enemy's hammer); false if it has none */
+	virtual bool GetMeleeBlade(FZMeleeBlade& OutBlade) const { return false; }
 };
 
 /**

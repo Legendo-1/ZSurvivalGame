@@ -29,7 +29,8 @@ public class ZSurvivalGame : ModuleRules
 		});
 
 		// EngineSettings: the game's default level (for continuing a save made before the level was saved in it)
-		PrivateDependencyModuleNames.AddRange(new string[] { "EngineSettings" });
+		// AssetRegistry: finding enemy Blueprints by name for the test commands
+		PrivateDependencyModuleNames.AddRange(new string[] { "EngineSettings", "AssetRegistry" });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"ZSurvivalGame",

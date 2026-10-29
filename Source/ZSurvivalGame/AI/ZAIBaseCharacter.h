@@ -23,8 +23,38 @@ class UZFootstepComponent;
 class UZHitFlashComponent;
 class UZLockOnTargetComponent;
 class UZLootTable;
+class UZMeleeTraceComponent;
+class UStaticMesh;
+class UStaticMeshComponent;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FZOnAICombatStateChanged, EZAICombatState /*NewState*/, EZAICombatState /*OldState*/);
+
+/** A mesh an enemy carries on its body, e.g. a weapon or a shield: it follows the socket and nothing collides with it */
+USTRUCT(BlueprintType)
+struct FZAttachedMesh
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Looks")
+	TObjectPtr<UStaticMesh> Mesh;
+
+	/** The socket (or bone) of its body mesh it follows, e.g. weapon_rSocket */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Looks")
+	FName Socket;
+
+	/** Moved, turned and scaled from the socket */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Looks")
+	FTransform Offset;
+
+	/** Its attacks hit with this mesh: the Weapon Hitbox notifies in its attack montages sweep it along the swing.
+	 *  The part that hits: between the mesh's sockets BladeStart and BladeEnd if it has them, otherwise the whole mesh along its longest side */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon")
+	bool bIsWeapon = false;
+
+	/** How thick the part that hits is, in cm of the mesh; 0 = as thick as the mesh */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (ClampMin = "0", Units = "cm", EditCondition = "bIsWeapon"))
+	float BladeRadius = 0.f;
+};
 
 /**
  *  Base class for every AI character: zombies, other monsters and human NPCs (see AI.md)
@@ -61,6 +91,10 @@ class AZAIBaseCharacter : public ACharacter, public IAbilitySystemInterface, pub
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZCharacterSpacingComponent> SpacingComponent;
 
+	/** Finds what its attacks hit, along its weapon, while a Weapon Hitbox notify in the attack's montage is active (on the server) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZMeleeTraceComponent> MeleeTraceComponent;
+
 public:
 
 	AZAIBaseCharacter();
@@ -82,13 +116,31 @@ public:
 	/** Every machine: a cue arrived for this character. Sounds and effects are GameplayCue Notify assets; this plays the hit flash with its Hit Cue */
 	virtual void HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters) override;
 
-	/** Server: starts the attack ability if the attack cooldown allows it; returns true if it started */
-	bool TryAttack();
+	/** Its weapon for the hitboxes of its attacks: the first of its Attached Meshes marked Is Weapon */
+	virtual bool GetMeleeBlade(FZMeleeBlade& OutBlade) const override;
 
-	/** True if its attack cooldown is over (and it's alive) */
+	/** Server: picks one of its attacks that fits a target this far away (middle to middle, along the ground) and starts it; true if one started */
+	bool TryAttack(float DistanceToTarget);
+
+	/** True if it may attack now: alive, the time between attacks is over, and one of its attacks is ready */
 	bool IsAttackReady() const;
 
-	/** True while its Attack Montage plays (the swing can go on after the attack ability ended at its hit) */
+	/** Server, at each decision of its AI: keeps the attack it goes for next, or picks another (by weight) when that one can't be used any more */
+	void UpdateAttackPlan(float DistanceToTarget);
+
+	/** How close its AI wants to get to a target this far away: into the range of the attack it plans (without one, ZAICombatRules::GetApproachRange) */
+	float GetApproachRange(float DistanceToTarget) const;
+
+	/** One of its Attacks, or null */
+	const FZEnemyAttack* GetAttack(int32 Index) const { return Attacks.IsValidIndex(Index) ? &Attacks[Index] : nullptr; }
+
+	/** The attack it's making or made last (server), or null */
+	const FZEnemyAttack* GetCurrentAttack() const { return GetAttack(CurrentAttackIndex); }
+
+	/** Which of its Attacks that is (server), or INDEX_NONE */
+	int32 GetCurrentAttackIndex() const { return CurrentAttackIndex; }
+
+	/** True while the montage of its current attack plays (server) */
 	bool IsPlayingAttackAnimation() const;
 
 	/** --- COMBAT STATE (set by the AI on the server, replicated to everyone) --- */
@@ -124,17 +176,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "AI")
 	bool IsDead() const { return bIsDead; }
 
-	float GetAttackRange() const { return AttackRange; }
-	float GetMeleeDamage() const { return MeleeDamage; }
-	float GetMeleePoiseDamage() const { return MeleePoiseDamage; }
-	float GetMeleeReach() const { return MeleeReach; }
-	float GetMeleeRadius() const { return MeleeRadius; }
-	float GetMeleeHitDelay() const { return MeleeHitDelay; }
-	UAnimMontage* GetAttackMontage() const { return AttackMontage; }
-
 protected:
 
-	/** Sets up the ability system; the server also sets the health and gives the abilities */
+	/** Sets up the ability system and its Attached Meshes; the server also sets the health and gives the abilities */
 	virtual void BeginPlay() override;
 
 	virtual void PossessedBy(AController* NewController) override;
@@ -168,6 +212,20 @@ protected:
 	/** The same on every machine when the combat state changed (the server calls it itself) */
 	void HandleCombatStateChanged(EZAICombatState OldState);
 
+	/** Every machine: makes a component for each of its Attached Meshes */
+	void CreateAttachedMeshes();
+
+	/** --- LOOKS --- */
+
+	/** Meshes it carries on its body, e.g. a hammer on weapon_rSocket and a shield on weapon_lSocket; every machine makes them itself
+	 *  when the game starts (they don't show in the Blueprint's viewport), and nothing collides with them */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Looks")
+	TArray<FZAttachedMesh> AttachedMeshes;
+
+	/** The components made for its Attached Meshes */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UStaticMeshComponent>> AttachedMeshComponents;
+
 	/** --- STATS --- */
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Survival|Stats", meta = (ClampMin = "1"))
@@ -187,12 +245,8 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Combat")
 	FZAICombatSettings CombatSettings;
 
-	/** Attacks when the target is this close (center to center, in cm) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI", meta = (ClampMin = "0"))
-	float AttackRange = 150.f;
-
-	/** Seconds between attacks */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI", meta = (ClampMin = "0"))
+	/** At least this long from the start of one attack to the start of the next, in seconds */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI", meta = (ClampMin = "0", Units = "s"))
 	float AttackCooldown = 1.5f;
 
 	/** Seconds the body stays after dying */
@@ -203,30 +257,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Effects")
 	FZCharacterCues CharacterCues;
 
-	/** --- MELEE --- */
+	/** --- ATTACKS --- */
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee", meta = (ClampMin = "0"))
-	float MeleeDamage = 10.f;
-
-	/** How far in front the hit reaches, in cm */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee", meta = (ClampMin = "0"))
-	float MeleeReach = 120.f;
-
-	/** Radius of the hit, in cm */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee", meta = (ClampMin = "0"))
-	float MeleeRadius = 50.f;
-
-	/** Seconds from the start of the attack until it hits */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee", meta = (ClampMin = "0"))
-	float MeleeHitDelay = 0.4f;
-
-	/** How much each of its hits wears down the target's poise toward a stagger */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee", meta = (ClampMin = "0"))
-	float MeleePoiseDamage = 15.f;
-
-	/** Attack animation (optional) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Melee")
-	TObjectPtr<UAnimMontage> AttackMontage;
+	/** Its attacks: it picks one that fits how far away its target is (each with its range, damage, cooldown and weight; see AI.md → Attacks) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Attacks")
+	TArray<FZEnemyAttack> Attacks;
 
 	/** --- STAGGER --- */
 
@@ -276,6 +311,18 @@ protected:
 
 	/** When the last attack started (server) */
 	double LastAttackTime = -1000.0;
+
+	/** When each of its Attacks may be used again (server) */
+	TArray<double> AttackReadyTimes;
+
+	/** The attack it's making or made last (server) */
+	int32 CurrentAttackIndex = INDEX_NONE;
+
+	/** The attack it goes for next: its AI walks into that one's range (server) */
+	int32 PlannedAttackIndex = INDEX_NONE;
+
+	/** Its attacks as the AI's rules see them (ready or not, at the current time) */
+	TArray<FZAttackOption> MakeAttackOptions() const;
 
 	/** Its combat state, set by its AI on the server */
 	UPROPERTY(ReplicatedUsing = OnRep_CombatState)

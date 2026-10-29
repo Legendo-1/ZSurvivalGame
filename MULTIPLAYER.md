@@ -2,7 +2,7 @@
 
 How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Melee combat, poise and staggers: COMBAT.md. How enemies notice you, pick a target and fight: AI.md. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
 
-**Last updated:** 2026-10-29 (lock-on; hit-stop and the hit flash; spacing; the enemies' new AI)
+**Last updated:** 2026-10-29 (lock-on; hit-stop and the hit flash; spacing; the enemies' new AI; the Stone Golem; several attacks per enemy)
 
 ## The basic idea
 
@@ -122,13 +122,16 @@ Every ability is blocked while dead or staggered.
 
 ## Enemies
 
-- **`AZAIBaseCharacter`** is the base class for every AI character (zombies, other monsters, human NPCs). Each one has its own health, team, combat settings and melee numbers (Class Defaults: **Survival|Stats**, **AI**, **AI|Combat**, **AI|Melee**).
+- **`AZAIBaseCharacter`** is the base class for every AI character (zombies, other monsters, human NPCs). Each one has its own health, team, combat settings and attacks (Class Defaults: **Survival|Stats**, **AI**, **AI|Combat**, **AI|Attacks**).
 - **`AZZombieCharacter`** is the first enemy type: the Quinn mannequin with the combat template's animations and punch, until zombie models exist. 60 health, slower than a jogging player, 15 damage and 15 poise damage per hit, 30 poise (two machete hits stagger it).
-- **Enemies stagger** when their poise breaks: their attack is cut short and the AI waits it out. **Max Poise** is under **Survival|Stats**, the **Stagger Montage** under **AI|Stagger**, the poise damage of its hits under **AI|Melee**.
+- **The Stone Golem** (`BP_Enemy_StoneGolem`, a Blueprint of `AZAIBaseCharacter`): a big, tough enemy that circles you between hammer swings (AI.md → The Stone Golem).
+- **Enemies' attacks** (**AI|Attacks**): each enemy picks among several, by distance, cooldown and weight (AI.md → Attacks). The host picks them and finds their hits (along the enemy's weapon, while the montage's Weapon Hitbox notifies are active); everyone sees the animations through the ability system, as with the players' attacks. A lunge or charge with root motion moves the enemy on the host, and the others see it move.
+- **What an enemy carries** (the golem's hammer and shield) is its **Attached Meshes** list: every machine makes these itself when the enemy appears, from its class defaults, so nothing about them is sent over the network. They're looks only: nothing collides with them.
+- **Enemies stagger** when their poise breaks: their attack is cut short and the AI waits it out. **Max Poise** is under **Survival|Stats**, the **Stagger Montage** under **AI|Stagger**, the poise damage of its hits in each of its **AI|Attacks**.
 - **The AI** (`AZAIBaseController`, server only) notices players by sight, up close and when they hit it, picks whom to fight by distance and threat, and runs the combat states (Idle, Approaching, Strafing, Attacking, DodgeRecovering, Staggered): AI.md explains it all. With a **Nav Mesh** in the level it walks around obstacles; without one it walks straight at you. It moves by accelerating, like a player's input (**Use Acceleration For Paths**, set in `AZAIBaseCharacter`), so the animation Blueprint plays its walk instead of sliding it along in the standing pose.
 - **`AZEnemySpawner`**: place it in a level to keep spawning enemies around it (Max Alive, Spawn Interval, Spawn Radius, Total To Spawn, Enemy Class).
 
-**A new enemy type:** right-click in the Content Browser → **Blueprint Class** → search **ZZombieCharacter** (or **ZAIBaseCharacter** for something completely different) → change its mesh, animation Blueprint, attack montage, numbers and **Combat Settings** (AI.md). A special attack (e.g. a spitter's acid) is a new ability added to **Default Abilities**.
+**A new enemy type:** right-click in the Content Browser → **Blueprint Class** → search **ZZombieCharacter** (or **ZAIBaseCharacter** for something completely different) → change its mesh, animation Blueprint, attacks, numbers and **Combat Settings** (AI.md). A special attack (e.g. a spitter's acid) is a new ability added to **Default Abilities**.
 
 **Teams** (`EZTeam`): Players, Monsters, Humans. Characters on the same team can't damage each other (no friendly fire). Friendly human NPCs use the Players team.
 
