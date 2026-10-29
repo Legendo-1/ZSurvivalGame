@@ -2,7 +2,7 @@
 
 How enemies think: how they notice you, how they pick whom to fight in co-op, their combat states, and how to set up a new kind of enemy. Their attacks, poise and staggers are in COMBAT.md; how all of it works in multiplayer is also in MULTIPLAYER.md.
 
-**Last updated:** 2026-10-29 (several attacks per enemy, hitboxes along an enemy's weapon, the Stone Golem's four attacks)
+**Last updated:** 2026-10-29 (the Stone Golem's four attacks with your numbers; Min Range left at 0)
 
 ## The parts
 
@@ -76,7 +76,7 @@ Each kind of enemy has a list of attacks: **Class Defaults → AI|Attacks → At
 | Setting of an attack | What it does |
 |---|---|
 | **Montage** | Its animation |
-| **Min Range / Max Range** | It starts this attack when you're this far away (middle to middle, along the ground). A lunge or a charge has a Min Range, so it isn't used right in front of you |
+| **Min Range / Max Range** | It starts this attack when you're this far away (middle to middle, along the ground). Leave Min Range at 0 unless an attack must never be used up close: a higher Min Range only makes the attack come up less often |
 | **Damage**, **Poise Damage** | Of each hit |
 | **Cooldown** | Seconds before it uses this attack again (its other attacks can come sooner) |
 | **Weight** | How often it's picked: 2 = twice as often as an attack with 1; 0 = never |
@@ -123,7 +123,7 @@ Its attacks (the hammer hits; at least 2 s from one attack to the next):
 | 3, lunge with a spin | 0–2.5 m | 40 / 60 | 6 s | 1 | Moves it 1.2 m; the spin passes at head height, so it often misses |
 | 4, charge | 0–3.0 m | 20 / 25 each | 10 s | 1 | Moves it 4.3 m with four swings |
 
-Every hit but the charge's staggers you (your poise can't take 35 at once).
+All four attacks have Min Range 0, so it can use any of them up close, each about as often (weight 1). Every hit but the charge's staggers you (your poise can't take 35 at once).
 
 The quick swing (`AM_StoneGolem_Attack3`: 0–1.5 m, 25 / 35, weight 1) was taken out of its list: it arcs up and behind the golem and rarely connected. Its montage is still in the folder; to bring it back, add an entry to **Attacks** with that montage.
 
