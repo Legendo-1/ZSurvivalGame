@@ -9,6 +9,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "ZSurvivalGame.h"
+#include "ZCharacterMovementComponent.h"
 #include "ZSurvivalGameCharacter.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZCombatLibrary.h"
@@ -207,6 +208,7 @@ void UZGameplayAbility_ComboAttack::ActivateAbility(const FGameplayAbilitySpecHa
 		MeleeHitDelegateHandle = Tracer->OnHit.AddUObject(this, &UZGameplayAbility_ComboAttack::OnMeleeHit);
 	}
 
+	StartTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' %s attack %d: '%s'%s"), *GetNameSafe(Avatar), GetAttackTypeName(AttackType), Step + 1, *GetNameSafe(Attack->Montage),
 		Attack->Section.IsNone() ? TEXT("") : *FString::Printf(TEXT(" section %s"), *Attack->Section.ToString()));
 
@@ -233,6 +235,16 @@ void UZGameplayAbility_ComboAttack::OnMeleeHit(const FHitResult& Hit)
 	if (!ASC || !IsActive())
 	{
 		return;
+	}
+
+	// hit-stop: the swing almost stops for a moment on the attacker's own machine; it rides in the moves, so the server slows the same moves
+	if (CurrentActorInfo->IsLocallyControlled())
+	{
+		const FZMeleeAttack* HitAttack = FindAttack(CurrentActorInfo, Step);
+		if (UZCharacterMovementComponent* Movement = Cast<UZCharacterMovementComponent>(CurrentActorInfo->MovementComponent.Get()))
+		{
+			Movement->StartHitStop(HitAttack ? HitAttack->HitStopTime : 0.f);
+		}
 	}
 
 	// the server found it itself (the host's own attacks, AI)
@@ -388,6 +400,9 @@ void UZGameplayAbility_ComboAttack::EndAbility(const FGameplayAbilitySpecHandle 
 		{
 			Character->SetSpeedLimit(EZSpeedLimit::None);
 		}
+
+		UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s' %s attack %d %s after %.2f s"), ActorInfo ? *GetNameSafe(ActorInfo->AvatarActor.Get()) : TEXT("?"), GetAttackTypeName(AttackType), Step + 1,
+			bWasCancelled ? TEXT("cut short") : TEXT("ended"), GetWorld() ? GetWorld()->GetTimeSeconds() - StartTime : 0.0);
 	}
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);

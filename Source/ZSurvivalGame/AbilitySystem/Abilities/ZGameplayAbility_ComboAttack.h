@@ -93,6 +93,9 @@ private:
 	TMap<TWeakObjectPtr<AActor>, int32> HitCounts;
 	int32 MaxHitsPerTarget = 1;
 
+	/** When it started (world time), for the log when it ends */
+	double StartTime = 0.0;
+
 	TWeakObjectPtr<UZMeleeTraceComponent> HitTracer;
 	FDelegateHandle MeleeHitDelegateHandle;
 	FDelegateHandle TargetDataDelegateHandle;

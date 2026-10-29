@@ -16,6 +16,7 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_MeleeAttack.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Stagger.h"
 #include "Audio/ZFootstepComponent.h"
+#include "Combat/ZHitFlashComponent.h"
 #include "Combat/ZLockOnTargetComponent.h"
 #include "Items/ZLootTable.h"
 #include "Items/ZPickup.h"
@@ -36,6 +37,8 @@ AZAICharacter::AZAICharacter()
 	LockOnTarget = CreateDefaultSubobject<UZLockOnTargetComponent>(TEXT("LockOnTarget"));
 	LockOnTarget->SetupAttachment(GetCapsuleComponent());
 	LockOnTarget->SetRelativeLocation(FVector(0.f, 0.f, 40.f));
+
+	HitFlashComponent = CreateDefaultSubobject<UZHitFlashComponent>(TEXT("HitFlash"));
 
 	// AI characters don't need as many updates as players
 	SetNetUpdateFrequency(30.f);
@@ -79,6 +82,18 @@ UAbilitySystemComponent* AZAICharacter::GetAbilitySystemComponent() const
 FGenericTeamId AZAICharacter::GetGenericTeamId() const
 {
 	return FGenericTeamId(static_cast<uint8>(Team));
+}
+
+void AZAICharacter::HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters)
+{
+	// the hit flash comes with its Hit Cue, which the server sends to everyone with every hit
+	if (EventType == EGameplayCueEvent::Executed && CharacterCues.HitCue.IsValid() && GameplayCueTag == CharacterCues.HitCue)
+	{
+		HitFlashComponent->Flash();
+	}
+
+	// the default: Blueprint functions named after the tag
+	IGameplayCueInterface::HandleGameplayCue(Self, GameplayCueTag, EventType, Parameters);
 }
 
 void AZAICharacter::BeginPlay()

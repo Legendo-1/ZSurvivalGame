@@ -45,6 +45,10 @@ struct FZMeleeAttack
 	/** A heavy attack pressed in this attack's Combo Window plays this heavy attack (its number in Heavy Attacks, from 1). 0: the next one (after a light attack: the first) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack", meta = (ClampMin = "0"))
 	int32 NextHeavyAttack = 0;
+
+	/** Hit-stop: how long the swing almost stops when it hits someone, so the hit feels heavy (0 = never). Heavier attacks usually stop longer */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack", meta = (ClampMin = "0", ClampMax = "0.5", Units = "s"))
+	float HitStopTime = 0.08f;
 };
 
 /**

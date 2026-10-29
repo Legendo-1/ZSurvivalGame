@@ -1,8 +1,8 @@
 # Combat
 
-How melee combat works (light and heavy combos, hitboxes, poise and staggers), the souls-like rules for when you can act (being locked into an action, and the input buffer), dodging, lock-on, and how to make melee weapons and attack animations. Guns are in ITEMS.md, sounds and effects in AUDIO.md.
+How melee combat works (light and heavy combos, hitboxes, hit feedback, poise and staggers), the souls-like rules for when you can act (being locked into an action, and the input buffer), dodging, lock-on, and how to make melee weapons and attack animations. Guns are in ITEMS.md, sounds and effects in AUDIO.md.
 
-**Last updated:** 2026-10-29 (lock-on)
+**Last updated:** 2026-10-29 (lock-on; hit feedback: hit-stop, hit flash, camera shake)
 
 ## Controls
 
@@ -49,6 +49,20 @@ Like in Dark Souls, once you start something you're locked into it.
 - **It hits bodies, not the invisible capsule around them**, so the hit knows the bone (e.g. the head). Several enemies in the swing are all hit. Walls don't stop a swing.
 - **Kicks and punches:** a Weapon Hitbox notify can also hit with other bones, e.g. `foot_r` for a kick: select the notify → Details → **Extra Sockets**. Untick **Use Weapon** for a kick without the weapon.
 - **To see the hitboxes:** console `Z.Melee.DrawDebug 1` draws them green and the hits red (on your own screen).
+
+## Hit feedback: how a hit feels
+
+- **Hit-stop:** when your swing hits someone, it almost stops for a split second, so the hit feels heavy.
+  - How long: **Hit Stop Time** on each attack in the moveset (0.08 s for every attack now; 0 = none). Heavy attacks usually get longer, e.g. 0.12.
+  - How slow: **Hit Stop Anim Rate** (Project Settings → Game → Combat): 0.05 = the animation plays at 5% speed meanwhile, 0 = frozen.
+  - Only your swing stops, not the enemy. Hitting two enemies in one swing doesn't stop it twice as long.
+  - In multiplayer the host slows exactly the same moments of your attack, so nothing gets out of step.
+- **Hit flash:** a character that gets hit flashes white for a moment. Everyone sees it, enemies and players alike.
+  - The look: `M_HitFlash` (`Content/Effects`), set in **Hit Flash Material**. **Hit Flash Time** (0.12 s) is how long it takes to fade, **Hit Flash Color** its color (values above 1 are brighter).
+  - It comes with the character's **Hit Cue**: a character whose Hit Cue is empty doesn't flash either.
+  - Another material works too: it's laid over the whole character. Make it **Unlit** and **Translucent**; it can use the parameters `FlashAmount` (goes from 1 to 0 while it fades) and `FlashColor`.
+- **Camera shake:** your camera shakes a little when your melee hit lands (only yours, not the other players'). It's `CS_MeleeHit` (`Content/Effects`), played by the melee impact's cue notify `GCN_Weapon_MeleeImpact` (`Content/GameplayCues`). Stronger or weaker: open `CS_MeleeHit` → **Root Shake Pattern** → **Pitch** and **Yaw** → **Amplitude**.
+- **Sound and blood** where the hit lands: add them to `GCN_Weapon_MeleeImpact` (AUDIO.md → "Making a sound for an event", step 4). The enemy's own Hit Cue plays with every hit too (its grunt, blood on it).
 
 ## Poise and staggers
 
@@ -123,6 +137,10 @@ Like in Dark Souls, once you start something you're locked into it.
 | **Lock On Camera Return Speed** | How fast the camera drifts back onto the target after you turned it | 3 |
 | **Switch Target On Kill** | When the target dies, lock on to the next enemy near the middle of the screen | on |
 | **Release Lock On When Aiming** | Aiming a gun lets go of the lock | on |
+| **Hit Stop Anim Rate** | How fast your attack's animation plays during hit-stop (0 = frozen, 1 = no slowdown) | 0.05 |
+| **Hit Flash Material** | Laid over a character that's hit, fading out (empty = no flash) | `M_HitFlash` |
+| **Hit Flash Time** | How long the hit flash takes to fade | 0.12 s |
+| **Hit Flash Color** | The flash's color; above 1 is brighter | white, 2 |
 
 ## Making a melee weapon
 
@@ -134,6 +152,7 @@ A melee weapon is three assets: a **moveset** (its attacks), its **weapon data**
      - **Section:** leave empty, unless one montage holds several attacks: then the name of this attack's section.
      - **Damage Multiplier** and **Poise Damage Multiplier:** the weapon's damage and poise damage times this (1 = as is, 2 = double).
      - **Stamina Cost:** what it costs.
+     - **Hit Stop Time:** how long the swing almost stops when it hits (see "Hit feedback"). 0.08 s for light attacks, about 0.12 s for heavy ones.
      - **Next Light Attack / Next Heavy Attack:** leave at 0 for the usual order. A number picks which attack follows in this attack's Combo Window (1 = the first of that list).
    - **Heavy Attacks → +** the same for the heavy combo.
    - **Save.**
@@ -185,7 +204,7 @@ An attack is an **Anim Montage** with three kinds of markers (notify states) in 
 
 | Event | Tag | Where it's set |
 |---|---|---|
-| A melee hit lands | `GameplayCue.Weapon.MeleeImpact` | The weapon data's **Impact Cue** |
+| A melee hit lands | `GameplayCue.Weapon.MeleeImpact` | The weapon data's **Impact Cue**. `GCN_Weapon_MeleeImpact` plays it: for now only the camera shake |
 | A character staggers | `GameplayCue.Character.Stagger` | The character's **Stagger Cue** (Class Defaults → **Effects → Character Cues**) |
 
 The target's own **Hit Cue** plays with every hit too. How to make the sounds and effects: AUDIO.md.
@@ -218,6 +237,7 @@ So you can try everything before real weapon animations exist:
 - `AM_Melee_Light_1`, `_2`, `_3` and `AM_Melee_Heavy_1` (`Characters/Mannequins/Anims/Melee`): the mannequin's unarmed punches and kicks as attacks, with hitboxes and windows (their hitboxes also hit with the left hand and the right foot). Kept as examples: `MS_OneHanded` now uses three light and three heavy attacks from the sword and shield pack (`Characters/Mannequins/Anims/SwordAndShield`), until better one-handed animations without a shield are found.
 - `AM_Stagger_Front` (`Characters/Mannequins/Anims/Stagger`): a hit reaction, as the stagger for players and zombies.
 - `MS_OneHanded` (`Content/Weapons/Movesets`): the machete's moveset.
+- `M_HitFlash`, `CS_MeleeHit` (`Content/Effects`) and `GCN_Weapon_MeleeImpact` (`Content/GameplayCues`): the hit flash, and the melee hit's camera shake and its cue notify (no sound or blood yet).
 - `DA_Machete` and `ID_Machete`: the machete, damage 25 and poise damage 15 per hit. Its mesh `SM_PlaceholderBlade` (`Content/Weapons/Meshes`) is a stretched box with the two blade sockets, held in the right hand.
 
 To replace them, follow "Making a melee weapon" and "Making an attack animation" above: a real mesh with blade sockets, and real attack montages in the moveset.

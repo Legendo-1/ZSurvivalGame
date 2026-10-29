@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "GameplayCueInterface.h"
 #include "GenericTeamAgentInterface.h"
 #include "ZSurvivalGameTypes.h"
 #include "AbilitySystem/ZCombatLibrary.h"
@@ -17,6 +18,7 @@ class UAnimMontage;
 class UGameplayAbility;
 class UZAttributeSet;
 class UZFootstepComponent;
+class UZHitFlashComponent;
 class UZLockOnTargetComponent;
 class UZLootTable;
 
@@ -26,7 +28,7 @@ class UZLootTable;
  *  Each enemy type is a child class or Blueprint that sets its looks and numbers (see AZZombieCharacter)
  */
 UCLASS(Abstract)
-class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IZCharacterCuesInterface, public IZCombatantInterface
+class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IGameplayCueInterface, public IZCharacterCuesInterface, public IZCombatantInterface
 {
 	GENERATED_BODY()
 
@@ -46,6 +48,10 @@ class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZLockOnTargetComponent> LockOnTarget;
 
+	/** Makes it flash when it's hit (with its Hit Cue, on every machine) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZHitFlashComponent> HitFlashComponent;
+
 public:
 
 	AZAICharacter();
@@ -61,6 +67,11 @@ public:
 
 	/** Its Stagger Montage, for the stagger ability */
 	virtual UAnimMontage* GetStaggerMontage() const override { return StaggerMontage; }
+
+	using IGameplayCueInterface::HandleGameplayCue;
+
+	/** Every machine: a cue arrived for this character. Sounds and effects are GameplayCue Notify assets; this plays the hit flash with its Hit Cue */
+	virtual void HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters) override;
 
 	/** Server: starts the attack ability if the attack cooldown allows it; returns true if it started */
 	bool TryAttack();

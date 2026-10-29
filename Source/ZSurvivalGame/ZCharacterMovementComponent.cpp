@@ -10,6 +10,7 @@
 #include "Combat/ZAnimNotifyState_ActionWindow.h"
 #include "Combat/ZCombatComponent.h"
 #include "Combat/ZCombatSettings.h"
+#include "ZSurvivalGame.h"
 
 namespace
 {
@@ -25,6 +26,7 @@ namespace
 	enum EZMoveFlag : uint8
 	{
 		ZMoveFlag_Strafe = 1 << 0,
+		ZMoveFlag_HitStop = 1 << 1,
 	};
 
 	constexpr int32 ZFlagBits = 4;
@@ -46,12 +48,52 @@ uint8 UZCharacterMovementComponent::GetZFlags() const
 		ZFlags |= ZMoveFlag_Strafe;
 	}
 
+	if (bHitStop)
+	{
+		ZFlags |= ZMoveFlag_HitStop;
+	}
+
 	return ZFlags;
 }
 
 void UZCharacterMovementComponent::SetZFlags(uint8 ZFlags)
 {
+	const bool bNewHitStop = (ZFlags & ZMoveFlag_HitStop) != 0;
+	if (bNewHitStop && !bHitStop && CharacterOwner && CharacterOwner->HasAuthority() && !CharacterOwner->IsLocallyControlled())
+	{
+		UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s': the server slows the attack for hit-stop (from the player's moves)"), *GetNameSafe(CharacterOwner));
+	}
+
 	bWantsToStrafe = (ZFlags & ZMoveFlag_Strafe) != 0;
+	bHitStop = bNewHitStop;
+}
+
+void UZCharacterMovementComponent::StartHitStop(float Duration)
+{
+	if (Duration <= 0.f || !GetWorld() || !CharacterOwner || !CharacterOwner->IsLocallyControlled())
+	{
+		return;
+	}
+
+	// a second hit in the same swing doesn't add up, it only keeps the stop going
+	HitStopEndTime = FMath::Max(HitStopEndTime, GetWorld()->GetTimeSeconds() + Duration);
+	if (!bHitStop)
+	{
+		UE_LOG(LogZSurvivalGame, Verbose, TEXT("'%s': hit-stop for %.2f s"), *GetNameSafe(CharacterOwner), Duration);
+	}
+
+	bHitStop = true;
+}
+
+void UZCharacterMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	// the player's own machine ends hit-stop; the server follows its moves
+	if (bHitStop && CharacterOwner && CharacterOwner->IsLocallyControlled() && GetWorld() && GetWorld()->GetTimeSeconds() >= HitStopEndTime)
+	{
+		bHitStop = false;
+	}
+
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 
 FTransform UZCharacterMovementComponent::ProcessRootMotion(const FTransform& LocalRootMotion, UCharacterMovementComponent* Movement, float DeltaSeconds) const
@@ -280,6 +322,22 @@ void UZCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Delt
 
 	// The engine doesn't turn the character while an animation's root motion moves it; while Still it keeps facing the camera (ProcessRootMotion drops the animation's turning)
 	bAllowPhysicsRotationDuringAnimRootMotion = SpeedLimit == EZSpeedLimit::Still;
+
+	// Hit-stop slows the whole animation (and with it the attack's root motion and its notifies) for exactly the moves that have it, here and on the server.
+	// The pose is ticked after this, in the move (root motion) or right after it (the server; the player's own machine ticks it itself)
+	if (USkeletalMeshComponent* Mesh = CharacterOwner ? CharacterOwner->GetMesh() : nullptr)
+	{
+		if (bHitStop)
+		{
+			Mesh->GlobalAnimRateScale = UZCombatSettings::Get()->HitStopAnimRate;
+			bAnimSlowedByHitStop = true;
+		}
+		else if (bAnimSlowedByHitStop)
+		{
+			Mesh->GlobalAnimRateScale = 1.f;
+			bAnimSlowedByHitStop = false;
+		}
+	}
 }
 
 FRotator UZCharacterMovementComponent::GetDeltaRotation(float DeltaTime) const

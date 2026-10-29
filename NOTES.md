@@ -41,6 +41,10 @@ Things learned the hard way, and known issues. Remove a known issue once it's fi
 - **Testing melee:** `ZSpawnDummy 120` puts a still zombie in front of you. Enemies from `ZSpawnZombies` attack from about 1.5 m, farther than the placeholder machete reaches, so walk up to them.
 - **Test runs without a window** create moves faster than a client can send them ("Hit limit of 96 saved moves"); `t.MaxFPS 60` on both test processes avoids it.
 
+### Assets named only in settings
+
+- **They aren't packed into a packaged game by themselves.** `M_HitFlash` (Project Settings → Game → Combat → **Hit Flash Material**) and `DA_Footsteps` (Footsteps → **Default Footstep Data**) are only named in settings. Before making a packaged build: Project Settings → **Packaging** → **Additional Asset Directories to Cook** → add `Content/Effects` and `Content/Audio/Footsteps`. Playing in the editor doesn't need it.
+
 ### Aim offsets
 
 - **AO_Rifle's center pose had the wrong base pose.** `MM_Rifle_Idle_ADS_AO_CC` (Manny) had `MF_Rifle_Idle_ADS` (Quinn) as Base Pose Animation, so the character was rotated in game even when looking straight ahead. Fixed by setting its Base Pose Animation to `MM_Rifle_Idle_ADS_AO_CC`. `_CU` and `_CD` still have `MF_Rifle_Idle_ADS` as their base and look fine in game.

@@ -2,7 +2,7 @@
 
 How to give the game its sounds, particles and character animations: shots, reloads, deaths, taking out a weapon, crafting, footsteps and the rest, so they work for every player.
 
-**Last updated:** 2026-10-28 (melee hits and staggers; the melee attack animations)
+**Last updated:** 2026-10-29 (the melee impact cue notify with its camera shake)
 
 ## Who does what
 
@@ -24,7 +24,7 @@ C++ never names a sound file. It only sends an **event** with a **tag**, e.g. `G
 | `GameplayCue.Weapon.Impact` | A shot hits something | Where it hit | Weapon → **Impact Cue** |
 | `GameplayCue.Weapon.Reload` | A reload starts | On the character | Weapon → **Reload Cue** |
 | `GameplayCue.Weapon.Equip` | A weapon is taken out | On the character | Weapon → **Equip Cue** (its **Equip Montage** plays with it) |
-| `GameplayCue.Weapon.MeleeImpact` | A melee hit lands (Raw Magnitude = the damage; Physical Material = the body's surface) | Where it hit | The melee weapon's Data Asset → **Effects → Impact Cue** |
+| `GameplayCue.Weapon.MeleeImpact` | A melee hit lands (Raw Magnitude = the damage; Physical Material = the body's surface). `GCN_Weapon_MeleeImpact` exists, with a camera shake for the attacker; add the sound and blood to it | Where it hit | The melee weapon's Data Asset → **Effects → Impact Cue** |
 | `GameplayCue.Character.Hit` | A character takes damage | Where it was hit | The character's Class Defaults → **Effects → Character Cues → Hit Cue** |
 | `GameplayCue.Character.Death` | A player or enemy dies | On the character | **Character Cues → Death Cue** |
 | `GameplayCue.Character.Stagger` | A character's poise breaks and it staggers (Instigator = who broke it) | On the character | **Character Cues → Stagger Cue** |

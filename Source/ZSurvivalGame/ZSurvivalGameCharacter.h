@@ -24,6 +24,7 @@ class UAnimMontage;
 class UZCharacterMovementComponent;
 class UZCombatComponent;
 class UZEquipmentComponent;
+class UZHitFlashComponent;
 class UZInteractionComponent;
 class UZInventoryComponent;
 class UZItemInstance;
@@ -88,6 +89,10 @@ class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterfac
 	/** Locks the camera and the facing on to an enemy (the lock-on key) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZLockOnComponent> LockOnComponent;
+
+	/** Makes the character flash when it's hit (with its Hit Cue, on every machine) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZHitFlashComponent> HitFlashComponent;
 
 protected:
 
@@ -270,7 +275,7 @@ public:
 
 	using IGameplayCueInterface::HandleGameplayCue;
 
-	/** Every machine: a cue arrived for this character. Sounds and effects are GameplayCue Notify assets; this plays the weapon's Equip Montage with its equip cue */
+	/** Every machine: a cue arrived for this character. Sounds and effects are GameplayCue Notify assets; this plays the weapon's Equip Montage with its equip cue and the hit flash with the Hit Cue */
 	virtual void HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters) override;
 
 protected:

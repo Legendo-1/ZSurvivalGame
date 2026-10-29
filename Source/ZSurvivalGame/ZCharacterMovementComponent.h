@@ -61,6 +61,13 @@ public:
 	void SetWantsToStrafe(bool bNewWantsToStrafe) { bWantsToStrafe = bNewWantsToStrafe; }
 	bool WantsToStrafe() const { return bWantsToStrafe; }
 
+	/**
+	 *  Player's own machine: hit-stop, the swing almost stops for Duration seconds because it hit someone (the animation plays at Hit Stop Anim Rate).
+	 *  It's a state of the moves like strafing, so the server slows the same moves and the attack stays in step on both
+	 */
+	void StartHitStop(float Duration);
+	bool IsInHitStop() const { return bHitStop; }
+
 	/** Our states as the bits of FZCharacterNetworkMoveData::ZFlags, and back (a saved move remembers them this way) */
 	uint8 GetZFlags() const;
 	void SetZFlags(uint8 ZFlags);
@@ -79,7 +86,10 @@ public:
 
 protected:
 
-	/** Turns the character toward the camera or toward the movement, before each move */
+	/** Player's own machine: ends hit-stop when its time is up, before the move */
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+	/** Turns the character toward the camera or toward the movement, and slows its animation during hit-stop, before each move */
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 
 	/** The Attack Turn Rate during an attack's windup, else the normal rotation rate */
@@ -103,6 +113,11 @@ private:
 	bool bWantsToAim = false;
 	bool bWantsToStrafe = false;
 	EZSpeedLimit SpeedLimit = EZSpeedLimit::None;
+
+	/** Hit-stop: on while the swing is slowed (a move state), until when (player's own machine), and whether we slowed the mesh's animation */
+	bool bHitStop = false;
+	double HitStopEndTime = 0.0;
+	bool bAnimSlowedByHitStop = false;
 
 	/** Where our move data lives while it's sent or received */
 	FZCharacterNetworkMoveDataContainer MoveDataContainer;

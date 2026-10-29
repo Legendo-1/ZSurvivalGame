@@ -29,6 +29,7 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_ComboAttack.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Stagger.h"
 #include "Combat/ZCombatComponent.h"
+#include "Combat/ZHitFlashComponent.h"
 #include "Combat/ZLockOnComponent.h"
 #include "Combat/ZMeleeTraceComponent.h"
 #include "Interaction/ZInteractionComponent.h"
@@ -92,6 +93,8 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter(const FObjectInitializer& Objec
 	MeleeTraceComponent = CreateDefaultSubobject<UZMeleeTraceComponent>(TEXT("MeleeTrace"));
 
 	LockOnComponent = CreateDefaultSubobject<UZLockOnComponent>(TEXT("LockOn"));
+
+	HitFlashComponent = CreateDefaultSubobject<UZHitFlashComponent>(TEXT("HitFlash"));
 
 	// The player's abilities, given to the PlayerState's ability system in PossessedBy
 	DefaultAbilities.Add(UZGameplayAbility_Sprint::StaticClass());
@@ -629,6 +632,12 @@ void AZSurvivalGameCharacter::HandleGameplayCue(UObject* Self, FGameplayTag Game
 				UE_LOG(LogZSurvivalGame, Warning, TEXT("'%s' can't play the equip animation '%s' (made for another skeleton?)"), *GetNameSafe(this), *GetNameSafe(EquipMontage));
 			}
 		}
+	}
+
+	// the hit flash comes with the character's Hit Cue, which the server sends to everyone with every hit
+	if (EventType == EGameplayCueEvent::Executed && CharacterCues.HitCue.IsValid() && GameplayCueTag == CharacterCues.HitCue)
+	{
+		HitFlashComponent->Flash();
 	}
 
 	// the default: Blueprint functions named after the tag

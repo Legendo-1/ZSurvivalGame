@@ -6,8 +6,10 @@
 #include "Engine/DeveloperSettings.h"
 #include "ZCombatSettings.generated.h"
 
+class UMaterialInterface;
+
 /**
- *  The numbers behind combat: the input buffer, poise and staggering, and the server's slack for melee hits (see COMBAT.md)
+ *  The numbers behind combat: the input buffer, poise and staggering, the server's slack for melee hits, lock-on and hit feedback (see COMBAT.md)
  *  Project Settings → Game → Combat (saved in Config/DefaultGame.ini)
  */
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "Combat"))
@@ -100,4 +102,22 @@ public:
 	/** Aiming a gun lets go of the lock (you aim yourself) */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On")
 	bool bReleaseLockOnWhenAiming = true;
+
+	/** --- HIT FEEDBACK --- */
+
+	/** How fast the attacker's animation plays during hit-stop (each attack's Hit Stop Time in its moveset): 0 = frozen, 1 = no slowdown */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Hit Feedback", meta = (ClampMin = "0", ClampMax = "1"))
+	float HitStopAnimRate = 0.05f;
+
+	/** Laid over a character's mesh when it's hit, fading out (empty = no flash). It may use the parameters FlashAmount (1 → 0) and FlashColor */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Hit Feedback")
+	TSoftObjectPtr<UMaterialInterface> HitFlashMaterial;
+
+	/** How long the hit flash takes to fade out, in seconds */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Hit Feedback", meta = (ClampMin = "0", ClampMax = "1", Units = "s"))
+	float HitFlashTime = 0.12f;
+
+	/** The flash's color (the material's FlashColor); above 1 is brighter */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Hit Feedback", meta = (HideAlphaChannel))
+	FLinearColor HitFlashColor = FLinearColor(2.f, 2.f, 2.f);
 };

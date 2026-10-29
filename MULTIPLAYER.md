@@ -2,7 +2,7 @@
 
 How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Melee combat, poise and staggers: COMBAT.md. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
 
-**Last updated:** 2026-10-29 (lock-on)
+**Last updated:** 2026-10-29 (lock-on; hit-stop and the hit flash)
 
 ## The basic idea
 
@@ -67,6 +67,8 @@ COMBAT.md explains the rules for players. In multiplayer:
 4. **Your machine finds the hits** (the blade during the Weapon Hitbox notify) and sends them to the server, which checks them: close enough (the weapon's Max Reach plus **Melee Reach Tolerance**) and not hit more often than the attack has hitboxes. Then it deals the damage and poise damage.
 5. **The server decides staggers** (poise is only on the server): it starts the stagger, cuts short whatever you were doing, and tells your machine.
 6. **The server is lenient about timing:** it trusts your machine about when a window was open (your animation runs a moment ahead of the server's). It only refuses actions while you're staggered or dead.
+7. **Hit-stop** (your swing almost stops for a moment when it hits) is a state of your moves, like sprinting: your machine slows the attack, and the server slows exactly the same moves when they arrive. So the attack's movement and its windows stay in step on both.
+8. **The hit flash** comes with the target's Hit Cue, which the server sends to everyone with every hit: every machine flashes the character itself.
 
 Enemies run everything on the server.
 
@@ -171,6 +173,7 @@ The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are expl
 | Shots, impacts, hits, deaths, reloads, taking out weapons, crafting, ... | GameplayCues, sent by the server (AUDIO.md) |
 | Attack, fire, reload, dodge and stagger animations | The ability system plays them for everyone |
 | Who you're locked on to | The lock-on component's target, sent by the server (your character's facing already shows it) |
+| A character flashing when hit | It comes with the Hit Cue (sent by the server) |
 | The animation for taking out a weapon | It comes with the equip GameplayCue |
 | Footsteps | Nothing is sent: every machine plays them from the animations and movement it already has (AUDIO.md → Footsteps) |
 | Death (ragdoll) | `bIsDead`, sent by the server |
