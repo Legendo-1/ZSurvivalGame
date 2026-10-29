@@ -28,6 +28,10 @@ public:
 	UFUNCTION(Exec)
 	void ZSpawnDummy(float Distance = 120.f, const FString& Who = TEXT(""));
 
+	/** Like ZSpawnDummy, but Angle degrees to the right of straight ahead (negative: to the left), e.g. ZSpawnDummyAt 200 40 (host) */
+	UFUNCTION(Exec)
+	void ZSpawnDummyAt(float Distance = 120.f, float Angle = 0.f, const FString& Who = TEXT(""));
+
 	/** Kills every AI character in the level */
 	UFUNCTION(Exec)
 	void ZKillEnemies();
@@ -70,9 +74,17 @@ public:
 	UFUNCTION(Exec)
 	void ZStagger(const FString& Who = TEXT(""));
 
-	/** Writes your combat state to the Output Log: the attack, the input buffer, busy or staggered, open windows, poise and stamina (as this window sees it) */
+	/** Writes your combat state to the Output Log: the attack, the input buffer, busy or staggered, open windows, lock-on, poise and stamina (as this window sees it) */
 	UFUNCTION(Exec)
 	void ZCombat();
+
+	/** Like the lock-on key: locks on to the enemy nearest the middle of the screen, or lets go (in this window) */
+	UFUNCTION(Exec)
+	void ZLockOn();
+
+	/** Turns your camera by Yaw degrees to the right (and Pitch up), like moving the mouse, e.g. ZTurn 60 to turn away from a locked-on target */
+	UFUNCTION(Exec)
+	void ZTurn(float Yaw = 0.f, float Pitch = 0.f);
 
 	/** --- EQUIPMENT --- */
 

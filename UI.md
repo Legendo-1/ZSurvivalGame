@@ -2,7 +2,7 @@
 
 How the inventory screen and the HUD work, how to change their keys, and how to give them your own look.
 
-**Last updated:** 2026-10-28 (the ammo and the crosshair only show for guns)
+**Last updated:** 2026-10-29 (the lock-on marker)
 
 ## The inventory screen
 
@@ -123,6 +123,7 @@ Sounds in the world (shots, pickups, crafting at a station) are in AUDIO.md.
 | `InteractionText` | Text | Optional | "[E] Pick up Rifle Ammo x15" while looking at something to interact with |
 | `InteractionProgress` | Progress Bar | Optional | Fills while holding the interact key on an interaction that takes time |
 | `MessageText` | Text | Optional | The last few messages to the player, e.g. "Crafted Bandage x1." (if the HUD has none, one is added above the bottom middle of the screen) |
+| `LockOnMarker` | any (e.g. Image) | Optional | Moved onto the enemy you're locked on to, every frame; hidden when you're not locked on. Put it straight in the Canvas Panel (not inside another panel) and set its **Alignment** to 0.5, 0.5 so its middle sits on the target. If the HUD has none, a small white dot is added |
 
 ## Console commands
 

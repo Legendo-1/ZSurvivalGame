@@ -8,9 +8,32 @@
 #include "ZCharacterMovementComponent.generated.h"
 
 /**
- *  Character movement that also syncs sprint, aim and speed limits with the server
+ *  What each of the player's moves tells the server beyond the engine's data: states that don't fit in the compressed flags
+ *  (those four bits hold sprint, aim and the speed limit). A new state is a bit in ZFlags (see EZMoveFlag in the .cpp)
+ */
+struct FZCharacterNetworkMoveData : public FCharacterNetworkMoveData
+{
+	typedef FCharacterNetworkMoveData Super;
+
+	/** Our states as bits */
+	uint8 ZFlags = 0;
+
+	virtual void ClientFillNetworkMoveData(const FSavedMove_Character& ClientMove, ENetworkMoveType MoveType) override;
+	virtual bool Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap, ENetworkMoveType MoveType) override;
+};
+
+/** Holds our move data for the moves sent together (new, pending and old) */
+struct FZCharacterNetworkMoveDataContainer : public FCharacterNetworkMoveDataContainer
+{
+	FZCharacterNetworkMoveDataContainer();
+
+	FZCharacterNetworkMoveData ZMoveData[3];
+};
+
+/**
+ *  Character movement that also syncs sprint, aim, speed limits and strafing (lock-on) with the server
  *  The owning client sets these states, predicts the speed and sends the states with every move;
- *  the server runs the move with the same states, so it agrees on the speed and doesn't pull the player back
+ *  the server runs the move with the same states, so it agrees on the speed and facing and doesn't pull the player back
  *  The speeds themselves are set on the character (Survival|Movement)
  */
 UCLASS()
@@ -33,6 +56,14 @@ public:
 	/** Set on the owning client (or in a predicted ability). On the server the client's moves overwrite it */
 	void SetSpeedLimit(EZSpeedLimit NewSpeedLimit) { SpeedLimit = NewSpeedLimit; }
 	EZSpeedLimit GetSpeedLimit() const { return SpeedLimit; }
+
+	/** Set by lock-on: the character faces the control rotation (the target) instead of turning toward its movement. On the server the client's moves overwrite it */
+	void SetWantsToStrafe(bool bNewWantsToStrafe) { bWantsToStrafe = bNewWantsToStrafe; }
+	bool WantsToStrafe() const { return bWantsToStrafe; }
+
+	/** Our states as the bits of FZCharacterNetworkMoveData::ZFlags, and back (a saved move remembers them this way) */
+	uint8 GetZFlags() const;
+	void SetZFlags(uint8 ZFlags);
 
 	/** True while moving at sprint speed: sprint held, not aiming, no speed limit and moving forward or sideways */
 	bool IsSprinting() const;
@@ -57,6 +88,9 @@ protected:
 	/** Replaying old moves after a server correction overwrites the states; this puts the current ones back */
 	virtual bool ClientUpdatePositionAfterServerUpdate() override;
 
+	/** Server: reads our states from the player's move data before running the move */
+	virtual void MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags, const FVector& NewAccel) override;
+
 private:
 
 	/** While Still (attacks), animation root motion only moves the character; its turning is dropped, so the attack goes where the camera looks */
@@ -67,5 +101,9 @@ private:
 
 	bool bWantsToSprint = false;
 	bool bWantsToAim = false;
+	bool bWantsToStrafe = false;
 	EZSpeedLimit SpeedLimit = EZSpeedLimit::None;
+
+	/** Where our move data lives while it's sent or received */
+	FZCharacterNetworkMoveDataContainer MoveDataContainer;
 };

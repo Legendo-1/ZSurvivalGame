@@ -6,12 +6,13 @@
 #include "Blueprint/UserWidget.h"
 #include "ZSurvivalHUDWidget.generated.h"
 
+class AZSurvivalGameCharacter;
 class UProgressBar;
 class UTextBlock;
 class UWidget;
 
 /**
- *  Player HUD showing health and stamina bars, the ammo while a weapon is in the hands, and what the interact key would do
+ *  Player HUD showing health and stamina bars, the ammo while a weapon is in the hands, what the interact key would do and the lock-on target
  *  The Widget Blueprint must contain Progress Bars named HealthBar and StaminaBar; the other widgets are optional (see MULTIPLAYER.md)
  */
 UCLASS(abstract)
@@ -57,7 +58,14 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	UTextBlock* MessageText;
 
-	/** Adds a MessageText near the bottom of the screen if the Widget Blueprint has none, so messages always show */
+	/**
+	 *  Sits on the enemy the player is locked on to (optional: a small dot is added if the Widget Blueprint has none).
+	 *  It's moved every frame, so put it straight in the Canvas Panel with its Alignment at 0.5, 0.5
+	 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	UWidget* LockOnMarker;
+
+	/** Adds a MessageText near the bottom of the screen and a LockOnMarker if the Widget Blueprint has none, so they always show */
 	virtual void NativeOnInitialized() override;
 
 	/** Updates the bars from the owning player's character every frame */
@@ -65,4 +73,7 @@ protected:
 
 	/** Name of the key mapped to Interact, e.g. "E" */
 	FText GetInteractKeyName() const;
+
+	/** Puts the lock-on marker on the target's lock-on point on screen, or hides it */
+	void UpdateLockOnMarker(const AZSurvivalGameCharacter* SurvivalCharacter);
 };

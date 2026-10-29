@@ -2,7 +2,7 @@
 
 How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Melee combat, poise and staggers: COMBAT.md. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
 
-**Last updated:** 2026-10-28 (melee attacks, staggers, locked-in actions and the input buffer)
+**Last updated:** 2026-10-29 (lock-on)
 
 ## The basic idea
 
@@ -20,6 +20,7 @@ How the player's actions, weapons, enemies, health and death work in multiplayer
 | Weapon stats | **Weapon Data Assets**: guns `UZRangedWeaponData` (DA_Pistol, DA_Rifle), melee weapons `UZMeleeWeaponData` (DA_Machete) with a **moveset** of attacks (`UZMeleeMoveset`) | One asset per weapon, easy to tune |
 | The input buffer and the combo | **Combat component** on the character (`UZCombatComponent`) | Presses wait there on your machine; the server uses it to check combos |
 | What a melee swing hits | **Melee trace component** on the character (`UZMeleeTraceComponent`) | Sweeps the blade on the machine that finds the hits: your own (players) or the server (enemies) |
+| Lock-on | **Lock-on component** on the character (`UZLockOnComponent`), **lock-on points** on enemies (`UZLockOnTargetComponent`) | Picks the target, turns the camera and the character on your own machine; tells the server the target |
 | A weapon in the hands | **Weapon actor** (`AZWeapon`) | Spawned by the server when a weapon item is equipped, attached to the hand on every machine; the server keeps its ammo |
 | A crafting station | **Station actor** (`AZCraftingStation`, BP_Workbench) | Placed in a level; recipes that need it only work nearby (the server checks the distance) |
 | Enemies' health and attacks | **The enemy itself** (`AZAICharacter`) | Enemies have no PlayerState, so their ability system is on the character |
@@ -68,6 +69,15 @@ COMBAT.md explains the rules for players. In multiplayer:
 6. **The server is lenient about timing:** it trusts your machine about when a window was open (your animation runs a moment ahead of the server's). It only refuses actions while you're staggered or dead.
 
 Enemies run everything on the server.
+
+## Lock-on
+
+COMBAT.md → Lock-on explains it for players. In multiplayer:
+
+1. **Your machine does all of it:** it picks the target, moves the camera and turns your character toward the target by pointing the control rotation at it. The control rotation goes to the server with every move anyway (it's how the server knows where you look), so the server turns you the same way.
+2. **The movement component sends one more state with every move:** "strafing" (facing the target instead of turning toward where you walk). The four compressed move flags were full (sprint, aim, speed limit), so this rides in the movement component's own move data, which has room for more states.
+3. **The server is told the target** (one message when it changes). It checks it (alive, an enemy, roughly in range) and passes it on to the other players. Nothing decides gameplay with it: it's there for animations and later features.
+4. **Finding a target is cheap:** every lock-on point registers itself in a list (`UZLockOnSubsystem`), so the search never looks through the whole level. Walls are checked with a line trace only for the best few, and while locked on, about ten times a second.
 
 ## The abilities
 
@@ -160,6 +170,7 @@ The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are expl
 | Armor and jewelry | Nothing yet: only the owner gets what's equipped (armor isn't visible on the character yet) |
 | Shots, impacts, hits, deaths, reloads, taking out weapons, crafting, ... | GameplayCues, sent by the server (AUDIO.md) |
 | Attack, fire, reload, dodge and stagger animations | The ability system plays them for everyone |
+| Who you're locked on to | The lock-on component's target, sent by the server (your character's facing already shows it) |
 | The animation for taking out a weapon | It comes with the equip GameplayCue |
 | Footsteps | Nothing is sent: every machine plays them from the animations and movement it already has (AUDIO.md → Footsteps) |
 | Death (ragdoll) | `bIsDead`, sent by the server |
@@ -208,7 +219,10 @@ The **Server** window is the host. The **Client** window is the second player.
 | `ZHurt 50` | Takes 50 health (`ZHurt 0` shows your health) |
 | `ZSpawnDummy 120` | A zombie without AI in front of you, to practice melee on (`ZSpawnDummy 120 all`: one in front of every player) |
 | `ZStagger` | Staggers you (`ZStagger players`, `ZStagger enemies`) |
-| `ZCombat` | Your combat state: attack, input buffer, busy or staggered, open windows, poise and stamina |
+| `ZCombat` | Your combat state: attack, input buffer, busy or staggered, open windows, lock-on, poise and stamina |
+| `ZLockOn` | Locks on to the enemy nearest the middle of the screen, or lets go (like the lock-on key) |
+| `ZTurn -20` | Turns your camera 20° to the left, like the mouse (to test switching and letting go) |
+| `ZSpawnDummyAt 220 -55` | A dummy 2.2 m away, 55° to the left (`all` at the end: for every player) |
 | `Z.Melee.DrawDebug 1` | Draws melee hitboxes and hits |
 | `ZFloorSurface Metal` | The floor under you sounds like metal until Play stops; `ZFloorSurface` says what it is |
 | `Z.Footsteps.Debug 1` / `0` | Shows / hides every footstep (Output Log and in the world) |

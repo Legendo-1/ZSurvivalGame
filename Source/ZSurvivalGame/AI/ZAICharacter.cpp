@@ -16,6 +16,7 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_MeleeAttack.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Stagger.h"
 #include "Audio/ZFootstepComponent.h"
+#include "Combat/ZLockOnTargetComponent.h"
 #include "Items/ZLootTable.h"
 #include "Items/ZPickup.h"
 #include "Progression/ZProgressionComponent.h"
@@ -30,6 +31,11 @@ AZAICharacter::AZAICharacter()
 	AttributeSet = CreateDefaultSubobject<UZAttributeSet>(TEXT("AttributeSet"));
 
 	FootstepComponent = CreateDefaultSubobject<UZFootstepComponent>(TEXT("Footsteps"));
+
+	// players lock on to its chest: on the capsule rather than a bone, so the camera follows it smoothly
+	LockOnTarget = CreateDefaultSubobject<UZLockOnTargetComponent>(TEXT("LockOnTarget"));
+	LockOnTarget->SetupAttachment(GetCapsuleComponent());
+	LockOnTarget->SetRelativeLocation(FVector(0.f, 0.f, 40.f));
 
 	// AI characters don't need as many updates as players
 	SetNetUpdateFrequency(30.f);

@@ -54,4 +54,50 @@ public:
 	/** For attack montages without a Turn Window: how long from the montage's start the attack turns toward the camera, in seconds of the montage */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Melee", meta = (ClampMin = "0", Units = "s"))
 	float AttackTurnTime = 0.2f;
+
+	/** --- LOCK-ON --- */
+
+	/** Lock-on finds enemies up to this far from your character, in cm */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On", meta = (ClampMin = "0", Units = "cm"))
+	float LockOnDistance = 250.f;
+
+	/** ...and at most this far from the middle of the screen, in degrees */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On", meta = (ClampMin = "1", ClampMax = "90", Units = "deg"))
+	float LockOnAngle = 20.f;
+
+	/** When two enemies are near the middle, how much being farther away counts against one (degrees from the middle per meter). Higher prefers the closer one */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On", meta = (ClampMin = "0"))
+	float LockOnDistanceWeight = 2.f;
+
+	/** The lock lets go when the target gets farther than this from your character, in cm (more than Lock On Distance, so a step back doesn't end it) */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On", meta = (ClampMin = "0", Units = "cm"))
+	float LoseLockDistance = 600.f;
+
+	/** Turning the camera at least this far from the target toward another enemy switches the lock to it (once that enemy is near the middle of the screen), in degrees */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On", meta = (ClampMin = "0", ClampMax = "180", Units = "deg"))
+	float SwitchTargetAngle = 10.f;
+
+	/** Turning the camera this far away from the target with the mouse or stick, with no other enemy there, lets go of it, in degrees */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On", meta = (ClampMin = "1", ClampMax = "180", Units = "deg"))
+	float BreakLockAngle = 35.f;
+
+	/** The lock lets go when walls hide the target this long, in seconds (other characters in between don't count) */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On", meta = (ClampMin = "0", Units = "s"))
+	float LoseSightTime = 1.f;
+
+	/** How quickly the camera follows the target (higher = tighter) */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On", meta = (ClampMin = "0.1"))
+	float LockOnCameraSpeed = 10.f;
+
+	/** How quickly the camera drifts back onto the target after you turned it a little with the mouse or stick (higher = faster; turning past Break Lock Angle before it's back lets go) */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On", meta = (ClampMin = "0"))
+	float LockOnCameraReturnSpeed = 3.f;
+
+	/** When the target dies, lock on to the next enemy near the middle of the screen (if there's one) */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On")
+	bool bSwitchTargetOnKill = true;
+
+	/** Aiming a gun lets go of the lock (you aim yourself) */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Lock-On")
+	bool bReleaseLockOnWhenAiming = true;
 };

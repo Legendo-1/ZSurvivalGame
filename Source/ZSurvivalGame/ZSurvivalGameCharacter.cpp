@@ -29,6 +29,7 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_ComboAttack.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Stagger.h"
 #include "Combat/ZCombatComponent.h"
+#include "Combat/ZLockOnComponent.h"
 #include "Combat/ZMeleeTraceComponent.h"
 #include "Interaction/ZInteractionComponent.h"
 #include "Items/ZEquipmentComponent.h"
@@ -89,6 +90,8 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter(const FObjectInitializer& Objec
 	CombatComponent = CreateDefaultSubobject<UZCombatComponent>(TEXT("Combat"));
 
 	MeleeTraceComponent = CreateDefaultSubobject<UZMeleeTraceComponent>(TEXT("MeleeTrace"));
+
+	LockOnComponent = CreateDefaultSubobject<UZLockOnComponent>(TEXT("LockOn"));
 
 	// The player's abilities, given to the PlayerState's ability system in PossessedBy
 	DefaultAbilities.Add(UZGameplayAbility_Sprint::StaticClass());
@@ -430,9 +433,10 @@ void AZSurvivalGameCharacter::PlayDeath()
 {
 	bFireHeld = false;
 
-	// nothing waits or hits any more
+	// nothing waits or hits any more, and the camera is the player's again
 	CombatComponent->ClearBuffer();
 	MeleeTraceComponent->EndAllHitboxes();
+	LockOnComponent->ReleaseLockOn();
 
 	// stop moving and fall over as a ragdoll
 	GetCharacterMovement()->StopMovementImmediately();
@@ -771,6 +775,12 @@ void AZSurvivalGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Completed, this, &AZSurvivalGameCharacter::DoInteractEnd);
 		}
 
+		// Lock-on
+		if (LockOnAction)
+		{
+			EnhancedInputComponent->BindAction(LockOnAction, ETriggerEvent::Started, this, &AZSurvivalGameCharacter::DoLockOn);
+		}
+
 		// Weapon slots: each key takes out the weapon in its slot (after the current attack or dodge)
 		for (const FZWeaponSlotInput& SlotInput : WeaponSlotInputs)
 		{
@@ -950,6 +960,12 @@ void AZSurvivalGameCharacter::DoInteractStart()
 void AZSurvivalGameCharacter::DoInteractEnd()
 {
 	InteractionComponent->StopInteraction();
+}
+
+void AZSurvivalGameCharacter::DoLockOn()
+{
+	// all on the player's own machine; the lock-on component tells the server
+	LockOnComponent->ToggleLockOn();
 }
 
 void AZSurvivalGameCharacter::PressAbilityInput(EZAbilityInputID InputID)

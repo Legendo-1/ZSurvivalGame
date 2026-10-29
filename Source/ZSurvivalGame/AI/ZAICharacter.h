@@ -17,6 +17,7 @@ class UAnimMontage;
 class UGameplayAbility;
 class UZAttributeSet;
 class UZFootstepComponent;
+class UZLockOnTargetComponent;
 class UZLootTable;
 
 /**
@@ -40,6 +41,10 @@ class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public 
 	/** Footstep sounds, matching the surface (its Footstep Data, or the project's default) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZFootstepComponent> FootstepComponent;
+
+	/** Where players lock on to it (its chest); move it in the Blueprint for other body shapes, or add more for big enemies */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZLockOnTargetComponent> LockOnTarget;
 
 public:
 

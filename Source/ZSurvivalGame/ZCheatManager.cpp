@@ -21,6 +21,7 @@
 #include "AbilitySystem/ZGameplayTags.h"
 #include "Audio/ZFootstepComponent.h"
 #include "Combat/ZCombatComponent.h"
+#include "Combat/ZLockOnComponent.h"
 #include "Crafting/ZCraftingComponent.h"
 #include "Crafting/ZCraftingRecipe.h"
 #include "Crafting/ZCraftingStation.h"
@@ -98,6 +99,11 @@ void UZCheatManager::ZSpawnZombies(int32 Count, float Distance)
 
 void UZCheatManager::ZSpawnDummy(float Distance, const FString& Who)
 {
+	ZSpawnDummyAt(Distance, 0.f, Who);
+}
+
+void UZCheatManager::ZSpawnDummyAt(float Distance, float Angle, const FString& Who)
+{
 	if (!CheckIsHost(TEXT("ZSpawnDummy")))
 	{
 		return;
@@ -112,7 +118,7 @@ void UZCheatManager::ZSpawnDummy(float Distance, const FString& Who)
 		}
 
 		// in front of the character (not the camera), at the same height, facing it; without a controller it never moves or attacks
-		const FVector Forward = FRotator(0.f, Pawn->GetActorRotation().Yaw, 0.f).Vector();
+		const FVector Forward = FRotator(0.f, Pawn->GetActorRotation().Yaw + Angle, 0.f).Vector();
 		const FVector SpawnLocation = Pawn->GetActorLocation() + Forward * FMath::Max(Distance, 90.f) + FVector(0.f, 0.f, 2.f);
 
 		FActorSpawnParameters SpawnParams;
@@ -558,11 +564,35 @@ void UZCheatManager::ZCombat()
 	}
 
 	// poise and stamina only reach their owner (and the host has everyone's)
-	UE_LOG(LogZSurvivalGame, Log, TEXT("ZCombat: %s; poise %.0f/%.0f, stamina %.0f/%.0f, weapon %s"),
-		*Character->GetCombatComponent()->GetDebugString(),
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZCombat: %s; %s; poise %.0f/%.0f, stamina %.0f/%.0f, weapon %s"),
+		*Character->GetCombatComponent()->GetDebugString(), *Character->GetLockOnComponent()->GetDebugString(),
 		ASC->GetNumericAttribute(UZAttributeSet::GetPoiseAttribute()), ASC->GetNumericAttribute(UZAttributeSet::GetMaxPoiseAttribute()),
 		ASC->GetNumericAttribute(UZAttributeSet::GetStaminaAttribute()), ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute()),
 		*UEnum::GetDisplayValueAsText(Character->GetWeaponType()).ToString());
+}
+
+void UZCheatManager::ZLockOn()
+{
+	const APlayerController* PlayerController = GetOuterAPlayerController();
+	AZSurvivalGameCharacter* Character = PlayerController ? Cast<AZSurvivalGameCharacter>(PlayerController->GetPawn()) : nullptr;
+	if (!Character)
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZLockOn: no character"));
+		return;
+	}
+
+	Character->DoLockOn();
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZLockOn: %s"), *Character->GetLockOnComponent()->GetDebugString());
+}
+
+void UZCheatManager::ZTurn(float Yaw, float Pitch)
+{
+	// the same as mouse input: the control rotation moves (lock-on reads that as the player turning the camera)
+	if (APlayerController* PlayerController = GetOuterAPlayerController())
+	{
+		PlayerController->SetControlRotation(PlayerController->GetControlRotation() + FRotator(Pitch, Yaw, 0.f));
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZTurn: camera turned %.0f deg to the right and %.0f deg up"), Yaw, Pitch);
+	}
 }
 
 void UZCheatManager::ZEquip(const FString& ItemName, int32 SlotNumber)

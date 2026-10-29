@@ -47,6 +47,11 @@ Things learned the hard way, and known issues. Remove a known issue once it's fi
 
 ## Known issues
 
+- **C++ builds fail since the Fab plugin update of 2026-10-29:** "Expecting to find a type to be declared in a module rules named 'FabToolset'". The Epic Games Launcher updated the engine's Fab plugin with a new part (FabToolset) that the installed engine's build rules don't know about. Every editor build stops with this error (Visual Studio's Development Editor, Live Coding, and the "rebuild modules?" prompt when opening the project), in any project. Building the game itself still works. Ways around it:
+  1. **Epic Games Launcher → Unreal Engine → Library → the ▾ under 5.8 → Verify.** This may put the engine's own Fab plugin back. If the launcher updates it again, use 2.
+  2. **Build without Fab:** in Visual Studio, right-click **ZSurvivalGame** in the Solution Explorer → **Properties** → **NMake** → with **Configuration: Development Editor** selected at the top, add ` -DisablePlugin=Fab` at the end of **Build Command Line** and **Rebuild All Command Line** → **OK**. The editor still loads Fab (it's already built); only the build skips it.
+  3. Wait for Epic to fix it, then remove the workaround.
+
 - **Pistol run, right knee on slopes:** the right knee bends outward when the right foot lands on a slope while running with the pistol. Something in the pistol animation causes it, not the IK settings.
 - **Small corrections at the start of a melee attack:** a client's position can be put back by 2 or 3 cm when an attack starts right after a combo step or a stagger. Normal for attacks that move the character with their animation, and hard to see.
 - **Zombies outreach the placeholder machete:** they attack from about 1.5 m and their punch reaches 1.7 m, while the placeholder punches with a stretched box reach about 1 m. Real machete animations swing farther; otherwise lower the zombie's **Attack Range** and **Melee Reach** (Class Defaults → **AI**, **AI|Melee**).

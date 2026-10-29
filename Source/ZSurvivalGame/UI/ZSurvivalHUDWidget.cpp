@@ -1,15 +1,20 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "UI/ZSurvivalHUDWidget.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/WidgetTree.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/Image.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "ZSurvivalGameCharacter.h"
 #include "ZSurvivalGamePlayerController.h"
+#include "Combat/ZLockOnComponent.h"
+#include "Combat/ZLockOnTargetComponent.h"
 #include "Interaction/ZInteractionComponent.h"
 #include "Weapons/ZWeapon.h"
 
@@ -17,9 +22,31 @@ void UZSurvivalHUDWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 
-	// no MessageText in the Widget Blueprint: put one above the bottom middle of the screen
 	UCanvasPanel* Canvas = WidgetTree ? Cast<UCanvasPanel>(WidgetTree->RootWidget) : nullptr;
-	if (MessageText || !Canvas)
+	if (!Canvas)
+	{
+		return;
+	}
+
+	// no LockOnMarker in the Widget Blueprint: a small white dot with a dark outline, moved onto the target every frame
+	if (!LockOnMarker)
+	{
+		constexpr float MarkerSize = 12.f;
+		UImage* Dot = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("LockOnMarker"));
+		Dot->SetBrush(FSlateRoundedBoxBrush(FLinearColor::White, MarkerSize * 0.5f, FLinearColor(0.f, 0.f, 0.f, 0.85f), 2.f, FVector2f(MarkerSize, MarkerSize)));
+		Dot->SetVisibility(ESlateVisibility::Collapsed);
+		if (UCanvasPanelSlot* MarkerSlot = Canvas->AddChildToCanvas(Dot))
+		{
+			MarkerSlot->SetAnchors(FAnchors(0.f, 0.f));
+			MarkerSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+			MarkerSlot->SetSize(FVector2D(MarkerSize, MarkerSize));
+		}
+
+		LockOnMarker = Dot;
+	}
+
+	// no MessageText in the Widget Blueprint: put one above the bottom middle of the screen
+	if (MessageText)
 	{
 		return;
 	}
@@ -122,6 +149,31 @@ void UZSurvivalHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 		const float HoldProgress = Interaction ? Interaction->GetHoldProgress() : 0.f;
 		InteractionProgress->SetVisibility(HoldProgress > 0.f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 		InteractionProgress->SetPercent(HoldProgress);
+	}
+
+	UpdateLockOnMarker(SurvivalCharacter);
+}
+
+void UZSurvivalHUDWidget::UpdateLockOnMarker(const AZSurvivalGameCharacter* SurvivalCharacter)
+{
+	if (!LockOnMarker)
+	{
+		return;
+	}
+
+	// where the target's lock-on point is on screen (in the widget's units, so it fits any resolution and DPI scale)
+	const UZLockOnComponent* LockOn = SurvivalCharacter ? SurvivalCharacter->GetLockOnComponent() : nullptr;
+	const UZLockOnTargetComponent* Target = LockOn ? LockOn->GetTarget() : nullptr;
+	FVector2D ScreenPosition = FVector2D::ZeroVector;
+	const bool bShow = Target && UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(GetOwningPlayer(), Target->GetComponentLocation(), ScreenPosition, false);
+
+	LockOnMarker->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	if (bShow)
+	{
+		if (UCanvasPanelSlot* MarkerSlot = Cast<UCanvasPanelSlot>(LockOnMarker->Slot))
+		{
+			MarkerSlot->SetPosition(ScreenPosition);
+		}
 	}
 }
 

@@ -1,8 +1,8 @@
 # Combat
 
-How melee combat works (light and heavy combos, hitboxes, poise and staggers), the souls-like rules for when you can act (being locked into an action, and the input buffer), dodging, and how to make melee weapons and attack animations. Guns are in ITEMS.md, sounds and effects in AUDIO.md.
+How melee combat works (light and heavy combos, hitboxes, poise and staggers), the souls-like rules for when you can act (being locked into an action, and the input buffer), dodging, lock-on, and how to make melee weapons and attack animations. Guns are in ITEMS.md, sounds and effects in AUDIO.md.
 
-**Last updated:** 2026-10-28 (attacks turn toward the camera during their windup, then keep that direction until the Dodge Window)
+**Last updated:** 2026-10-29 (lock-on)
 
 ## Controls
 
@@ -11,6 +11,7 @@ How melee combat works (light and heavy combos, hitboxes, poise and staggers), t
 | **Left mouse** | Light attack. Press again during the swing for the next attack of the combo | Fire (hold for automatic guns) |
 | **Right mouse** | Heavy attack | Aim (hold) |
 | **Dodge** | Dodge | Dodge |
+| **Middle mouse** (gamepad: click the right stick) | Lock on to the enemy nearest the middle of the screen, or let go | The same |
 | **3** | Take out (or put away) your melee weapon | |
 
 A melee weapon goes in the **Melee** equipment slot (ITEMS.md → Equipment). New characters start with a **Machete** (`ID_Machete`) there.
@@ -68,6 +69,36 @@ Like in Dark Souls, once you start something you're locked into it.
 - Mid-attack you can only dodge in the attack's **Dodge Window**; mid-shot right after the shot.
 - **A dodge animation** (a roll) can be set as **Dodge Montage** on the Dodge ability. It must stay in place: the dodge moves you itself.
 
+## Lock-on
+
+- **Middle mouse** (gamepad: click the right stick) locks on to the enemy nearest the middle of the screen, if:
+  - it's at most **2.5 m** from your character (**Lock On Distance**),
+  - it's within **20°** of the middle of the screen (**Lock On Angle**),
+  - and no wall hides it.
+- A **white dot** sits on the target while you're locked on. Press the key again to let go.
+- **While locked on:**
+  - Your character faces the target. **A** and **D** circle around it, **S** steps away, **W** goes toward it.
+  - The camera follows the target.
+  - Attacks turn toward the target during their windup (instead of toward the camera).
+  - With a gun, firing without aiming goes at the target (the middle of the screen is on it). **Aiming** (right mouse with a gun) lets go, so you aim yourself (**Release Lock On When Aiming**).
+- **Switching to another enemy:** turn the camera toward it (mouse or right stick). Once it's near the middle of the screen and in range, the lock moves to it.
+  - Small movements don't switch: you have to turn at least **10°** away from the current target (**Switch Target Angle**).
+  - When you stop turning, the camera drifts back onto the target.
+- **The lock lets go by itself when:**
+  - you turn the camera more than **35°** away from the target (**Break Lock Angle**) and there's no other enemy where you turned to,
+  - the target gets farther than **6 m** from you (**Lose Lock Distance**),
+  - walls hide the target for more than **1 second** (**Lose Sight Time**). Other characters in the way don't count,
+  - the target dies. The lock then jumps to another enemy near the middle of the screen, if there's one (**Switch Target On Kill**),
+  - you die.
+- **2.5 m is short:** Dark Souls locks on from about 15–20 m. If lock-on feels like it rarely finds anything, raise **Lock On Distance** (and **Lose Lock Distance** with it).
+- **Other players** can't be locked on to.
+
+**Lock-on points on enemies:**
+- Every enemy has one on its chest: the **LockOnTarget** component, 40 cm above the middle of its capsule. The camera aims at it and the dot sits on it.
+- **For a taller or shorter enemy:** open its Blueprint → **Components** → select **LockOnTarget** → move it up or down in the viewport.
+- **For a big enemy (a boss), more points:** **Components → Add → Lock On Target**. To make it follow a body part, select it → **Details → Sockets → Parent Socket** → pick a bone (e.g. the head). Each point is its own target, so you can switch between them like between enemies.
+- **A point that can't be targeted:** untick **Can Be Locked On** on it. During play, the host can switch it with the Blueprint node **Set Can Be Locked On** (e.g. a boss that flies away).
+
 ## Settings
 
 **Edit → Project Settings → Game → Combat:**
@@ -81,6 +112,17 @@ Like in Dark Souls, once you start something you're locked into it.
 | **Combo Timing Tolerance** | How late the host still accepts the next attack of a client's combo | 1 s |
 | **Attack Turn Rate** | How fast an attack turns toward the camera during its windup | 900 degrees per second |
 | **Attack Turn Time** | For attacks without a Turn Window: how long from the start they turn | 0.2 s |
+| **Lock On Distance** | How far from your character lock-on finds enemies | 250 cm |
+| **Lock On Angle** | How far from the middle of the screen lock-on finds enemies | 20° |
+| **Lock On Distance Weight** | When two enemies are near the middle, how much the farther one counts against it (higher prefers the closer one) | 2 |
+| **Lose Lock Distance** | The lock lets go when the target gets farther than this | 600 cm |
+| **Switch Target Angle** | How far you turn the camera from the target before the lock can move to another enemy | 10° |
+| **Break Lock Angle** | Turning the camera this far from the target, with no other enemy there, lets go | 35° |
+| **Lose Sight Time** | The lock lets go when walls hide the target this long | 1 s |
+| **Lock On Camera Speed** | How tightly the camera follows the target | 10 |
+| **Lock On Camera Return Speed** | How fast the camera drifts back onto the target after you turned it | 3 |
+| **Switch Target On Kill** | When the target dies, lock on to the next enemy near the middle of the screen | on |
+| **Release Lock On When Aiming** | Aiming a gun lets go of the lock | on |
 
 ## Making a melee weapon
 
@@ -154,6 +196,7 @@ The target's own **Hit Cue** plays with every hit too. How to make the sounds an
 - **The host decides staggers.** Your machine learns about a stagger a moment after it happened.
 - **The host checks every combo:** an attack only counts if it can follow the attack before. Timing is left to your machine, which sees the windows exactly.
 - Everyone sees your attacks, dodges and staggers (the animations come from the host).
+- **Lock-on runs on your own machine.** Your character faces the target through the camera direction your machine sends with every move anyway, so the host turns and moves you the same way (no rubber-banding while circling an enemy). The host and the other players are told which enemy you're locked on to (for animations later).
 
 ## Console commands
 
@@ -161,8 +204,11 @@ The target's own **Hit Cue** plays with every hit too. How to make the sounds an
 |---|---|
 | `ZSpawnDummy 120` | A zombie that stands still (no AI), 120 cm in front of you, to practice on; `ZSpawnDummy 120 all` puts one in front of every player (*host*) |
 | `ZStagger` | Staggers you; `ZStagger players` every player, `ZStagger enemies` every enemy (*host*) |
-| `ZCombat` | Writes your combat state to the Output Log: the attack, what waits in the buffer, busy or staggered, open windows, poise and stamina |
+| `ZCombat` | Writes your combat state to the Output Log: the attack, what waits in the buffer, busy or staggered, open windows, lock-on (target, distance, how far you face away from it), poise and stamina |
 | `ZWeaponStats` | The stats of the weapon in your hands (for a melee weapon: damage, poise damage, attack speed, stamina cost, reach) |
+| `ZSpawnDummyAt 220 -55` | Like `ZSpawnDummy`, but 55° to the left of straight ahead (positive: to the right), to try switching targets (*host*) |
+| `ZLockOn` | Like the lock-on key, and writes what you're locked on to |
+| `ZTurn -20` | Turns your camera 20° to the left (positive: to the right; a second number turns it up), like moving the mouse |
 | `Z.Melee.DrawDebug 1` | Draws the hitboxes (green) and the hits (red) |
 
 ## The placeholder content
@@ -171,7 +217,7 @@ So you can try everything before real weapon animations exist:
 
 - `AM_Melee_Light_1`, `_2`, `_3` and `AM_Melee_Heavy_1` (`Characters/Mannequins/Anims/Melee`): the mannequin's unarmed punches and kicks as attacks, with hitboxes and windows (their hitboxes also hit with the left hand and the right foot). Kept as examples: `MS_OneHanded` now uses three light and three heavy attacks from the sword and shield pack (`Characters/Mannequins/Anims/SwordAndShield`), until better one-handed animations without a shield are found.
 - `AM_Stagger_Front` (`Characters/Mannequins/Anims/Stagger`): a hit reaction, as the stagger for players and zombies.
-- `MS_OneHanded` (`Content/Weapons/Movesets`): those four attacks as a light combo of three and one heavy attack.
+- `MS_OneHanded` (`Content/Weapons/Movesets`): the machete's moveset.
 - `DA_Machete` and `ID_Machete`: the machete, damage 25 and poise damage 15 per hit. Its mesh `SM_PlaceholderBlade` (`Content/Weapons/Meshes`) is a stretched box with the two blade sockets, held in the right hand.
 
 To replace them, follow "Making a melee weapon" and "Making an attack animation" above: a real mesh with blade sockets, and real attack montages in the moveset.
@@ -180,6 +226,6 @@ To replace them, follow "Making a melee weapon" and "Making an attack animation"
 
 - **Hyper armor:** a window in heavy attacks where a stagger doesn't interrupt them (a new marker and a check in the stagger).
 - **Charged heavy attacks:** hold the right mouse button to charge.
-- **Blocking, parrying, backstabs** and **lock-on**.
+- **Blocking, parrying, backstabs.**
 - **Enemies with melee weapons:** AI attacks still use a simple sweep in front of them; the hitbox attacks can be used by AI later (they already work on the server).
 - **A poise bar** on the HUD, and **armor weight** making dodges slower.

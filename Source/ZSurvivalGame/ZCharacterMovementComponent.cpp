@@ -20,11 +20,38 @@ namespace
 	// the speed limit uses the last two bits (FLAG_Custom_2 and FLAG_Custom_3)
 	constexpr uint8 SpeedLimitShift = 6;
 	constexpr uint8 SpeedLimitMask = 0x3;
+
+	// the states in our own move data (FZCharacterNetworkMoveData::ZFlags); a new state is the next bit (raise ZFlagBits past 4)
+	enum EZMoveFlag : uint8
+	{
+		ZMoveFlag_Strafe = 1 << 0,
+	};
+
+	constexpr int32 ZFlagBits = 4;
 }
 
 UZCharacterMovementComponent::UZCharacterMovementComponent()
 {
 	ProcessRootMotionPreConvertToWorld.BindUObject(this, &UZCharacterMovementComponent::ProcessRootMotion);
+
+	// our moves carry our own data (ZFlags) to the server
+	SetNetworkMoveDataContainer(MoveDataContainer);
+}
+
+uint8 UZCharacterMovementComponent::GetZFlags() const
+{
+	uint8 ZFlags = 0;
+	if (bWantsToStrafe)
+	{
+		ZFlags |= ZMoveFlag_Strafe;
+	}
+
+	return ZFlags;
+}
+
+void UZCharacterMovementComponent::SetZFlags(uint8 ZFlags)
+{
+	bWantsToStrafe = (ZFlags & ZMoveFlag_Strafe) != 0;
 }
 
 FTransform UZCharacterMovementComponent::ProcessRootMotion(const FTransform& LocalRootMotion, UCharacterMovementComponent* Movement, float DeltaSeconds) const
@@ -39,7 +66,7 @@ FTransform UZCharacterMovementComponent::ProcessRootMotion(const FTransform& Loc
 	return TranslationOnly;
 }
 
-/** A saved move that also remembers sprint, aim and the speed limit */
+/** A saved move that also remembers sprint, aim, the speed limit and our move data's states */
 class FZSavedMove : public FSavedMove_Character
 {
 	typedef FSavedMove_Character Super;
@@ -53,6 +80,7 @@ public:
 		bSavedWantsToSprint = false;
 		bSavedWantsToAim = false;
 		SavedSpeedLimit = EZSpeedLimit::None;
+		SavedZFlags = 0;
 	}
 
 	virtual uint8 GetCompressedFlags() const override
@@ -80,7 +108,8 @@ public:
 		const FZSavedMove* NewZMove = static_cast<const FZSavedMove*>(NewMove.Get());
 		if (bSavedWantsToSprint != NewZMove->bSavedWantsToSprint
 			|| bSavedWantsToAim != NewZMove->bSavedWantsToAim
-			|| SavedSpeedLimit != NewZMove->SavedSpeedLimit)
+			|| SavedSpeedLimit != NewZMove->SavedSpeedLimit
+			|| SavedZFlags != NewZMove->SavedZFlags)
 		{
 			return false;
 		}
@@ -98,6 +127,7 @@ public:
 			bSavedWantsToSprint = Movement->WantsToSprint();
 			bSavedWantsToAim = Movement->WantsToAim();
 			SavedSpeedLimit = Movement->GetSpeedLimit();
+			SavedZFlags = Movement->GetZFlags();
 		}
 	}
 
@@ -111,15 +141,48 @@ public:
 			Movement->SetWantsToSprint(bSavedWantsToSprint);
 			Movement->SetWantsToAim(bSavedWantsToAim);
 			Movement->SetSpeedLimit(SavedSpeedLimit);
+			Movement->SetZFlags(SavedZFlags);
 		}
 	}
+
+	/** The states that go in our move data (FZCharacterNetworkMoveData) */
+	uint8 GetZFlags() const { return SavedZFlags; }
 
 private:
 
 	bool bSavedWantsToSprint = false;
 	bool bSavedWantsToAim = false;
 	EZSpeedLimit SavedSpeedLimit = EZSpeedLimit::None;
+	uint8 SavedZFlags = 0;
 };
+
+void FZCharacterNetworkMoveData::ClientFillNetworkMoveData(const FSavedMove_Character& ClientMove, ENetworkMoveType MoveType)
+{
+	Super::ClientFillNetworkMoveData(ClientMove, MoveType);
+
+	// every saved move is ours (FZNetworkPredictionData_Client makes them)
+	ZFlags = static_cast<const FZSavedMove&>(ClientMove).GetZFlags();
+}
+
+bool FZCharacterNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap, ENetworkMoveType MoveType)
+{
+	const bool bSuccess = Super::Serialize(CharacterMovement, Ar, PackageMap, MoveType);
+
+	if (Ar.IsLoading())
+	{
+		ZFlags = 0;
+	}
+
+	Ar.SerializeBits(&ZFlags, ZFlagBits);
+	return bSuccess && !Ar.IsError();
+}
+
+FZCharacterNetworkMoveDataContainer::FZCharacterNetworkMoveDataContainer()
+{
+	NewMoveData = &ZMoveData[0];
+	PendingMoveData = &ZMoveData[1];
+	OldMoveData = &ZMoveData[2];
+}
 
 /** Client prediction data that saves FZSavedMove moves */
 class FZNetworkPredictionData_Client : public FNetworkPredictionData_Client_Character
@@ -185,10 +248,11 @@ void UZCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Delt
 {
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
 
-	// Face the camera when always-face-camera is on, while aiming or while committed to an attack (the Still speed limit: attacks go where the camera looks),
+	// Face the camera (the control rotation) when always-face-camera is on, while aiming, while locked on (strafing: the control rotation points at the target)
+	// or while committed to an attack (the Still speed limit: attacks go where the camera looks),
 	// otherwise turn toward movement. All of these reach the server with each move, so both turn the same way (an attack's root motion follows the facing)
 	const AZSurvivalGameCharacter* ZCharacter = Cast<AZSurvivalGameCharacter>(CharacterOwner);
-	const bool bFaceCamera = bWantsToAim || SpeedLimit == EZSpeedLimit::Still || (ZCharacter && ZCharacter->ShouldAlwaysFaceCamera());
+	const bool bFaceCamera = bWantsToAim || bWantsToStrafe || SpeedLimit == EZSpeedLimit::Still || (ZCharacter && ZCharacter->ShouldAlwaysFaceCamera());
 
 	bOrientRotationToMovement = !bFaceCamera;
 	bUseControllerDesiredRotation = bFaceCamera;
@@ -233,12 +297,27 @@ bool UZCharacterMovementComponent::ClientUpdatePositionAfterServerUpdate()
 	const bool bRealWantsToSprint = bWantsToSprint;
 	const bool bRealWantsToAim = bWantsToAim;
 	const EZSpeedLimit RealSpeedLimit = SpeedLimit;
+	const uint8 RealZFlags = GetZFlags();
 
 	const bool bResult = Super::ClientUpdatePositionAfterServerUpdate();
 
 	bWantsToSprint = bRealWantsToSprint;
 	bWantsToAim = bRealWantsToAim;
 	SpeedLimit = RealSpeedLimit;
+	SetZFlags(RealZFlags);
 
 	return bResult;
+}
+
+void UZCharacterMovementComponent::MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags, const FVector& NewAccel)
+{
+	// the server running a player's move: the states in our move data (the compressed flags come in UpdateFromCompressedFlags).
+	// A client replaying its own moves also comes here, without move data: its saved moves already set the states
+	const FZCharacterNetworkMoveData* MoveData = static_cast<const FZCharacterNetworkMoveData*>(GetCurrentNetworkMoveData());
+	if (MoveData && CharacterOwner && CharacterOwner->GetLocalRole() == ROLE_Authority)
+	{
+		SetZFlags(MoveData->ZFlags);
+	}
+
+	Super::MoveAutonomous(ClientTimeStamp, DeltaTime, CompressedFlags, NewAccel);
 }

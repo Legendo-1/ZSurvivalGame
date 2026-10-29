@@ -27,6 +27,7 @@ class UZEquipmentComponent;
 class UZInteractionComponent;
 class UZInventoryComponent;
 class UZItemInstance;
+class UZLockOnComponent;
 class UZMeleeTraceComponent;
 class AZWeapon;
 struct FInputActionValue;
@@ -53,6 +54,7 @@ struct FZWeaponSlotInput
  *  Implements a controllable orbiting camera
  *  Sprint, aim, dodge, fire, reload and the melee attacks are abilities (see AbilitySystem/); health, stamina and poise live on the PlayerState
  *  Attacks, dodges, shots, reloads and weapon switches go through the combat component's input buffer (souls-like commitment, see COMBAT.md)
+ *  The lock-on key locks the camera and the character's facing on to an enemy (UZLockOnComponent)
  */
 UCLASS(abstract)
 class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IGameplayCueInterface, public IZCharacterCuesInterface, public IZGaitSpeedsInterface, public IZCombatantInterface
@@ -82,6 +84,10 @@ class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterfac
 	/** Finds what melee attacks hit (the weapon's blade during the attacks' Weapon Hitbox notifies), on the player's own machine */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZMeleeTraceComponent> MeleeTraceComponent;
+
+	/** Locks the camera and the facing on to an enemy (the lock-on key) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZLockOnComponent> LockOnComponent;
 
 protected:
 
@@ -124,6 +130,10 @@ protected:
 	/** Interact Input Action (hold for interactions that take time) */
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* InteractAction;
+
+	/** Lock-on Input Action: locks on to the enemy nearest the middle of the screen, or lets go */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* LockOnAction;
 
 	/** Keys that take out the weapon in a weapon slot (pressed again, they put it away), e.g. 1 = short gun, 2 = long gun, 3 = melee */
 	UPROPERTY(EditAnywhere, Category = "Input")
@@ -423,6 +433,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	virtual void DoInteractEnd();
 
+	/** Lock-on pressed: locks on to the enemy nearest the middle of the screen (in range and in sight), or lets go */
+	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
+	virtual void DoLockOn();
+
 	/** Caps movement speed, e.g. Jog or Walk for the duration of a weapon swap or reload; None removes the cap. Call it on the owning player's machine (or in a predicted ability); it reaches the server with the next move */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Actions")
 	void SetSpeedLimit(EZSpeedLimit NewLimit);
@@ -445,6 +459,9 @@ public:
 
 	/** The input buffer and the melee combo */
 	UZCombatComponent* GetCombatComponent() const { return CombatComponent; }
+
+	/** Lock-on: the target, and whether the player is locked on */
+	UZLockOnComponent* GetLockOnComponent() const { return LockOnComponent; }
 
 	/** Puts this inventory weapon in its weapon slot and in the hands (e.g. from an inventory screen) */
 	UFUNCTION(BlueprintCallable, Category = "Survival|Weapon")
