@@ -28,6 +28,7 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_Reload.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_ComboAttack.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Stagger.h"
+#include "Combat/ZCharacterSpacingComponent.h"
 #include "Combat/ZCombatComponent.h"
 #include "Combat/ZHitFlashComponent.h"
 #include "Combat/ZLockOnComponent.h"
@@ -95,6 +96,9 @@ AZSurvivalGameCharacter::AZSurvivalGameCharacter(const FObjectInitializer& Objec
 	LockOnComponent = CreateDefaultSubobject<UZLockOnComponent>(TEXT("LockOn"));
 
 	HitFlashComponent = CreateDefaultSubobject<UZHitFlashComponent>(TEXT("HitFlash"));
+
+	SpacingComponent = CreateDefaultSubobject<UZCharacterSpacingComponent>(TEXT("Spacing"));
+	SpacingComponent->SetupAttachment(GetCapsuleComponent());
 
 	// The player's abilities, given to the PlayerState's ability system in PossessedBy
 	DefaultAbilities.Add(UZGameplayAbility_Sprint::StaticClass());
@@ -445,6 +449,7 @@ void AZSurvivalGameCharacter::PlayDeath()
 	GetCharacterMovement()->StopMovementImmediately();
 	GetCharacterMovement()->DisableMovement();
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SpacingComponent->SetSpacingEnabled(false);
 	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
 	GetMesh()->SetSimulatePhysics(true);
 

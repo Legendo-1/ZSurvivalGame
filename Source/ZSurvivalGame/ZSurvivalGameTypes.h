@@ -12,6 +12,10 @@ inline constexpr ECollisionChannel ZTraceChannel_Weapon = ECC_GameTraceChannel1;
 /** Trace channel for finding interactables (set up in DefaultEngine.ini). Ignored by everything except collisions of interactable things, which block it */
 inline constexpr ECollisionChannel ZTraceChannel_Interaction = ECC_GameTraceChannel2;
 
+/** Object channels of the spacing capsules around players and around enemies (UZCharacterSpacingComponent; set up in DefaultEngine.ini). Everything ignores them except the other side's capsules */
+inline constexpr ECollisionChannel ZObjectChannel_PlayerSpacing = ECC_GameTraceChannel3;
+inline constexpr ECollisionChannel ZObjectChannel_EnemySpacing = ECC_GameTraceChannel4;
+
 /** Which weapon animation set the character uses (add new ones at the end: the animation blueprint's Blend Poses nodes keep their pins by position) */
 UENUM(BlueprintType)
 enum class EZWeaponType : uint8

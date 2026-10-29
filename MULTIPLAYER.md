@@ -2,7 +2,7 @@
 
 How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Melee combat, poise and staggers: COMBAT.md. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
 
-**Last updated:** 2026-10-29 (lock-on; hit-stop and the hit flash)
+**Last updated:** 2026-10-29 (lock-on; hit-stop and the hit flash; spacing between players and enemies)
 
 ## The basic idea
 
@@ -21,6 +21,7 @@ How the player's actions, weapons, enemies, health and death work in multiplayer
 | The input buffer and the combo | **Combat component** on the character (`UZCombatComponent`) | Presses wait there on your machine; the server uses it to check combos |
 | What a melee swing hits | **Melee trace component** on the character (`UZMeleeTraceComponent`) | Sweeps the blade on the machine that finds the hits: your own (players) or the server (enemies) |
 | Lock-on | **Lock-on component** on the character (`UZLockOnComponent`), **lock-on points** on enemies (`UZLockOnTargetComponent`) | Picks the target, turns the camera and the character on your own machine; tells the server the target |
+| How close players and enemies get | **Spacing** component on every character (`UZCharacterSpacingComponent`) | An invisible, wider capsule only the other side bumps into; plain collision, so every machine agrees |
 | A weapon in the hands | **Weapon actor** (`AZWeapon`) | Spawned by the server when a weapon item is equipped, attached to the hand on every machine; the server keeps its ammo |
 | A crafting station | **Station actor** (`AZCraftingStation`, BP_Workbench) | Placed in a level; recipes that need it only work nearby (the server checks the distance) |
 | Enemies' health and attacks | **The enemy itself** (`AZAICharacter`) | Enemies have no PlayerState, so their ability system is on the character |
@@ -222,7 +223,7 @@ The **Server** window is the host. The **Client** window is the second player.
 | `ZHurt 50` | Takes 50 health (`ZHurt 0` shows your health) |
 | `ZSpawnDummy 120` | A zombie without AI in front of you, to practice melee on (`ZSpawnDummy 120 all`: one in front of every player) |
 | `ZStagger` | Staggers you (`ZStagger players`, `ZStagger enemies`) |
-| `ZCombat` | Your combat state: attack, input buffer, busy or staggered, open windows, lock-on, poise and stamina |
+| `ZCombat` | Your combat state: attack, input buffer, busy or staggered, open windows, lock-on, how far the nearest enemy stands, poise and stamina |
 | `ZLockOn` | Locks on to the enemy nearest the middle of the screen, or lets go (like the lock-on key) |
 | `ZTurn -20` | Turns your camera 20° to the left, like the mouse (to test switching and letting go) |
 | `ZSpawnDummyAt 220 -55` | A dummy 2.2 m away, 55° to the left (`all` at the end: for every player) |

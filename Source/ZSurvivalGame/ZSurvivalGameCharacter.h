@@ -22,6 +22,7 @@ class UAbilitySystemComponent;
 class UZGameplayAbility;
 class UAnimMontage;
 class UZCharacterMovementComponent;
+class UZCharacterSpacingComponent;
 class UZCombatComponent;
 class UZEquipmentComponent;
 class UZHitFlashComponent;
@@ -93,6 +94,10 @@ class AZSurvivalGameCharacter : public ACharacter, public IAbilitySystemInterfac
 	/** Makes the character flash when it's hit (with its Hit Cue, on every machine) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZHitFlashComponent> HitFlashComponent;
+
+	/** Keeps enemies from standing too close (an invisible, wider capsule only enemies bump into) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZCharacterSpacingComponent> SpacingComponent;
 
 protected:
 

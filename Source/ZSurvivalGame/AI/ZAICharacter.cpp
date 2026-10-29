@@ -16,6 +16,7 @@
 #include "AbilitySystem/Abilities/ZGameplayAbility_MeleeAttack.h"
 #include "AbilitySystem/Abilities/ZGameplayAbility_Stagger.h"
 #include "Audio/ZFootstepComponent.h"
+#include "Combat/ZCharacterSpacingComponent.h"
 #include "Combat/ZHitFlashComponent.h"
 #include "Combat/ZLockOnTargetComponent.h"
 #include "Items/ZLootTable.h"
@@ -39,6 +40,9 @@ AZAICharacter::AZAICharacter()
 	LockOnTarget->SetRelativeLocation(FVector(0.f, 0.f, 40.f));
 
 	HitFlashComponent = CreateDefaultSubobject<UZHitFlashComponent>(TEXT("HitFlash"));
+
+	SpacingComponent = CreateDefaultSubobject<UZCharacterSpacingComponent>(TEXT("Spacing"));
+	SpacingComponent->SetupAttachment(GetCapsuleComponent());
 
 	// AI characters don't need as many updates as players
 	SetNetUpdateFrequency(30.f);
@@ -240,6 +244,7 @@ void AZAICharacter::PlayDeath()
 	GetCharacterMovement()->StopMovementImmediately();
 	GetCharacterMovement()->DisableMovement();
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SpacingComponent->SetSpacingEnabled(false);
 	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
 	GetMesh()->SetSimulatePhysics(true);
 

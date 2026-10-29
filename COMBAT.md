@@ -1,8 +1,8 @@
 # Combat
 
-How melee combat works (light and heavy combos, hitboxes, hit feedback, poise and staggers), the souls-like rules for when you can act (being locked into an action, and the input buffer), dodging, lock-on, and how to make melee weapons and attack animations. Guns are in ITEMS.md, sounds and effects in AUDIO.md.
+How melee combat works (light and heavy combos, hitboxes, hit feedback, spacing, poise and staggers), the souls-like rules for when you can act (being locked into an action, and the input buffer), dodging, lock-on, and how to make melee weapons and attack animations. Guns are in ITEMS.md, sounds and effects in AUDIO.md.
 
-**Last updated:** 2026-10-29 (lock-on; hit feedback: hit-stop, hit flash, camera shake)
+**Last updated:** 2026-10-29 (lock-on; hit feedback: hit-stop, hit flash, camera shake; spacing between players and enemies)
 
 ## Controls
 
@@ -63,6 +63,18 @@ Like in Dark Souls, once you start something you're locked into it.
   - Another material works too: it's laid over the whole character. Make it **Unlit** and **Translucent**; it can use the parameters `FlashAmount` (goes from 1 to 0 while it fades) and `FlashColor`.
 - **Camera shake:** your camera shakes a little when your melee hit lands (only yours, not the other players'). It's `CS_MeleeHit` (`Content/Effects`), played by the melee impact's cue notify `GCN_Weapon_MeleeImpact` (`Content/GameplayCues`). Stronger or weaker: open `CS_MeleeHit` → **Root Shake Pattern** → **Pitch** and **Yaw** → **Amplitude**.
 - **Sound and blood** where the hit lands: add them to `GCN_Weapon_MeleeImpact` (AUDIO.md → "Making a sound for an event", step 4). The enemy's own Hit Cue plays with every hit too (its grunt, blood on it).
+
+## Spacing: how close players and enemies get
+
+- **Players and enemies can't stand right against each other:** about **1.2 m** apart (from the middle of one to the middle of the other) is as close as they get. Up close, swings went past an enemy's body: the machete's first slash missed at 0.9 and 1.1 m and hits from 1.2 m.
+- **Only between players and enemies.** Players don't keep each other away (doorways in co-op), and enemies crowd together as before.
+- **How:** every character has an invisible capsule a bit wider than its own: the **Spacing** component. Only the other side bumps into it, so you walk up to an enemy and stop at the gap, and an enemy walking up to you stops there too.
+  - **Extra Radius** (45 cm): how much wider than the character's own capsule. Between a player and an enemy, the larger of their two counts.
+  - Attacks that step forward and dodges stop at the gap too.
+  - Dead bodies don't keep anyone away.
+- **To change it:** BP_ThirdPersonCharacter → **Components** → select **Spacing** → **Details → Spacing → Extra Radius**. For an enemy type: its Blueprint → **Spacing** → the same. E.g. more for a big boss, less for a small enemy that should get in your face.
+- **Seeing it:** it's hidden in the game. In a character Blueprint's viewport, select **Spacing** to see its outline. `ZCombat` writes how far away the nearest enemy stands.
+- A weapon with a long reach can need more room than 45 cm, a dagger less: try with `ZSpawnDummy 300`, walk into it, then attack.
 
 ## Poise and staggers
 
@@ -215,6 +227,7 @@ The target's own **Hit Cue** plays with every hit too. How to make the sounds an
 - **The host decides staggers.** Your machine learns about a stagger a moment after it happened.
 - **The host checks every combo:** an attack only counts if it can follow the attack before. Timing is left to your machine, which sees the windows exactly.
 - Everyone sees your attacks, dodges and staggers (the animations come from the host).
+- **Spacing** is collision like any other, so your machine and the host agree on where you stop.
 - **Lock-on runs on your own machine.** Your character faces the target through the camera direction your machine sends with every move anyway, so the host turns and moves you the same way (no rubber-banding while circling an enemy). The host and the other players are told which enemy you're locked on to (for animations later).
 
 ## Console commands
@@ -223,7 +236,7 @@ The target's own **Hit Cue** plays with every hit too. How to make the sounds an
 |---|---|
 | `ZSpawnDummy 120` | A zombie that stands still (no AI), 120 cm in front of you, to practice on; `ZSpawnDummy 120 all` puts one in front of every player (*host*) |
 | `ZStagger` | Staggers you; `ZStagger players` every player, `ZStagger enemies` every enemy (*host*) |
-| `ZCombat` | Writes your combat state to the Output Log: the attack, what waits in the buffer, busy or staggered, open windows, lock-on (target, distance, how far you face away from it), poise and stamina |
+| `ZCombat` | Writes your combat state to the Output Log: the attack, what waits in the buffer, busy or staggered, open windows, lock-on (target, distance, how far you face away from it), how far the nearest enemy stands, poise and stamina |
 | `ZWeaponStats` | The stats of the weapon in your hands (for a melee weapon: damage, poise damage, attack speed, stamina cost, reach) |
 | `ZSpawnDummyAt 220 -55` | Like `ZSpawnDummy`, but 55° to the left of straight ahead (positive: to the right), to try switching targets (*host*) |
 | `ZLockOn` | Like the lock-on key, and writes what you're locked on to |

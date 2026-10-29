@@ -563,9 +563,21 @@ void UZCheatManager::ZCombat()
 		return;
 	}
 
+	// how close the nearest living enemy stands (center to center), e.g. to check the spacing
+	float NearestEnemy = -1.f;
+	for (TActorIterator<AZAICharacter> It(GetWorld()); It; ++It)
+	{
+		if (!It->IsDead())
+		{
+			const float Distance = FVector::Dist2D(It->GetActorLocation(), Character->GetActorLocation());
+			NearestEnemy = NearestEnemy < 0.f ? Distance : FMath::Min(NearestEnemy, Distance);
+		}
+	}
+
 	// poise and stamina only reach their owner (and the host has everyone's)
-	UE_LOG(LogZSurvivalGame, Log, TEXT("ZCombat: %s; %s; poise %.0f/%.0f, stamina %.0f/%.0f, weapon %s"),
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZCombat: %s; %s; nearest enemy %s; poise %.0f/%.0f, stamina %.0f/%.0f, weapon %s"),
 		*Character->GetCombatComponent()->GetDebugString(), *Character->GetLockOnComponent()->GetDebugString(),
+		NearestEnemy < 0.f ? TEXT("none") : *FString::Printf(TEXT("%.0f cm away"), NearestEnemy),
 		ASC->GetNumericAttribute(UZAttributeSet::GetPoiseAttribute()), ASC->GetNumericAttribute(UZAttributeSet::GetMaxPoiseAttribute()),
 		ASC->GetNumericAttribute(UZAttributeSet::GetStaminaAttribute()), ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute()),
 		*UEnum::GetDisplayValueAsText(Character->GetWeaponType()).ToString());

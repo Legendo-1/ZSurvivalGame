@@ -17,6 +17,7 @@ class UAbilitySystemComponent;
 class UAnimMontage;
 class UGameplayAbility;
 class UZAttributeSet;
+class UZCharacterSpacingComponent;
 class UZFootstepComponent;
 class UZHitFlashComponent;
 class UZLockOnTargetComponent;
@@ -51,6 +52,10 @@ class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public 
 	/** Makes it flash when it's hit (with its Hit Cue, on every machine) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UZHitFlashComponent> HitFlashComponent;
+
+	/** Keeps players from standing too close (an invisible, wider capsule only players bump into); its Extra Radius is set per enemy type */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UZCharacterSpacingComponent> SpacingComponent;
 
 public:
 
