@@ -69,7 +69,9 @@ Built around a modular C++ system rather than separate class files per gun:
 * \[x\] Sound and effect events (GameplayCues) for shots, impacts, reloads, taking out a weapon, hits, deaths, level-ups, pickups, used items and crafting, set per weapon, character, item and recipe; UI sounds; a take-out animation per weapon (see AUDIO.md).  
 * \[x\] Footsteps that match the surface (10 surfaces from Physical Materials) and the gait (walk, jog, sprint), with start, stop, jump and landing sounds, for players and enemies (see AUDIO.md).  
 * \[x\] Fire, reload and take-out animations on the upper body (the legs keep walking), and sounds for the shots (the pistol has its own), taking out the weapons and reloading (see ANIMATION.md and AUDIO.md).
-* \[x\] Souls-like melee combat: melee weapons (a machete for now) with light and heavy combos from a shared moveset, hitboxes that follow the blade during the swing, poise and staggers for players and enemies, invulnerable dodge frames, and locked-in actions with an input buffer for attacks, dodges, shots, reloads and weapon switches (see COMBAT.md).  
+* \[x\] Souls-like melee combat: melee weapons (a machete for now) with light and heavy combos from a shared moveset, hitboxes that follow the blade during the swing, poise and staggers for players and enemies, invulnerable dodge frames, and locked-in actions with an input buffer for attacks, dodges, shots, reloads and weapon switches (see COMBAT.md).
+* \[x\] Lock-on with target switching, hit feedback (hit-stop, hit flash, camera shake) and spacing between players and enemies (see COMBAT.md).
+* \[x\] Enemy AI foundation: senses (sight, up close, being hit), co-op targeting by distance and threat, and combat states (Idle, Approaching, Strafing, Attacking, DodgeRecovering, Staggered) that everyone sees for animations (see AI.md).  
 * \[ \] **Open Phase 1 Items:**  
   * Pistol aim strafe animations and aim offset.  
   * Weapon meshes, and the remaining sounds and effects (impacts, melee hits, staggers, deaths, pickups, crafting).

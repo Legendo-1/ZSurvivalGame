@@ -4,7 +4,7 @@
 #include "AbilitySystemComponent.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "Engine/World.h"
-#include "AI/ZAICharacter.h"
+#include "AI/ZAIBaseCharacter.h"
 #include "AbilitySystem/ZCombatLibrary.h"
 #include "AbilitySystem/ZGameplayTags.h"
 
@@ -22,7 +22,7 @@ UZGameplayAbility_MeleeAttack::UZGameplayAbility_MeleeAttack()
 
 void UZGameplayAbility_MeleeAttack::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
-	const AZAICharacter* Attacker = Cast<AZAICharacter>(ActorInfo->AvatarActor.Get());
+	const AZAIBaseCharacter* Attacker = Cast<AZAIBaseCharacter>(ActorInfo->AvatarActor.Get());
 	if (!Attacker || !CommitAbility(Handle, ActorInfo, ActivationInfo))
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
@@ -42,7 +42,7 @@ void UZGameplayAbility_MeleeAttack::ActivateAbility(const FGameplayAbilitySpecHa
 
 void UZGameplayAbility_MeleeAttack::OnHitTime()
 {
-	AZAICharacter* Attacker = Cast<AZAICharacter>(GetAvatarActorFromActorInfo());
+	AZAIBaseCharacter* Attacker = Cast<AZAIBaseCharacter>(GetAvatarActorFromActorInfo());
 	if (Attacker && !Attacker->IsDead())
 	{
 		// a sphere swept forward from the attacker hits the characters in front of it

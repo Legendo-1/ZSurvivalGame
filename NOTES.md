@@ -45,6 +45,13 @@ Things learned the hard way, and known issues. Remove a known issue once it's fi
 
 - **PlayerSpacing and EnemySpacing** (Project Settings → Collision → Object Channels) belong to the spacing capsules around characters (COMBAT.md → Spacing). Leave them on **Ignore** for everything else: a wall or a pickup that blocks them would push characters around.
 
+### AI
+
+- **`Lvl_ThirdPerson` has no navmesh.** Enemies then walk straight at their target and get stuck behind walls (and behind other players), and at the foot of a ledge you jumped onto, even with a ramp next to it. AI.md → "Moving around" has the steps to add one.
+- **`Z.AI.Debug` needs the 1:** `Z.AI.Debug 1`. Typed alone it only writes `Z.AI.Debug = "false"`.
+- **Shots go through parts of a new enemy:** hits only count on the body shapes of the mesh's Physics Asset, not on the mesh you see. A bulky mesh (a golem's head, armor) sticks out past them. AI.md → "A new kind of enemy" step 5.
+- **Enemies only fight what they sense:** they no longer find every player within a radius through walls. A zombie behind you that looks away stays Idle until you get close, hit it, or it turns and sees you.
+
 ### Assets named only in settings
 
 - **They aren't packed into a packaged game by themselves.** `M_HitFlash` (Project Settings → Game → Combat → **Hit Flash Material**) and `DA_Footsteps` (Footsteps → **Default Footstep Data**) are only named in settings. Before making a packaged build: Project Settings → **Packaging** → **Additional Asset Directories to Cook** → add `Content/Effects` and `Content/Audio/Footsteps`. Playing in the editor doesn't need it.
@@ -55,10 +62,14 @@ Things learned the hard way, and known issues. Remove a known issue once it's fi
 
 ## Known issues
 
-- **C++ builds fail since the Fab plugin update of 2026-10-29:** "Expecting to find a type to be declared in a module rules named 'FabToolset'". The Epic Games Launcher updated the engine's Fab plugin with a new part (FabToolset) that the installed engine's build rules don't know about. Every editor build stops with this error (Visual Studio's Development Editor, Live Coding, and the "rebuild modules?" prompt when opening the project), in any project. Building the game itself still works. Ways around it:
-  1. **Epic Games Launcher → Unreal Engine → Library → the ▾ under 5.8 → Verify.** This may put the engine's own Fab plugin back. If the launcher updates it again, use 2.
-  2. **Build without Fab:** in Visual Studio, right-click **ZSurvivalGame** in the Solution Explorer → **Properties** → **NMake** → with **Configuration: Development Editor** selected at the top, add ` -DisablePlugin=Fab` at the end of **Build Command Line** and **Rebuild All Command Line** → **OK**. The editor still loads Fab (it's already built); only the build skips it.
-  3. Wait for Epic to fix it, then remove the workaround.
+- **C++ builds failed after the Fab plugin update of 2026-10-29:** "Expecting to find a type to be declared in a module rules named 'FabToolset'". The Epic Games Launcher updated the engine's Fab plugin with a new part, FabToolset, that the engine's own build rules don't know about. Every editor build stopped with this error (Visual Studio, the editor's compile button, the "rebuild modules?" prompt when opening the project), in any project.
+  - **Fixed on this PC** by taking FabToolset out of the engine's Fab plugin file, `C:\Program Files\Epic Games\UE_5.8\Engine\Plugins\Fab\Fab.uplugin`. The original is next to it as `Fab.uplugin.backup-2026-10-29`. FabToolset never loads by itself (it's an add-on for an experimental engine feature); the Fab window works as before.
+  - **If the error comes back** (after the launcher's **Verify**, or the next Fab update), or on another PC: close the editor, open that file in Notepad (as administrator if it won't save), and delete these lines in **"Modules"**: the `},` and `{` right before `"Name": "FabToolset"`, and everything from there down to the `]` and `}` that close its **"TargetAllowList"**. What's left in "Modules" is only the block for `"Name": "Fab"`. Save.
+  - **Don't build with `-DisablePlugin=Fab`** to get around it: the build then also switches Fab off in the editor.
+  - Remove this note once a Fab update builds without the fix.
+  - **A harmless error in the Output Log since that update:** "LogPython: Error: ... ToolsetRegistry ... init_unreal.py ... has no attribute 'PythonTestRunner'". It comes from an experimental engine plugin the Fab update switched on, and changes nothing in the game.
+
+- **"Blueprint failed to compile: CR_Mannequin_Body" when pressing Play** (since the Stone Golem is used): the error is in the Stone Golem pack's own copy, `StoneGolem/Demo/Characters/Mannequins/Rigs/CR_Mannequin_Body`. It points to rig functions from its maker's computer that didn't come with the pack. The golem's animation Blueprint uses the pack's foot IK rig, whose preview mesh is the pack's mannequin, which loads that broken rig; so it loads with the golem, although nothing in the game runs it. Pressing Play anyway is fine. To get rid of the message: right-click that `CR_Mannequin_Body` → **Delete** → in the window that opens, pick `CR_Mannequin_Body` from `Characters/Mannequins/Rigs` (the project's own, which works) under **Replace References** → **Replace References** → **Save All**.
 
 - **Pistol run, right knee on slopes:** the right knee bends outward when the right foot lands on a slope while running with the pistol. Something in the pistol animation causes it, not the IK settings.
 - **Small corrections at the start of a melee attack:** a client's position can be put back by 2 or 3 cm when an attack starts right after a combo step or a stagger. Normal for attacks that move the character with their animation, and hard to see.

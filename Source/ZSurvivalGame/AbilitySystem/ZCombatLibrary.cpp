@@ -9,6 +9,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Kismet/GameplayStatics.h"
+#include "Perception/AISense_Damage.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayCueLibrary.h"
 #include "AbilitySystem/ZGameplayEffect_Damage.h"
@@ -106,6 +107,9 @@ bool UZCombatLibrary::ApplyDamage(AActor* Source, AActor* Target, float Damage, 
 	CueParams.EffectCauser = Source;
 	CueParams.PhysicalMaterial = Hit.PhysMaterial.Get();
 	UZGameplayCueLibrary::ExecuteCue(Target, UZGameplayCueLibrary::GetCharacterCues(Target).HitCue, CueParams);
+
+	// an AI that is hit knows who did it and from where, even if it didn't see them (its damage sense; nothing happens for players)
+	UAISense_Damage::ReportDamageEvent(Target, Target, Source, CueParams.RawMagnitude, Source->GetActorLocation(), CueParams.Location);
 
 	return true;
 }

@@ -10,7 +10,8 @@
 #include "ZSurvivalGameTypes.h"
 #include "AbilitySystem/ZCombatLibrary.h"
 #include "AbilitySystem/ZGameplayCueLibrary.h"
-#include "ZAICharacter.generated.h"
+#include "AI/ZAITypes.h"
+#include "ZAIBaseCharacter.generated.h"
 
 class AZPickup;
 class UAbilitySystemComponent;
@@ -23,13 +24,16 @@ class UZHitFlashComponent;
 class UZLockOnTargetComponent;
 class UZLootTable;
 
+DECLARE_MULTICAST_DELEGATE_TwoParams(FZOnAICombatStateChanged, EZAICombatState /*NewState*/, EZAICombatState /*OldState*/);
+
 /**
- *  Base class for every AI character: zombies, other monsters and human NPCs
- *  Has its own ability system and attributes (health); its AI (AZAIController) only runs on the server
- *  Each enemy type is a child class or Blueprint that sets its looks and numbers (see AZZombieCharacter)
+ *  Base class for every AI character: zombies, other monsters and human NPCs (see AI.md)
+ *  Has its own ability system and attributes (health); its AI (AZAIBaseController, with the combat brain) only runs on the server
+ *  The AI's combat state and target are replicated here, so animations and effects on every machine can use them
+ *  Each enemy type is a child class or Blueprint that sets its looks, numbers and Combat Settings (see AZZombieCharacter)
  */
 UCLASS(Abstract)
-class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IGameplayCueInterface, public IZCharacterCuesInterface, public IZCombatantInterface
+class AZAIBaseCharacter : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface, public IGameplayCueInterface, public IZCharacterCuesInterface, public IZCombatantInterface
 {
 	GENERATED_BODY()
 
@@ -59,7 +63,7 @@ class AZAICharacter : public ACharacter, public IAbilitySystemInterface, public 
 
 public:
 
-	AZAICharacter();
+	AZAIBaseCharacter();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -81,11 +85,45 @@ public:
 	/** Server: starts the attack ability if the attack cooldown allows it; returns true if it started */
 	bool TryAttack();
 
+	/** True if its attack cooldown is over (and it's alive) */
+	bool IsAttackReady() const;
+
+	/** True while its Attack Montage plays (the swing can go on after the attack ability ended at its hit) */
+	bool IsPlayingAttackAnimation() const;
+
+	/** --- COMBAT STATE (set by the AI on the server, replicated to everyone) --- */
+
+	/** What it's doing in the fight: Idle, Approaching, Strafing, Attacking, DodgeRecovering or Staggered (e.g. for its animations) */
+	UFUNCTION(BlueprintPure, Category = "AI|Combat")
+	EZAICombatState GetCombatState() const { return CombatState; }
+
+	/** Whom it fights, or null (e.g. for its head to follow the target) */
+	UFUNCTION(BlueprintPure, Category = "AI|Combat")
+	AActor* GetCombatTarget() const { return CombatTarget; }
+
+	/** Server (the AI brain): its new combat state, for everyone */
+	void SetCombatState(EZAICombatState NewState);
+
+	/** Server (the AI brain): its new target, for everyone */
+	void SetCombatTarget(AActor* NewTarget);
+
+	/** Every machine: the combat state changed */
+	FZOnAICombatStateChanged OnCombatStateChanged;
+
+	/** How it senses and fights (its AI reads them) */
+	const FZAICombatSettings& GetCombatSettings() const { return CombatSettings; }
+
+	/** Server: changes how it senses and fights during play, e.g. a boss that starts circling in its second phase (its AI picks them up right away) */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "AI|Combat")
+	void SetCombatSettings(const FZAICombatSettings& NewSettings);
+
+	/** Its movement component's Max Walk Speed as set up (the AI chases at it; strafing slows it down) */
+	float GetDefaultWalkSpeed() const { return DefaultWalkSpeed; }
+
 	/** True after health reached 0 */
 	UFUNCTION(BlueprintPure, Category = "AI")
 	bool IsDead() const { return bIsDead; }
 
-	float GetAggroRange() const { return AggroRange; }
 	float GetAttackRange() const { return AttackRange; }
 	float GetMeleeDamage() const { return MeleeDamage; }
 	float GetMeleePoiseDamage() const { return MeleePoiseDamage; }
@@ -120,6 +158,16 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "AI", meta = (DisplayName = "On Died"))
 	void BP_OnDied(AActor* Killer);
 
+	/** Every machine: its combat state changed, e.g. to play a roar when it starts approaching */
+	UFUNCTION(BlueprintImplementableEvent, Category = "AI|Combat", meta = (DisplayName = "On Combat State Changed"))
+	void BP_OnCombatStateChanged(EZAICombatState NewState, EZAICombatState OldState);
+
+	UFUNCTION()
+	void OnRep_CombatState(EZAICombatState OldState);
+
+	/** The same on every machine when the combat state changed (the server calls it itself) */
+	void HandleCombatStateChanged(EZAICombatState OldState);
+
 	/** --- STATS --- */
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Survival|Stats", meta = (ClampMin = "1"))
@@ -135,9 +183,9 @@ protected:
 
 	/** --- AI --- */
 
-	/** Notices players this close, in cm */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI", meta = (ClampMin = "0"))
-	float AggroRange = 2500.f;
+	/** How it senses enemies (sight, proximity, memory) and fights them (strafing, recovery); its AI reads these */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Combat")
+	FZAICombatSettings CombatSettings;
 
 	/** Attacks when the target is this close (center to center, in cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI", meta = (ClampMin = "0"))
@@ -228,4 +276,15 @@ protected:
 
 	/** When the last attack started (server) */
 	double LastAttackTime = -1000.0;
+
+	/** Its combat state, set by its AI on the server */
+	UPROPERTY(ReplicatedUsing = OnRep_CombatState)
+	EZAICombatState CombatState = EZAICombatState::Idle;
+
+	/** Whom it fights, set by its AI on the server */
+	UPROPERTY(Replicated)
+	TObjectPtr<AActor> CombatTarget;
+
+	/** The movement component's Max Walk Speed at BeginPlay */
+	float DefaultWalkSpeed = 0.f;
 };

@@ -47,7 +47,11 @@ AZZombieCharacter::AZZombieCharacter()
 	GetMesh()->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -96.f), FRotator(0.f, -90.f, 0.f));
 
 	MaxHealth = 60.f;
-	AggroRange = 3000.f;
+	// zombies see far, smell the living close by, and never circle: they walk straight in
+	CombatSettings.SightRadius = 3000.f;
+	CombatSettings.LoseSightRadius = 3500.f;
+	CombatSettings.ProximityRadius = 500.f;
+	CombatSettings.bCanStrafe = false;
 	AttackCooldown = 1.6f;
 	MeleeDamage = 15.f;
 	MeleePoiseDamage = 15.f;

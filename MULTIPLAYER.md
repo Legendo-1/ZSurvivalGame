@@ -1,8 +1,8 @@
 # Multiplayer & abilities
 
-How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Melee combat, poise and staggers: COMBAT.md. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
+How the player's actions, weapons, enemies, health and death work in multiplayer, and the plan for what isn't built yet. Melee combat, poise and staggers: COMBAT.md. How enemies notice you, pick a target and fight: AI.md. Items, the inventory, pickups and the interact key have their own guide: ITEMS.md. Crafting and tradeskills: CRAFTING.md. Levels, trait points and traits: PROGRESSION.md. The HUD and the inventory screen: UI.md. Sounds, effects and animations: AUDIO.md. Saving: SAVING.md.
 
-**Last updated:** 2026-10-29 (lock-on; hit-stop and the hit flash; spacing between players and enemies)
+**Last updated:** 2026-10-29 (lock-on; hit-stop and the hit flash; spacing; the enemies' new AI)
 
 ## The basic idea
 
@@ -24,8 +24,8 @@ How the player's actions, weapons, enemies, health and death work in multiplayer
 | How close players and enemies get | **Spacing** component on every character (`UZCharacterSpacingComponent`) | An invisible, wider capsule only the other side bumps into; plain collision, so every machine agrees |
 | A weapon in the hands | **Weapon actor** (`AZWeapon`) | Spawned by the server when a weapon item is equipped, attached to the hand on every machine; the server keeps its ammo |
 | A crafting station | **Station actor** (`AZCraftingStation`, BP_Workbench) | Placed in a level; recipes that need it only work nearby (the server checks the distance) |
-| Enemies' health and attacks | **The enemy itself** (`AZAICharacter`) | Enemies have no PlayerState, so their ability system is on the character |
-| Enemy decisions | **AI controller** (`AZAIController`) | Only exists on the server |
+| Enemies' health and attacks | **The enemy itself** (`AZAIBaseCharacter`) | Enemies have no PlayerState, so their ability system is on the character. It also sends everyone its combat state and target |
+| Enemy decisions | **AI controller** (`AZAIBaseController`) with its senses, targeting and combat brain | Only exists on the server (AI.md) |
 | What's been done in the world (bosses, shortcuts) | **GameState** (`AZSurvivalGameState`) | Everyone sees it; it's saved with the host's game |
 | Bringing your character in and saving it | **Player Save** component on the PlayerController (`UZPlayerSaveComponent`), and `UZSaveSubsystem` for the files on your PC | The PlayerController only exists on the server and your own machine, the two that need it |
 
@@ -122,13 +122,13 @@ Every ability is blocked while dead or staggered.
 
 ## Enemies
 
-- **`AZAICharacter`** is the base class for every AI character (zombies, other monsters, human NPCs). Each one has its own health, team, AI ranges and melee numbers (Class Defaults: **Survival|Stats**, **AI**, **AI|Melee**).
+- **`AZAIBaseCharacter`** is the base class for every AI character (zombies, other monsters, human NPCs). Each one has its own health, team, combat settings and melee numbers (Class Defaults: **Survival|Stats**, **AI**, **AI|Combat**, **AI|Melee**).
 - **`AZZombieCharacter`** is the first enemy type: the Quinn mannequin with the combat template's animations and punch, until zombie models exist. 60 health, slower than a jogging player, 15 damage and 15 poise damage per hit, 30 poise (two machete hits stagger it).
 - **Enemies stagger** when their poise breaks: their attack is cut short and the AI waits it out. **Max Poise** is under **Survival|Stats**, the **Stagger Montage** under **AI|Stagger**, the poise damage of its hits under **AI|Melee**.
-- **The AI** (`AZAIController`, server only) goes for the closest living player within its aggro range, walks there and attacks when close. With a **Nav Mesh** in the level it walks around obstacles; without one it walks straight at you. It moves by accelerating, like a player's input (**Use Acceleration For Paths**, set in `AZAICharacter`), so the animation Blueprint plays its walk instead of sliding it along in the standing pose.
+- **The AI** (`AZAIBaseController`, server only) notices players by sight, up close and when they hit it, picks whom to fight by distance and threat, and runs the combat states (Idle, Approaching, Strafing, Attacking, DodgeRecovering, Staggered): AI.md explains it all. With a **Nav Mesh** in the level it walks around obstacles; without one it walks straight at you. It moves by accelerating, like a player's input (**Use Acceleration For Paths**, set in `AZAIBaseCharacter`), so the animation Blueprint plays its walk instead of sliding it along in the standing pose.
 - **`AZEnemySpawner`**: place it in a level to keep spawning enemies around it (Max Alive, Spawn Interval, Spawn Radius, Total To Spawn, Enemy Class).
 
-**A new enemy type:** right-click in the Content Browser → **Blueprint Class** → search **ZZombieCharacter** (or **ZAICharacter** for something completely different) → change its mesh, animation Blueprint, attack montage and numbers. A special attack (e.g. a spitter's acid) is a new ability added to **Default Abilities**.
+**A new enemy type:** right-click in the Content Browser → **Blueprint Class** → search **ZZombieCharacter** (or **ZAIBaseCharacter** for something completely different) → change its mesh, animation Blueprint, attack montage, numbers and **Combat Settings** (AI.md). A special attack (e.g. a spitter's acid) is a new ability added to **Default Abilities**.
 
 **Teams** (`EZTeam`): Players, Monsters, Humans. Characters on the same team can't damage each other (no friendly fire). Friendly human NPCs use the Players team.
 
@@ -174,6 +174,7 @@ The HUD (`WBP_HUD`, the widget names it needs) and the inventory screen are expl
 | Shots, impacts, hits, deaths, reloads, taking out weapons, crafting, ... | GameplayCues, sent by the server (AUDIO.md) |
 | Attack, fire, reload, dodge and stagger animations | The ability system plays them for everyone |
 | Who you're locked on to | The lock-on component's target, sent by the server (your character's facing already shows it) |
+| What an enemy is doing and whom it fights | Its combat state and target, sent by the server (for its animations) |
 | A character flashing when hit | It comes with the Hit Cue (sent by the server) |
 | The animation for taking out a weapon | It comes with the equip GameplayCue |
 | Footsteps | Nothing is sent: every machine plays them from the animations and movement it already has (AUDIO.md → Footsteps) |
@@ -227,6 +228,7 @@ The **Server** window is the host. The **Client** window is the second player.
 | `ZLockOn` | Locks on to the enemy nearest the middle of the screen, or lets go (like the lock-on key) |
 | `ZTurn -20` | Turns your camera 20° to the left, like the mouse (to test switching and letting go) |
 | `ZSpawnDummyAt 220 -55` | A dummy 2.2 m away, 55° to the left (`all` at the end: for every player) |
+| `ZAIStates` | Every enemy's AI: its combat state, target and whether it sees it (more AI commands: AI.md) |
 | `Z.Melee.DrawDebug 1` | Draws melee hitboxes and hits |
 | `ZFloorSurface Metal` | The floor under you sounds like metal until Play stops; `ZFloorSurface` says what it is |
 | `Z.Footsteps.Debug 1` / `0` | Shows / hides every footstep (Output Log and in the world) |

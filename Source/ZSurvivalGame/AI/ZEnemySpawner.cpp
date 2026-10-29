@@ -5,7 +5,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
-#include "AI/ZAICharacter.h"
+#include "AI/ZAIBaseCharacter.h"
 #include "AI/ZZombieCharacter.h"
 
 AZEnemySpawner::AZEnemySpawner()
@@ -57,7 +57,7 @@ void AZEnemySpawner::StopSpawning()
 
 void AZEnemySpawner::SpawnTick()
 {
-	AliveEnemies.RemoveAll([](const TWeakObjectPtr<AZAICharacter>& Enemy) { return !Enemy.IsValid() || Enemy->IsDead(); });
+	AliveEnemies.RemoveAll([](const TWeakObjectPtr<AZAIBaseCharacter>& Enemy) { return !Enemy.IsValid() || Enemy->IsDead(); });
 
 	if (TotalToSpawn > 0 && SpawnedCount >= TotalToSpawn)
 	{
@@ -75,7 +75,7 @@ void AZEnemySpawner::SpawnTick()
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
 
 	const FRotator SpawnRotation(0.f, FMath::FRandRange(0.f, 360.f), 0.f);
-	if (AZAICharacter* Enemy = GetWorld()->SpawnActor<AZAICharacter>(EnemyClass, SpawnLocation, SpawnRotation, SpawnParams))
+	if (AZAIBaseCharacter* Enemy = GetWorld()->SpawnActor<AZAIBaseCharacter>(EnemyClass, SpawnLocation, SpawnRotation, SpawnParams))
 	{
 		AliveEnemies.Add(Enemy);
 		++SpawnedCount;
@@ -98,7 +98,7 @@ bool AZEnemySpawner::FindSpawnLocation(FVector& OutLocation) const
 	}
 
 	// stand on the ground: capsule half height above it
-	const float HalfHeight = EnemyClass->GetDefaultObject<AZAICharacter>()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	const float HalfHeight = EnemyClass->GetDefaultObject<AZAIBaseCharacter>()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	OutLocation = Ground.ImpactPoint + FVector(0.f, 0.f, HalfHeight + 2.f);
 	return true;
 }

@@ -7,6 +7,7 @@
 #include "Engine/AssetManager.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "TimerManager.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
@@ -14,7 +15,9 @@
 #include "ZSurvivalGameCharacter.h"
 #include "ZSurvivalGamePlayerController.h"
 #include "ZSurvivalGameState.h"
-#include "AI/ZAICharacter.h"
+#include "AI/ZAIBaseCharacter.h"
+#include "AI/ZAIBaseController.h"
+#include "AI/ZAICombatBrainComponent.h"
 #include "AI/ZZombieCharacter.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZCombatLibrary.h"
@@ -141,7 +144,7 @@ void UZCheatManager::ZKillEnemies()
 	}
 
 	int32 NumKilled = 0;
-	for (TActorIterator<AZAICharacter> It(GetWorld()); It; ++It)
+	for (TActorIterator<AZAIBaseCharacter> It(GetWorld()); It; ++It)
 	{
 		UAbilitySystemComponent* ASC = It->GetAbilitySystemComponent();
 		if (ASC && !It->IsDead())
@@ -526,7 +529,7 @@ void UZCheatManager::ZStagger(const FString& Who)
 	if (Who.Equals(TEXT("enemies"), ESearchCase::IgnoreCase))
 	{
 		int32 NumStaggered = 0;
-		for (TActorIterator<AZAICharacter> It(GetWorld()); It; ++It)
+		for (TActorIterator<AZAIBaseCharacter> It(GetWorld()); It; ++It)
 		{
 			NumStaggered += UZCombatLibrary::Stagger(*It, nullptr) ? 1 : 0;
 		}
@@ -565,7 +568,7 @@ void UZCheatManager::ZCombat()
 
 	// how close the nearest living enemy stands (center to center), e.g. to check the spacing
 	float NearestEnemy = -1.f;
-	for (TActorIterator<AZAICharacter> It(GetWorld()); It; ++It)
+	for (TActorIterator<AZAIBaseCharacter> It(GetWorld()); It; ++It)
 	{
 		if (!It->IsDead())
 		{
@@ -581,6 +584,122 @@ void UZCheatManager::ZCombat()
 		ASC->GetNumericAttribute(UZAttributeSet::GetPoiseAttribute()), ASC->GetNumericAttribute(UZAttributeSet::GetMaxPoiseAttribute()),
 		ASC->GetNumericAttribute(UZAttributeSet::GetStaminaAttribute()), ASC->GetNumericAttribute(UZAttributeSet::GetMaxStaminaAttribute()),
 		*UEnum::GetDisplayValueAsText(Character->GetWeaponType()).ToString());
+}
+
+void UZCheatManager::ZAIStates()
+{
+	if (!CheckIsHost(TEXT("ZAIStates")))
+	{
+		return;
+	}
+
+	int32 Count = 0;
+	for (TActorIterator<AZAIBaseCharacter> It(GetWorld()); It; ++It)
+	{
+		const AZAIBaseController* AIController = Cast<AZAIBaseController>(It->GetController());
+		const UZAICombatBrainComponent* Brain = AIController ? AIController->GetCombatBrain() : nullptr;
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZAIStates: '%s' %s"), *GetNameSafe(*It),
+			It->IsDead() ? TEXT("dead") : Brain ? *Brain->GetDebugInfoString() : TEXT("has no AI (e.g. a dummy)"));
+		++Count;
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZAIStates: %d AI character(s)"), Count);
+}
+
+void UZCheatManager::ZAIStrafe(bool bStrafe)
+{
+	if (!CheckIsHost(TEXT("ZAIStrafe")))
+	{
+		return;
+	}
+
+	int32 Count = 0;
+	for (TActorIterator<AZAIBaseCharacter> It(GetWorld()); It; ++It)
+	{
+		if (!It->IsDead())
+		{
+			FZAICombatSettings Settings = It->GetCombatSettings();
+			Settings.bCanStrafe = bStrafe;
+			It->SetCombatSettings(Settings);
+			++Count;
+		}
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZAIStrafe: %d enemies %s"), Count, bStrafe ? TEXT("circle their target between attacks") : TEXT("walk straight in"));
+}
+
+void UZCheatManager::ZSpawnEnemyAt(float Distance, float Angle, bool bFacingAway)
+{
+	const APlayerController* PlayerController = GetOuterAPlayerController();
+	const APawn* Pawn = PlayerController ? PlayerController->GetPawn() : nullptr;
+	if (!Pawn || !CheckIsHost(TEXT("ZSpawnEnemyAt")))
+	{
+		return;
+	}
+
+	const FVector Direction = FRotator(0.f, Pawn->GetActorRotation().Yaw + Angle, 0.f).Vector();
+	const FVector SpawnLocation = Pawn->GetActorLocation() + Direction * FMath::Max(Distance, 100.f) + FVector(0.f, 0.f, 2.f);
+	const FRotator SpawnRotation = (bFacingAway ? Direction : -Direction).Rotation();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	if (const AZZombieCharacter* Zombie = GetWorld()->SpawnActor<AZZombieCharacter>(AZZombieCharacter::StaticClass(), SpawnLocation, SpawnRotation, SpawnParams))
+	{
+		UE_LOG(LogZSurvivalGame, Log, TEXT("ZSpawnEnemyAt: '%s' %.0f cm away, %.0f deg to the right, looking %s you"), *GetNameSafe(Zombie),
+			FVector::Dist2D(Zombie->GetActorLocation(), Pawn->GetActorLocation()), Angle, bFacingAway ? TEXT("away from") : TEXT("at"));
+	}
+}
+
+void UZCheatManager::ZAIDodge()
+{
+	if (!CheckIsHost(TEXT("ZAIDodge")))
+	{
+		return;
+	}
+
+	int32 Count = 0;
+	for (TActorIterator<AZAIBaseCharacter> It(GetWorld()); It; ++It)
+	{
+		UAbilitySystemComponent* ASC = It->GetAbilitySystemComponent();
+		if (ASC && !It->IsDead())
+		{
+			ASC->AddLooseGameplayTag(ZGameplayTags::State_Dodging);
+			TWeakObjectPtr<UAbilitySystemComponent> WeakASC = ASC;
+			FTimerHandle Timer;
+			GetWorld()->GetTimerManager().SetTimer(Timer, FTimerDelegate::CreateLambda([WeakASC]()
+			{
+				if (UAbilitySystemComponent* DodgingASC = WeakASC.Get())
+				{
+					DodgingASC->RemoveLooseGameplayTag(ZGameplayTags::State_Dodging);
+				}
+			}), 0.3f, false);
+			++Count;
+		}
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZAIDodge: %d enemies 'dodged'"), Count);
+}
+
+void UZCheatManager::ZHitEnemies(float Damage, int32 PlayerIndex)
+{
+	const AGameStateBase* GameState = GetWorld()->GetGameState();
+	const APlayerState* Player = GameState && GameState->PlayerArray.IsValidIndex(PlayerIndex) ? GameState->PlayerArray[PlayerIndex].Get() : nullptr;
+	APawn* Attacker = Player ? Player->GetPawn() : nullptr;
+	if (!Attacker || !CheckIsHost(TEXT("ZHitEnemies")))
+	{
+		UE_LOG(LogZSurvivalGame, Warning, TEXT("ZHitEnemies: there's no player %d with a character"), PlayerIndex);
+		return;
+	}
+
+	int32 Count = 0;
+	for (TActorIterator<AZAIBaseCharacter> It(GetWorld()); It; ++It)
+	{
+		FHitResult Hit;
+		Hit.ImpactPoint = It->GetActorLocation();
+		Count += UZCombatLibrary::ApplyDamage(Attacker, *It, Damage, Hit) ? 1 : 0;
+	}
+
+	UE_LOG(LogZSurvivalGame, Log, TEXT("ZHitEnemies: '%s' hurt %d enemies for %.0f"), *GetNameSafe(Attacker), Count, Damage);
 }
 
 void UZCheatManager::ZLockOn()

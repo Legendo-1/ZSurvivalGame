@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "AI/ZAICharacter.h"
+#include "AI/ZAIBaseCharacter.h"
+#include "Animation/AnimInstance.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
@@ -9,7 +10,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "ZSurvivalGame.h"
-#include "AI/ZAIController.h"
+#include "AI/ZAIBaseController.h"
 #include "AbilitySystem/ZAbilitySystemComponent.h"
 #include "AbilitySystem/ZAttributeSet.h"
 #include "AbilitySystem/ZGameplayTags.h"
@@ -23,7 +24,7 @@
 #include "Items/ZPickup.h"
 #include "Progression/ZProgressionComponent.h"
 
-AZAICharacter::AZAICharacter()
+AZAIBaseCharacter::AZAIBaseCharacter()
 {
 	// the ability system lives on the character itself (AI has no PlayerState); Minimal: only tags and cues replicate
 	AbilitySystemComponent = CreateDefaultSubobject<UZAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
@@ -47,7 +48,7 @@ AZAICharacter::AZAICharacter()
 	// AI characters don't need as many updates as players
 	SetNetUpdateFrequency(30.f);
 
-	AIControllerClass = AZAIController::StaticClass();
+	AIControllerClass = AZAIBaseController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.f);
@@ -71,24 +72,28 @@ AZAICharacter::AZAICharacter()
 	StaggerAbility = UZGameplayAbility_Stagger::StaticClass();
 }
 
-void AZAICharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+void AZAIBaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(AZAICharacter, bIsDead);
+	DOREPLIFETIME(AZAIBaseCharacter, bIsDead);
+
+	// for animations and effects on every machine
+	DOREPLIFETIME(AZAIBaseCharacter, CombatState);
+	DOREPLIFETIME(AZAIBaseCharacter, CombatTarget);
 }
 
-UAbilitySystemComponent* AZAICharacter::GetAbilitySystemComponent() const
+UAbilitySystemComponent* AZAIBaseCharacter::GetAbilitySystemComponent() const
 {
 	return AbilitySystemComponent;
 }
 
-FGenericTeamId AZAICharacter::GetGenericTeamId() const
+FGenericTeamId AZAIBaseCharacter::GetGenericTeamId() const
 {
 	return FGenericTeamId(static_cast<uint8>(Team));
 }
 
-void AZAICharacter::HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters)
+void AZAIBaseCharacter::HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters)
 {
 	// the hit flash comes with its Hit Cue, which the server sends to everyone with every hit
 	if (EventType == EGameplayCueEvent::Executed && CharacterCues.HitCue.IsValid() && GameplayCueTag == CharacterCues.HitCue)
@@ -100,11 +105,14 @@ void AZAICharacter::HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag
 	IGameplayCueInterface::HandleGameplayCue(Self, GameplayCueTag, EventType, Parameters);
 }
 
-void AZAICharacter::BeginPlay()
+void AZAIBaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
 	AbilitySystemComponent->InitAbilityActorInfo(this, this);
+
+	// the AI chases at this speed and slows down for other things (strafing)
+	DefaultWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
 
 	if (!HasAuthority())
 	{
@@ -116,8 +124,8 @@ void AZAICharacter::BeginPlay()
 	AbilitySystemComponent->SetNumericAttributeBase(UZAttributeSet::GetHealthAttribute(), MaxHealth);
 	AbilitySystemComponent->SetNumericAttributeBase(UZAttributeSet::GetMaxPoiseAttribute(), MaxPoise);
 	AbilitySystemComponent->SetNumericAttributeBase(UZAttributeSet::GetPoiseAttribute(), MaxPoise);
-	AttributeSet->OnOutOfHealth.AddUObject(this, &AZAICharacter::HandleOutOfHealth);
-	AttributeSet->OnPoiseBroken.AddUObject(this, &AZAICharacter::HandlePoiseBroken);
+	AttributeSet->OnOutOfHealth.AddUObject(this, &AZAIBaseCharacter::HandleOutOfHealth);
+	AttributeSet->OnPoiseBroken.AddUObject(this, &AZAIBaseCharacter::HandlePoiseBroken);
 
 	if (AttackAbility)
 	{
@@ -138,7 +146,7 @@ void AZAICharacter::BeginPlay()
 	}
 }
 
-void AZAICharacter::PossessedBy(AController* NewController)
+void AZAIBaseCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
@@ -146,7 +154,7 @@ void AZAICharacter::PossessedBy(AController* NewController)
 	AbilitySystemComponent->InitAbilityActorInfo(this, this);
 }
 
-float AZAICharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+float AZAIBaseCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
 	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
@@ -161,7 +169,70 @@ float AZAICharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEv
 	return ActualDamage;
 }
 
-bool AZAICharacter::TryAttack()
+bool AZAIBaseCharacter::IsAttackReady() const
+{
+	return !bIsDead && AttackAbility && GetWorld() && GetWorld()->GetTimeSeconds() - LastAttackTime >= AttackCooldown;
+}
+
+bool AZAIBaseCharacter::IsPlayingAttackAnimation() const
+{
+	const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	return AttackMontage && AnimInstance && AnimInstance->Montage_IsPlaying(AttackMontage);
+}
+
+void AZAIBaseCharacter::SetCombatState(EZAICombatState NewState)
+{
+	if (!HasAuthority() || NewState == CombatState)
+	{
+		return;
+	}
+
+	const EZAICombatState OldState = CombatState;
+	CombatState = NewState;
+
+	// the server doesn't get the OnRep
+	HandleCombatStateChanged(OldState);
+}
+
+void AZAIBaseCharacter::SetCombatSettings(const FZAICombatSettings& NewSettings)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	CombatSettings = NewSettings;
+	if (AZAIBaseController* AIController = Cast<AZAIBaseController>(GetController()))
+	{
+		AIController->RefreshCombatSettings();
+	}
+}
+
+void AZAIBaseCharacter::SetCombatTarget(AActor* NewTarget)
+{
+	if (HasAuthority())
+	{
+		CombatTarget = NewTarget;
+	}
+}
+
+void AZAIBaseCharacter::OnRep_CombatState(EZAICombatState OldState)
+{
+	HandleCombatStateChanged(OldState);
+}
+
+void AZAIBaseCharacter::HandleCombatStateChanged(EZAICombatState OldState)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogZSurvivalGame, VeryVerbose, TEXT("'%s' combat state: %s -> %s (replicated)"), *GetNameSafe(this), LexToString(OldState), LexToString(CombatState));
+	}
+
+	OnCombatStateChanged.Broadcast(CombatState, OldState);
+	BP_OnCombatStateChanged(CombatState, OldState);
+}
+
+bool AZAIBaseCharacter::TryAttack()
 {
 	if (bIsDead || !AttackAbility || !HasAuthority())
 	{
@@ -183,7 +254,7 @@ bool AZAICharacter::TryAttack()
 	return false;
 }
 
-void AZAICharacter::HandleOutOfHealth(AActor* DamageInstigator)
+void AZAIBaseCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 {
 	if (bIsDead)
 	{
@@ -230,7 +301,7 @@ void AZAICharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	SetLifeSpan(DeadBodyLifeSpan);
 }
 
-void AZAICharacter::HandlePoiseBroken(AActor* StaggerInstigator)
+void AZAIBaseCharacter::HandlePoiseBroken(AActor* StaggerInstigator)
 {
 	if (!bIsDead)
 	{
@@ -238,7 +309,7 @@ void AZAICharacter::HandlePoiseBroken(AActor* StaggerInstigator)
 	}
 }
 
-void AZAICharacter::PlayDeath()
+void AZAIBaseCharacter::PlayDeath()
 {
 	// stop moving and fall over as a ragdoll
 	GetCharacterMovement()->StopMovementImmediately();
@@ -252,7 +323,7 @@ void AZAICharacter::PlayDeath()
 	GetMesh()->SetCollisionResponseToChannel(ZTraceChannel_Weapon, ECR_Ignore);
 }
 
-void AZAICharacter::OnRep_IsDead()
+void AZAIBaseCharacter::OnRep_IsDead()
 {
 	if (bIsDead)
 	{

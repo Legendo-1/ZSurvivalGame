@@ -78,6 +78,27 @@ public:
 	UFUNCTION(Exec)
 	void ZCombat();
 
+	/** Writes every enemy's AI state to the Output Log: its combat state, for how long, its target and how far, seen or not (host) */
+	UFUNCTION(Exec)
+	void ZAIStates();
+
+	/** Makes every living enemy circle its target between attacks (ZAIStrafe 0: walk straight in again), to try the Strafing state (host) */
+	UFUNCTION(Exec)
+	void ZAIStrafe(bool bStrafe = true);
+
+	/** Spawns a zombie with its AI, Distance cm from your character and Angle degrees to the right of straight ahead; 1 at the end: it looks away from you (host),
+	 *  e.g. ZSpawnEnemyAt 900 180 1 puts one behind you that doesn't see you */
+	UFUNCTION(Exec)
+	void ZSpawnEnemyAt(float Distance = 600.f, float Angle = 0.f, bool bFacingAway = false);
+
+	/** Pretends every living enemy dodged (the dodge state for 0.3 s, without moving), to try the DodgeRecovering state (host) */
+	UFUNCTION(Exec)
+	void ZAIDodge();
+
+	/** Hurts every living enemy as if player number PlayerIndex hit it (0 = the host, 1 = the first client), e.g. to try their damage sense and threat (host) */
+	UFUNCTION(Exec)
+	void ZHitEnemies(float Damage = 10.f, int32 PlayerIndex = 0);
+
 	/** Like the lock-on key: locks on to the enemy nearest the middle of the screen, or lets go (in this window) */
 	UFUNCTION(Exec)
 	void ZLockOn();

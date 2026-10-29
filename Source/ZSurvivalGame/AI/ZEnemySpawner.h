@@ -6,7 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "ZEnemySpawner.generated.h"
 
-class AZAICharacter;
+class AZAIBaseCharacter;
 class UBillboardComponent;
 
 /**
@@ -50,7 +50,7 @@ protected:
 
 	/** What to spawn (a zombie by default) */
 	UPROPERTY(EditAnywhere, Category = "Spawning")
-	TSubclassOf<AZAICharacter> EnemyClass;
+	TSubclassOf<AZAIBaseCharacter> EnemyClass;
 
 	/** Most living enemies from this spawner at once */
 	UPROPERTY(EditAnywhere, Category = "Spawning", meta = (ClampMin = "0"))
@@ -72,7 +72,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Spawning")
 	bool bSpawnOnBeginPlay = true;
 
-	TArray<TWeakObjectPtr<AZAICharacter>> AliveEnemies;
+	TArray<TWeakObjectPtr<AZAIBaseCharacter>> AliveEnemies;
 
 	int32 SpawnedCount = 0;
 
