@@ -118,10 +118,10 @@ Its attacks (the hammer hits; at least 2 s from one attack to the next):
 
 | Attack | Range | Damage / poise damage | Cooldown | Weight | Notes |
 |---|---|---|---|---|---|
-| 1, sideways swing | 0–2.0 m | 35 / 50 | – | 3 | Passes at your head |
-| 2, double swing | 0–2.0 m | 30 / 40 | – | 2 | Hits the most often |
-| 3, lunge with a spin | 1.5–2.3 m | 40 / 60 | 6 s | 1 | Moves it 1.2 m; the spin passes at head height, so it often misses |
-| 4, charge | 2.7–5.7 m | 20 / 25 each | 12 s | 1 | Moves it 4.3 m with four swings; it opens fights with it from afar |
+| 1, sideways swing | 0–2.0 m | 35 / 50 | – | 1 | Passes at your head |
+| 2, double swing | 0–2.0 m | 30 / 40 | – | 1 | Hits the most often |
+| 3, lunge with a spin | 0–2.5 m | 40 / 60 | 6 s | 1 | Moves it 1.2 m; the spin passes at head height, so it often misses |
+| 4, charge | 0–3.0 m | 20 / 25 each | 10 s | 1 | Moves it 4.3 m with four swings |
 
 Every hit but the charge's staggers you (your poise can't take 35 at once).
 
