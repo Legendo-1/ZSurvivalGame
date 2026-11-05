@@ -153,7 +153,7 @@ AActor* UZInteractionComponent::FindBestInteractable() const
 			continue;
 		}
 
-		const FVector ToCandidate = Candidate->GetActorLocation() - Pawn->GetActorLocation();
+		const FVector ToCandidate = IZInteractable::Execute_GetInteractionLocation(Candidate, Pawn) - Pawn->GetActorLocation();
 		const float DistanceSquared = ToCandidate.SizeSquared2D();
 		if (DistanceSquared < ClosestDistanceSquared && FVector::DotProduct(Forward, ToCandidate.GetSafeNormal2D()) > -0.25f && CanInteractWith(Candidate))
 		{
@@ -174,8 +174,9 @@ bool UZInteractionComponent::CanInteractWith(AActor* Target, float ExtraRange) c
 	}
 
 	// in range
+	const FVector TargetLocation = IZInteractable::Execute_GetInteractionLocation(Target, Pawn);
 	const float MaxDistance = InteractionRange + NearbyRadius + ExtraRange;
-	if (FVector::DistSquared(Pawn->GetActorLocation(), Target->GetActorLocation()) > FMath::Square(MaxDistance))
+	if (FVector::DistSquared(Pawn->GetActorLocation(), TargetLocation) > FMath::Square(MaxDistance))
 	{
 		return false;
 	}
@@ -184,7 +185,7 @@ bool UZInteractionComponent::CanInteractWith(AActor* Target, float ExtraRange) c
 	FCollisionQueryParams SightParams(SCENE_QUERY_STAT(ZInteractionSight), false, Pawn);
 	SightParams.AddIgnoredActor(Target);
 	FHitResult Blocker;
-	if (GetWorld()->LineTraceSingleByChannel(Blocker, Pawn->GetPawnViewLocation(), Target->GetActorLocation(), ECC_Visibility, SightParams))
+	if (GetWorld()->LineTraceSingleByChannel(Blocker, Pawn->GetPawnViewLocation(), TargetLocation, ECC_Visibility, SightParams))
 	{
 		return false;
 	}

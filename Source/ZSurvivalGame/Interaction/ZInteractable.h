@@ -42,8 +42,16 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
 	void Interact(APawn* Interactor);
 
+	/**
+	 *  Where this player uses it from: range and line of sight are measured to this point (default: the actor's location)
+	 *  E.g. a ladder's top end for someone on the floor above
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Interaction")
+	FVector GetInteractionLocation(APawn* Interactor) const;
+
 	virtual bool CanInteract_Implementation(APawn* Interactor) const { return true; }
 	virtual FText GetInteractionText_Implementation(APawn* Interactor) const;
 	virtual float GetInteractionDuration_Implementation(APawn* Interactor) const { return 0.f; }
 	virtual void Interact_Implementation(APawn* Interactor) {}
+	virtual FVector GetInteractionLocation_Implementation(APawn* Interactor) const;
 };
