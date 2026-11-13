@@ -61,15 +61,16 @@ else:
         house.set_actor_location_and_rotation(loc, rot, False, False)
     o, e = house.get_actor_bounds(False)
     log(f"{LABEL} at {loc}, yaw {pl['yaw']}; bounds x {o.x - e.x:.0f}..{o.x + e.x:.0f}, y {o.y - e.y:.0f}..{o.y + e.y:.0f}, z {o.z - e.z:.0f}..{o.z + e.z:.0f}")
-    nav = actors.get(NAV)
-    if nav is None:
-        nav = eas.spawn_actor_from_class(unreal.NavMeshBoundsVolume, o, unreal.Rotator(0, 0, 0))
-        nav.set_actor_label(NAV)
-    nav.set_actor_location(o, False, False)
-    # the brush of a spawned volume is a 200 cm cube: scale it to the house plus 3 m round it
-    nav.set_actor_scale3d(unreal.Vector((e.x + 300) / 100.0, (e.y + 300) / 100.0, (e.z + 200) / 100.0))
-    no, ne = nav.get_actor_bounds(False)
-    log(f"{NAV}: bounds z {no.z - ne.z:.0f}..{no.z + ne.z:.0f}")
+    if pl.get("nav_bounds", True):      # houses from #2 on have no NavMesh inside: "nav_bounds": false
+        nav = actors.get(NAV)
+        if nav is None:
+            nav = eas.spawn_actor_from_class(unreal.NavMeshBoundsVolume, o, unreal.Rotator(0, 0, 0))
+            nav.set_actor_label(NAV)
+        nav.set_actor_location(o, False, False)
+        # the brush of a spawned volume is a 200 cm cube: scale it to the house plus 3 m round it
+        nav.set_actor_scale3d(unreal.Vector((e.x + 300) / 100.0, (e.y + 300) / 100.0, (e.z + 200) / 100.0))
+        no, ne = nav.get_actor_bounds(False)
+        log(f"{NAV}: bounds z {no.z - ne.z:.0f}..{no.z + ne.z:.0f}")
 unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
 log("level saved")
 log("DONE")

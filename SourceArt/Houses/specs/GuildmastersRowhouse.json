@@ -1,0 +1,95 @@
+{
+ "folder": "GuildmastersRowhouse",
+ "type": "townhouse_gable",
+ "interior": "shell",
+ "meshy_task": "9909a371-bb89-460e-8771-045ff7cebee2",
+ "notes": "House #2. Scale 9.2 (the Meshy facade, 0.870 wide, gives 8.0 m). Measured with tools/measure_meshy.py (m_front.png at 100 px/m), tools/raycast_meshy.py (front depth map) and tools/color_match.py. House y 0 = the upper facade face (Meshy y 0.771); the rusticated ground floor stands 0.11-0.14 m behind it, the plinth flush with it. House x = Meshy x - 0.03. The Meshy depth (6.21 m from the facade) is stretched to the plot (6.64 m); the back slope keeps its pitch.",
+ "scale": 9.2,
+ "width": 8.0,
+ "depth": 6.64,
+ "wall": 0.45,
+ "floor": 0.48,
+ "ceiling": 15.0,
+ "front": {
+  "zones": [
+   {"kind": "flat", "mat": "Gauged", "z0": 0.0, "z1": 1.14, "y": 0.0, "side_y": 0.0},
+   {"kind": "blocks", "mat": "Stone", "z0": 1.28, "z1": 6.86, "y": 0.138, "side_y": 0.11, "course": 0.465, "length": [0.75, 1.35],
+    "chamfer": 0.03, "jitter": 0.006, "quoins": {"y": 0.11, "length": [0.43, 0.59]}},
+   {"kind": "blocks", "mat": "Stone", "z0": 7.30, "z1": 14.38, "y": 0.0, "side_y": 0.0, "course": 0.472, "length": [0.55, 1.15],
+    "chamfer": 0.012, "jitter": 0.004}
+  ],
+  "gaps": [{"z0": 1.14, "z1": 1.28, "side_y": 0.138}, {"z0": 6.86, "z1": 7.30, "side_y": 0.138}, {"z0": 14.38, "z1": 15.36, "side_y": 0.0}],
+  "top": 15.36,
+  "mouldings": [
+   {"name": "plinth cap", "z": 1.14, "y": 0.138, "mat": "Gauged", "profile": [[0, 0], [0.138, 0], [0, 0.14]], "hub_v": 0.02, "breaks": [[1.99, 6.01]]},
+   {"name": "band", "z": 6.86, "y": 0.138, "mat": "Trim",
+    "profile": [[0, 0], [0.112, 0], [0.112, 0.08], [0.18, 0.12], [0.22, 0.15], [0.236, 0.17], [0.236, 0.44], [0.138, 0.44], [0, 0.44]]},
+   {"name": "cornice", "z": 14.38, "y": 0.0, "mat": "Trim",
+    "profile": [[0, 0], [0.12, 0], [0.12, 0.40], [0.20, 0.40], [0.30, 0.41], [0.36, 0.42], [0.36, 0.60], [0.38, 0.62], [0.42, 0.70],
+                [0.455, 0.76], [0.49, 0.84], [0.49, 0.98], [0, 0.98]], "hub_v": 0.6}
+  ],
+  "window_style": {
+   "panes": [2, 4], "rec": 0.33, "depth": 0.10, "frame": "Metal", "glass": "Glass", "reveal_mat": "Trim",
+   "architrave": {"mat": "Trim", "profile": [[0.24, 0], [0.24, 0.125], [0.17, 0.125], [0.16, 0.108], [0.06, 0.108], [0.05, 0.12], [0.0, 0.12], [0.0, 0.0]], "head": 0.22},
+   "sill": {"mat": "Trim", "h": 0.15, "ext": 0.31, "proud": 0.19, "drop": 0.0},
+   "brackets": {"mat": "Trim", "w": 0.24, "h": 0.16, "gap": 0.0, "proud": 0.06},
+   "hood": {"mat": "Trim", "gap": 0.02, "ext": 0.37,
+            "profile": [[0, 0], [0.13, 0], [0.14, 0.04], [0.17, 0.10], [0.20, 0.14], [0.25, 0.20], [0.27, 0.22], [0.27, 0.24], [0, 0.24]]}
+  },
+  "windows": [
+   {"x0": 1.00, "x1": 2.04, "z0": 7.80, "z1": 10.14}, {"x0": 3.48, "x1": 4.52, "z0": 7.80, "z1": 10.14}, {"x0": 5.96, "x1": 7.00, "z0": 7.80, "z1": 10.14},
+   {"x0": 1.00, "x1": 2.04, "z0": 11.34, "z1": 13.62}, {"x0": 3.48, "x1": 4.52, "z0": 11.34, "z1": 13.62}, {"x0": 5.96, "x1": 7.00, "z0": 11.34, "z1": 13.62}
+  ],
+  "door": {
+   "x0": 2.68, "x1": 5.32, "z_floor": 0.48, "z_top": 5.60, "leaf_top": 4.29, "leaf_y": 0.19, "leaf_t": 0.08,
+   "frame_mat": "Bronze", "panel_mat": "Door", "reveal_mat": "Trim",
+   "panel_rows": [[0.27, 0.67], [0.87, 1.87], [2.07, 2.97], [3.12, 3.54]], "stile": {"hinge": 0.29, "meeting": 0.28},
+   "ring": {"from_hinge": 0.86, "z": 1.62, "r": 0.13},
+   "transom": {"rail_top": 4.60, "grille_top": 5.30, "mullion": 0.06, "side": 0.08, "glass_y": 0.32, "back_y": 0.33, "lattice": 0.17},
+   "architrave": {"mat": "Trim", "y": 0.138, "z0": 1.30, "profile": [[0.24, 0], [0.24, 0.263], [0.20, 0.263], [0.19, 0.231], [0.0, 0.231], [0.0, 0.0]]},
+   "pedestals": {"mat": "Trim", "x": [[1.99, 2.68], [5.32, 6.01]], "z1": 1.14, "cap": 1.30, "front": -0.30, "cap_front": -0.24},
+   "pilasters": {"mat": "Trim", "x": [[1.99, 2.41], [5.59, 6.01]], "z0": 1.30, "z1": 5.62, "front": -0.19, "panel_front": -0.135,
+                 "panel_margin": 0.09, "panel_z": [1.48, 4.70]},
+   "consoles": {"mat": "Trim", "x": [2.20, 5.80], "y_wall": -0.19, "z_top": 5.62, "out": 0.27, "height": 0.78, "width": 0.30},
+   "hood": {"mat": "Trim", "x0": 1.76, "x1": 6.24, "z": 5.62, "y": 0.138,
+            "profile": [[0, 0], [0.27, 0], [0.27, 0.16], [0.308, 0.26], [0.398, 0.32], [0.518, 0.38], [0.668, 0.42], [0.668, 0.52],
+                        [0.758, 0.54], [0.758, 0.68], [0.808, 0.70], [0.858, 0.74], [0.858, 0.84], [0, 0.84]], "hub_v": 0.5},
+   "steps": [{"mat": "Gauged", "x0": 2.68, "x1": 5.32, "y0": -0.71, "z0": 0.0, "z1": 0.26},
+             {"mat": "Gauged", "x0": 2.68, "x1": 5.32, "y0": -0.14, "z0": 0.26, "z1": 0.48}]
+  },
+  "lanterns": [{"x": 1.33, "z": 3.86, "out": 0.62}, {"x": 6.67, "z": 3.86, "out": 0.62}],
+  "lantern_wall_y": 0.138
+ },
+ "sides": {"mat": "Stone", "course": 0.472, "length": [0.55, 1.15], "chamfer": 0.012, "jitter": 0.004, "gable_mat": "Stone"},
+ "back": {"mat": "Stone", "course": 0.472, "length": [0.55, 1.15], "chamfer": 0.012, "jitter": 0.004,
+          "fascia": {"mat": "Trim", "drop": 0.15, "rise": 0.08, "proud": 0.06}},
+ "roof": {
+  "mat": "Roof", "gutter_y": 0.59, "front_top": [1.98, 16.08], "ridge": 16.48, "back_pitch": 0.286,
+  "step_mat": "Trim", "lip": {"z0": 16.36, "proud": 0.04},
+  "coping": {"w": 0.13, "h": 0.10, "mat": "Trim"},
+  "ribs": {"x": [1.52, 1.86, 3.48, 3.84, 5.03, 5.58, 5.96, 7.60], "w": 0.13, "h": 0.06, "mat": "Gauged"},
+  "flashing": {"mat": "Gauged", "y0": 0.53, "y1": 0.65, "h": 0.06}
+ },
+ "chimneys": [{"x0": 0.83, "x1": 1.47, "y0": 0.75, "y1": 2.50, "z0": 15.2, "z1": 16.46, "mat": "Gauged", "cap_mat": "Trim",
+               "pots": 3, "cap_h": 0.26, "pot_h": 0.76, "pot_r": 0.19}],
+ "meshy_front": {"file": "C:/Users/Lenovo/Documents/Unreal Projects/ZSurvivalGame/Saved/HouseCheck/GuildmastersRowhouse/measure/m_front.png",
+                 "col0": 53.0, "row0": 1799.94, "ppm": 100},
+ "place": {"location": [19372, 5756, 1300], "yaw": 180, "hide": [], "nav_bounds": false},
+ "materials": {
+  "Stone":   {"tex": "plaster", "target": [0.633, 0.525, 0.401], "gain": 1.12, "ta": 0.6, "normal": 0.8, "dirt": 0.5, "variation": 0.10},
+  "Brick":   {"tex": "brick", "target": [0.082, 0.041, 0.027], "gain": 1.02, "ta": 0.95, "normal": 1.0, "dirt": 0.5},
+  "Gauged":  {"tex": "plaster", "target": [0.562, 0.465, 0.360], "gain": 1.08, "ta": 0.6, "normal": 0.7, "dirt": 0.5, "variation": 0.06},
+  "Trim":    {"tex": "plaster", "target": [0.645, 0.540, 0.420], "gain": 1.10, "ta": 0.5, "normal": 0.6, "dirt": 0.5, "variation": 0.05},
+  "Door":    {"tex": "timber", "target": [0.088, 0.046, 0.023], "gain": [1.47, 1.51, 1.59], "ta": 0.6, "normal": 0.8},
+  "Metal":   {"tex": "slate", "target": [0.166, 0.136, 0.108], "gain": 1.0, "ta": 0.3, "normal": 0.3, "rough": 0.6},
+  "Glass":   {"glass": true, "target": [0.035, 0.049, 0.062], "gain": 1.14, "emissive": 0.02},
+  "Brass":   {"tex": "plaster", "target": [0.42, 0.30, 0.13], "gain": 1.1, "ta": 0.3, "normal": 0.3, "rough": 0.45, "metal": 0.85, "dirt": 0.3},
+  "Dial":    {"tex": "plaster", "target": [0.45, 0.35, 0.20], "gain": 1.26, "ta": 0.3, "normal": 0.3, "dirt": 0.4},
+  "Clay":    {"tex": "plaster", "target": [0.205, 0.090, 0.047], "gain": 1.1, "ta": 0.5},
+  "Roof":    {"tex": "slate", "target": [0.077, 0.067, 0.062], "gain": 1.1, "ta": 0.8},
+  "Plaster": {"tex": "plaster", "target": [0.55, 0.52, 0.46], "gain": 1.0, "ta": 0.35, "normal": 0.4, "dirt": 0.0, "streak": 0.0, "variation": 0.03, "macro": 0.1},
+  "Timber":  {"tex": "timber", "target": [0.12, 0.08, 0.05], "gain": 1.0, "ta": 1.0, "dirt": 0.0, "streak": 0.0},
+  "Bronze":  {"tex": "slate", "target": [0.022, 0.020, 0.019], "gain": 1.0, "ta": 0.4, "normal": 0.4, "rough": 0.5, "metal": 0.4},
+  "Lamp":    {"glass": true, "target": [0.954, 0.915, 0.722], "gain": 1.0, "emissive": 1.5, "rough": 0.3}
+ }
+}

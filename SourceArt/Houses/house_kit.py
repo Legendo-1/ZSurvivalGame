@@ -29,11 +29,12 @@ from gothic_kit import Builder, translate, rot_z, _minus  # noqa: E402,F401
 
 # FBX material slots; each becomes MI_House_<Folder>_<name> in Unreal (ledger section 3)
 MATERIALS = ["Stone", "Brick", "Gauged", "Trim", "Door", "Metal", "Glass", "Brass", "Dial", "Clay", "Roof", "Plaster", "Timber",
-             "Bronze"]          # append new slots at the end only: earlier houses keep their slot order
+             "Bronze",          # added by house #1 (clock plate)
+             "Lamp"]            # added by house #2 (lit lantern glass); append new slots at the end only
 COLORS = {"Stone": (0.62, 0.58, 0.50), "Brick": (0.40, 0.22, 0.16), "Gauged": (0.45, 0.25, 0.18), "Trim": (0.66, 0.63, 0.56),
           "Door": (0.36, 0.31, 0.25), "Metal": (0.08, 0.08, 0.08), "Glass": (0.12, 0.14, 0.18), "Brass": (0.62, 0.48, 0.25),
           "Dial": (0.75, 0.66, 0.48), "Clay": (0.62, 0.38, 0.26), "Roof": (0.30, 0.28, 0.26), "Plaster": (0.80, 0.78, 0.72),
-          "Timber": (0.42, 0.30, 0.20), "Bronze": (0.25, 0.18, 0.13)}
+          "Timber": (0.42, 0.30, 0.20), "Bronze": (0.25, 0.18, 0.13), "Lamp": (0.95, 0.90, 0.70)}
 UV0 = (0.0, 0.0)            # one texture offset for all flat walls, so brick courses run on round the corners
 
 
@@ -459,3 +460,150 @@ def balustrade_y(B, y0, y1, x, z, h, rail, baluster, pitch=0.12):
     B.push(translate(x, 0.0, 0.0) @ rot_z(90.0))
     balustrade(B, y0, y1, 0.0, z, z, h, rail, baluster, pitch=pitch)
     B.pop()
+
+
+# ---------------------------------------------------------------------------------------------
+# Added by house #2 (GuildmastersRowhouse): mouldings swept along a facade, architraves, an iron-framed studded
+# door leaf, wall lanterns, consoles, gable copings, roof ribs and a diamond lattice
+# ---------------------------------------------------------------------------------------------
+def moulding_run(B, x0, x1, z, prof, mat, y=0.0, caps=True, hub_v=None, var=0.5):
+    """A straight moulding (cornice, string course, hood, plinth cap) along wall x from x0 to x1 on the plane y
+    (wall coordinates). prof = [(u, v), ...]: u out of the plane (towards -y), v up from z, listed from a point on
+    the plane at the bottom, round the outside, to a point on the plane at the top (so the outside is on the right).
+    With caps the flat ends are closed by fans around a hub on the plane at height hub_v (default: half the top);
+    every profile point must be visible from the hub (true for profiles that only grow outwards going up)."""
+    B.sweep([(x0, y, z), (x1, y, z)], [prof], mat, var=var)
+    if caps:
+        hv = hub_v if hub_v is not None else max(v for _u, v in prof) / 2
+        for xe, nx in ((x0, -1.0), (x1, 1.0)):
+            B.fan([(xe, y - u, z + v) for u, v in prof], mat, (nx, 0.0, 0.0), var=var, hub=(xe, y, z + hv))
+
+
+def frame_run(B, x0, x1, z0, z1, prof, mat, y=0.0, var=0.5):
+    """Architrave up both jambs and over the head of the opening x0..x1, z0..z1 (wall coordinates) on the plane y.
+    prof = [(u, v), ...]: u away from the opening edge, v out of the wall, listed from the outer edge to the opening
+    edge (gothic_kit.frame_profile format). The jambs end flat at z0: stand them on a sill, base or pedestal."""
+    B.sweep([(x0, y, z0), (x0, y, z1), (x1, y, z1), (x1, y, z0)], [prof], mat, b=(0, -1, 0), side=-1, var=var)
+
+
+def studded_leaf(B, w, h, frame_mat, panel_mat, rows, t=0.08, stile=(0.28, 0.28), sunk=0.03, stud=0.035, pitch=0.13,
+                 ring=None, var=0.5):
+    """Iron-framed timber door leaf: x 0..w, y 0..t (outside face at y = 0), z 0..h. One column of timber panels
+    sunk `sunk` into the iron frame on both faces; rows = [(z0, z1), ...] of the panels; stile = (width at x = 0,
+    width at x = w). Iron studs (cubes `stud` wide, half of them proud) along the middle of both stiles and of every
+    rail on the outside; ring = (x, z, r): a ring knocker hanging from a boss, on the outside."""
+    px0, px1 = stile[0], w - stile[1]
+    holes = [(px0, px1, a, b) for a, b in rows]
+    for y, inward in ((0.0, False), (t, True)):
+        flat_face(B, 0.0, w, 0.0, h, frame_mat, holes=holes, y=y, inward=inward, var=var)
+        yp = y + sunk if not inward else y - sunk
+        for hx0, hx1, hz0, hz1 in holes:
+            flat_face(B, hx0, hx1, hz0, hz1, panel_mat, y=yp, inward=inward, var=var)
+            reveal(B, (hx0, hx1, hz0, hz1), min(y, yp), max(y, yp), frame_mat, var=var)
+    block(B, 0.0, w, 0.0, t, 0.0, h, frame_mat, faces="xXzZ", var=var)
+    s = stud / 2
+    pts = []
+    for xc in (px0 / 2, w - stile[1] / 2):
+        n = max(1, int((h - 0.16) / pitch))
+        pts += [(xc, 0.08 + (h - 0.16) * k / n) for k in range(n + 1)]
+    edges = [0.0] + [v for ab in rows for v in ab] + [h]
+    for k in range(0, len(edges), 2):
+        zc = (edges[k] + edges[k + 1]) / 2
+        n = max(1, int((px1 - px0 - 0.1) / pitch))
+        pts += [(px0 + 0.05 + (px1 - px0 - 0.1) * j / n, zc) for j in range(n + 1)]
+    for xc, zc in pts:
+        block(B, xc - s, xc + s, -s, 0.0, zc - s, zc + s, frame_mat, faces="xXyzZ", var=var)
+    if ring:
+        rx, rz, r = ring
+        block(B, rx - 0.045, rx + 0.045, -0.03, 0.0, rz + r - 0.03, rz + r + 0.06, frame_mat, faces="xXyzZ", var=var)
+        a = np.radians(np.linspace(0.0, 360.0, 25)[:-1])
+        B.tube([(rx + r * math.cos(q), -0.035, rz + r * math.sin(q)) for q in a], 0.016, frame_mat, sides=8, closed=True, var=var)
+
+
+def wall_lantern(B, cx, y_wall, z_foot, out, iron, glass, var=0.5):
+    """Iron wall lantern on the wall plane y_wall (wall coordinates, the wall facing -y): a back plate, an arm curving
+    out and up, and a six-sided lantern standing on it, its foot at (cx, y_wall - out, z_foot): a tapered bottom, a
+    flared glazed body in `glass` with iron corner posts, a wide cap rim, a pyramid cap and a ball finial."""
+    yc = y_wall - out
+    block(B, cx - 0.07, cx + 0.07, y_wall - 0.05, y_wall, z_foot - 0.66, z_foot - 0.06, iron, faces="xXyzZ", var=var)
+    a = np.radians(np.linspace(0.0, 90.0, 10))
+    rise = 0.40
+    B.tube([(cx, y_wall - 0.05 - (out - 0.05) * math.sin(q), z_foot - 0.06 - rise + rise * (1 - math.cos(q))) for q in a],
+           0.045, iron, sides=8, var=var)
+    c = (cx, yc, z_foot)
+    B.lathe([[(0.0, -0.08), (0.06, -0.06), (0.12, 0.06), (0.155, 0.18)]], iron, segs=6, center=c, smooth=False, var=var)
+    B.lathe([[(0.155, 0.18), (0.24, 0.76)]], glass, segs=6, center=c, smooth=False, var=var)
+    B.lathe([[(0.24, 0.76), (0.30, 0.78), (0.30, 0.85), (0.24, 0.87), (0.07, 1.03), (0.04, 1.03), (0.04, 1.09)]],
+            iron, segs=6, center=c, smooth=False, var=var)
+    ball = [(0.06 * math.sin(q), 1.15 - 0.06 * math.cos(q)) for q in np.radians(np.linspace(0.0, 180.0, 7))]
+    B.lathe([ball[::-1]], iron, segs=8, center=c, smooth=True, var=var)
+    for k in range(6):
+        q = math.radians(60.0 * k)
+        e = np.array([math.cos(q), math.sin(q), 0.0])
+        B.tube([np.array(c) + e * 0.16 + (0, 0, 0.18), np.array(c) + e * 0.245 + (0, 0, 0.76)], 0.014, iron, sides=6, var=var)
+
+
+def console(B, xc, y_wall, z_top, mat, out=0.28, height=0.78, width=0.3, var=0.5):
+    """Scroll console under a hood or cornice (wall coordinates, the wall plane y_wall facing -y): from the side an S
+    scroll, a big volute at the top standing `out` from the wall and a small one at the foot, `height` below z_top;
+    from the front a solid upright block `width` wide."""
+    block(B, xc - width / 2, xc + width / 2, y_wall - 0.09, y_wall, z_top - height, z_top, mat, faces="xXyzZ", var=var)
+    B.push(translate(xc, y_wall, 0.0) @ rot_z(-90.0))
+    r0, r1 = 0.12, 0.06
+    gk.scroll(B, mat, (out - r0, z_top - r0 - 0.03), r0, (0.06 + r1, z_top - height + r1 + 0.02), r1, sx=1, y=0.0,
+              width=width, thick=0.07, var=var)
+    B.pop()
+
+
+def gable_coping(B, x0, x1, outline, h, mat, inner_want, var=0.5):
+    """Coping on a gable wall standing in x0..x1 (house coordinates) along the roof outline [(y, z), ...] (front to
+    back): the strip from the outline up to outline + h. Makes its top (a vertical step of the outline gives an
+    upright face), the face towards the roof (at x1 when inner_want = (1, 0, 0), else at x0) and both ends. Its
+    outer face is the wall's own face, carried up to outline + h."""
+    xin = x1 if inner_want[0] > 0 else x0
+    for (ya, za), (yb, zb) in zip(outline, outline[1:]):
+        up = (0.0, -(zb - za), yb - ya)
+        rect(B, (x0, ya, za + h), (x1, ya, za + h), (x1, yb, zb + h), (x0, yb, zb + h), mat, up, var)
+        if abs(yb - ya) > 1e-6:
+            rect(B, (xin, ya, za), (xin, yb, zb), (xin, yb, zb + h), (xin, ya, za + h), mat, inner_want, var)
+        elif zb > za:                   # an upright step up: close the end of the lower run below the step's own face
+            rect(B, (x0, ya, za), (x1, ya, za), (x1, ya, za + h), (x0, ya, za + h), mat, (0, -1, 0), var)
+    (y0, z0), (y1, z1) = outline[0], outline[-1]
+    rect(B, (x0, y0, z0), (x1, y0, z0), (x1, y0, z0 + h), (x0, y0, z0 + h), mat, (0, -1, 0), var)
+    rect(B, (x0, y1, z1), (x1, y1, z1), (x1, y1, z1 + h), (x0, y1, z1 + h), mat, (0, 1, 0), var)
+
+
+def slope_rib(B, xc, w, a, b, h, mat, var=0.5):
+    """Rib (batten, glazing bar, lead roll) w wide and h tall lying on a roof slope from a = (y, z) to b = (y, z)
+    at x = xc (house coordinates): its top, both sides and both ends."""
+    a, b = np.array([0.0, *a]), np.array([0.0, *b])
+    d = b - a
+    n = np.array([0.0, -d[2], d[1]]) / np.linalg.norm(d)
+    if n[2] < 0:
+        n = -n
+    lo = {"a0": a + (xc - w / 2, 0, 0), "a1": a + (xc + w / 2, 0, 0), "b0": b + (xc - w / 2, 0, 0), "b1": b + (xc + w / 2, 0, 0)}
+    hi = {k: v + n * h for k, v in lo.items()}
+    rect(B, hi["a0"], hi["a1"], hi["b1"], hi["b0"], mat, tuple(n), var)
+    rect(B, lo["a0"], lo["b0"], hi["b0"], hi["a0"], mat, (-1, 0, 0), var)
+    rect(B, lo["a1"], lo["b1"], hi["b1"], hi["a1"], mat, (1, 0, 0), var)
+    rect(B, lo["a0"], lo["a1"], hi["a1"], hi["a0"], mat, tuple(-d), var)
+    rect(B, lo["b0"], lo["b1"], hi["b1"], hi["b0"], mat, tuple(d), var)
+
+
+def lattice_bars(B, x0, x1, z0, z1, pitch, width, y_back, y_front, mat, var=0.5):
+    """Diamond lattice (two sets of diagonal bars) clipped to the rectangle x0..x1, z0..z1 (wall coordinates)."""
+    for sgn in (1.0, -1.0):
+        lo, hi = sorted((z0 - sgn * x0, z0 - sgn * x1))[0] - pitch, sorted((z1 - sgn * x0, z1 - sgn * x1))[1] + pitch
+        for c in np.arange(lo, hi, pitch):            # the line z = sgn * x + c
+            pts = []
+            for x in (x0, x1):
+                z = sgn * x + c
+                if z0 - 1e-9 <= z <= z1 + 1e-9:
+                    pts.append((x, z))
+            for z in (z0, z1):
+                x = (z - c) / sgn
+                if x0 - 1e-9 <= x <= x1 + 1e-9:
+                    pts.append((x, z))
+            pts = sorted(set((round(p[0], 6), round(p[1], 6)) for p in pts))
+            if len(pts) >= 2 and math.dist(pts[0], pts[-1]) > 0.02:
+                gk.bar(B, mat, pts[0], pts[-1], width, y_back, y_front, var=var)

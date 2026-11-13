@@ -9,6 +9,16 @@ Chat history and the session scratchpad are gone after `/clear`, so anything the
 
 **Scope (the user, 2026-11-13; applies from house #2 on):** only the **outside** matters: how the house looks. Inside, leave **one empty space**: no floors, stairs, rooms, guards or NavMesh. **Every house has its door(s)**: every door the Meshy model shows is built, **closed** and in place, so that from the outside **the house looks identical to the Meshy reference**. Each leaf is a separate piece that **can be made to open later** (section 3, "Inside and door"). **House #1 keeps its full interior** (it was built before this decision); its front door is now closed like the others.
 
+## 0. Strict rules for every house (the user, 2026-11-13; they override anything below that disagrees)
+The user's words: "Use the Meshy concept model purely as a visual and color guide, exactly as we did for the ClockmakersNarrowTownhouse. Execute the Blender Python scripts (build_house.py, house_kit.py) to generate the procedural kit geometry for this specific house. Adjust the material parameters in make_house_materials_ue.py to match the color palette of this house's Meshy reference. Do NOT take any viewport screenshots. Do NOT run lighting, exposure, or material tests. I have verified the master material logic. Once the UE5 import and assembly scripts run successfully, mark the house complete in the ledger and stop immediately."
+1. **The Meshy model is a visual and colour guide only**, used as for house #1: measure it in Blender (`measure_meshy.py`, `raycast_meshy.py`, `profile_meshy.py`, `color_match.py` on the Meshy pictures), then build the house from the kit.
+2. **Geometry** comes from `build_house.py` + `house_kit.py` and the house's spec.
+3. **Materials:** set the parameters of each slot in the spec's `"materials"` (read by `make_house_materials_ue.py`) to the Meshy palette, measured on the Meshy pictures or texture. The gains are not tuned afterwards.
+4. **No viewport screenshots and no Unreal captures** (`house_capture.py`, `ncap.py`, high-res screenshots). Clay renders in headless Blender (`--renders`) are allowed for checking proportions.
+5. **No lighting, exposure or material tests**, and no colour match against captures. The master material is verified.
+6. **No 5 m rule checks** for now (the user, 2026-11-13: "dont worry about the 5m rule … i will worry about all that later"). Keep the old houses' front line.
+7. **Done =** materials, import (`import_house_ue.py`: meshes plus `BP_House_<Folder>`) and placement (`place_house_ue.py`) ran without errors. Then mark the house `done` in the ledger, commit (rule 6 below) and **stop immediately**. No extra checks after that.
+
 ## 1. Rules (read first)
 1. **One house per task.** Take the first row in the house table (section 7) whose status is `in progress` (an interrupted task: resume it, after checking which files and assets already exist), or else the first `todo` row, in order. Build it, update the ledger, commit, and **stop**.
 2. **The pilot gate.** House #1 is the pilot. Until section 6 says `LOOK APPROVED: yes`, the next task is to finish or fix house #1, never to start #2. If #1's status is `waiting for look approval`, start by asking the user whether the look is approved, and what to change if not. Record the answer in section 6. Then either fix #1 or, once it's approved, set #1 to `done` and start #2.
@@ -59,6 +69,8 @@ Each line is a mistake that cost real time, and what to do instead. **When somet
 18. **`hidden_actors` and `set_editor_property`.** That property can't be set on a capture component. Use `hide_actor_components(actor)` / `show_only_actor_components(actor)` (`ncap.py` does).
 
 ## 1b. Per-house routine
+**Section 0 overrides this routine:** skip the 5 m checks (steps 3 and 9), the captures and colour tuning (step 10), and the capture-based colour check of the door (step 11). The task ends as soon as step 9's placement has run.
+
 1. **Read** this ledger: the scope note, the rules, the lessons (section 1a), the house's row and details, its plot group (section 8), the conventions and the kit index. Set the house's status to `in progress`.
 2. **Study the template.** Look at `ref_*.png`, then load `model.glb` in Blender and take section drawings with `SourceArt/Cathedral/v3/tools/template_slices.py`, adapted to the GLB. Decide the scale (section 3), then measure storey heights, bay widths, opening sizes, cornices and the roofline.
 3. **Fit the plot.** Find the slot's exact area. Check the 5 m rule and which side is the street, and list the old actors that overlap. Decide the real depth (section 8, depth rule).
@@ -97,7 +109,10 @@ Each line is a mistake that cost real time, and what to do instead. **When somet
   - **Doors (built and in use since house #1's fix):** every door of the Meshy model is a real doorway (the main one at least 1.2 m wide × 2.3 m high) with reveals through the wall, and a **closed** leaf matching the model (panels, transom, colour). In the spec: `"leaf": {"separate": true, "hinge": "left"|"right", "cols": 2, "rows": 3}`. `build_house.py` then writes the leaf as `SM_House_<Folder>_Door.fbx` in hinge space (origin on the hinge axis at the foot of the leaf, 6 cm thick, in the frame at the window-frame depth) with its own UCX box. It also writes `doors.json` (mesh, component, location in cm, yaw, `open_yaw_delta`). `import_house_ue.py` imports it and adds the BP component at the hinge. **To open a door later:** add `open_yaw_delta` (−90 for a left hinge, +90 for a right one) to the Door component's yaw. It swings inwards into the doorway without cutting the reveal.
   - Collision: UCX boxes for the outer walls (the door opening cut out), the roof and the ground floor. The door leaf has its own box collision, so it blocks while closed and moves with the component when it opens. Windows are blocked at the glass.
   - Storey heights: take them from the Meshy facade; there are no stair rules to satisfy. The walls stay 0.35–0.5 m thick.
-  - `build_house.py` needs this as an **additive** spec option (default = house #1's behaviour), for example `"interior": "shell"` (skip the stair and the upper floors, write no Int mesh) House #2 adds that switch. The separate door already exists (see Doors above).
+  - `"interior": "shell"` (added by house #2) builds the empty room into the Ext mesh: inner wall faces, floor and ceiling are joined in after the dirt bake (kept clean), and no Int mesh is written. Use it on every house from #2 on.
+  - Double doors (house #2): `build_house.separate_leaf()` writes each leaf as its own mesh (`_Door`, `_Door_1`), hinged at its jamb. The leaves meet in the middle with no gap.
+- **Builder types:** `townhouse_flat` (house #1: flat roof, zones on one plane) and `townhouse_gable` (house #2: gable roof between coped side walls; front zones each at their own depth `y`; `gaps` between zones closed by swept `mouldings` with optional `breaks`; `window_style` + `windows`; a `door` bay with steps, pedestals, pilasters, consoles, architrave, hood, lattice transom and two leaves; `lanterns`; `sides`, `back`, `roof`, `chimneys`). The spec format is in `specs/GuildmastersRowhouse.json`. A house with a different roof or door bay extends `townhouse_gable` with optional keys, or adds a new type.
+- **Slots used for other colours (house #2):** the slot name is only a name. Each house's MI sets its colour. The meaning per house is in its details row. For example, house #2 uses Gauged for its plinth and steps and Bronze for its black iron.
 - **House #1 only (kept for reference):** doorways ≥ 1.2 × 2.3 m, floors about 3.3–4.1 m apart, a 1.2 m dog-leg stair with ramp collision, guards with full-height collision.
 - **The 5 m rule:** every house wall is at least 5 m from the cathedral's walls and buttresses. Check it against the `BP_GironaCathedral_V3` components, not its bounding box: the box includes the stairs and front terrace.
 - **Materials:** tiling textures on the mesh's own UVs at 2 m per repeat, as in the cathedral. Master `/Game/CityArt/Materials/M_Cathedral_Stone`, with vertex colour R = block tone, G = crevice dirt, B = streaks, A = macro. The CC0 sets in `/Game/CityArt/Textures/CC0/` are ashlar, brick, cobble, plaster, slate and timber. There is no roof-tile, rubble-stone or copper set yet: if a house needs one, download a CC0 set (for example from ambientCG) only after asking the user, then record it here. Make the per-house instances with `make_house_materials_ue.py` (house #1 creates it), tinted to the palette.
@@ -127,6 +142,15 @@ PY="/c/Program Files/Blender Foundation/Blender 5.2/5.2/python/bin/python.exe"  
   "$BL" -b --factory-startup --python SourceArt/Houses/tools/check_5m.py -- x0 x1 y0 y1 z0 z1 [--blend <house.blend> --place Lx Ly Lz yaw]
   "$PY" -I SourceArt/Houses/tools/house_capture.py <views.json> <out dir> [--ticks 30]
   ```
+- **Measuring tools (added by house #2):**
+  ```
+  "$BL" -b --factory-startup --python SourceArt/Houses/tools/raycast_meshy.py -- <Folder> --scale S --depthmap <out.npy> --res 0.02 --xmax 8.06 --z1 17.6
+        # front depth map of the Meshy model in house space (hit y per x, z): wall planes, surrounds, hoods, steps as numbers
+  "$BL" -b --factory-startup --python SourceArt/Houses/tools/raycast_meshy.py -- <Folder> --scale S --x 0.3,4.0 [--step 0.05]
+        # the same along chosen x columns, printed
+  "$PY" -I SourceArt/Houses/tools/profile_meshy.py <m_info.json> right [--u0 -1 --u1 1.6]     # silhouette of a side picture
+  ```
+  Reading the depth map in runs (`np.load`, then group equal depths along a row or column) gave every measurement of house #2 in a few calls. Pass `measure_meshy.py` an **absolute** output folder: with a relative one the pictures are written somewhere else.
 - **Captures:** `house_capture.py` fills `ncap.py` and runs spawn, ticks, export, done over one connection. View keys: `name pos at fov w h base`, plus optional `hide` / `only` (actor labels) and `ortho`. **Ortho captures come out empty in 5.8**; for a front matched to `m_front.png` use a telephoto 400 m away with `"only": ["House_<Folder>"]` (fov = 2·atan(half width / distance)). The night level's auto exposure blows out fills: keep fills ≤ 300 cd outside, ≤ 60 cd inside, or use base-colour views.
 - **Playability (house #1 only; not part of the routine now):** `"$PY" -I SourceArt/Houses/tools/ue_house.py SourceArt/Houses/check_playability_ue.py <Folder> HOUSE_STEP=traces|negative|build|nav`. `traces` sweeps the player capsule along the route, `negative` runs sweeps that must be blocked, `build` starts a NavMesh rebuild, and `nav` reports coverage and a street-to-top-floor path. Note that `nav` prints "navigation system True", so don't grep its output for "True" to wait on the build.
 - **Git:** `SourceArt/Houses/build/` matches the `Build/` rule in `.gitignore` (case-insensitive on Windows), so add the `.blend` and `.fbx` with `git add -f` (they go through LFS). Leave out `.blend1`.
@@ -163,8 +187,18 @@ House #1 creates `house_kit.py`, which imports `SourceArt/Cathedral/v3/gothic_ki
 | `box_pts`, `slab_rects`, `flight`, `prism_bar`, `balustrade`, `balustrade_y` | slabs, a straight flight (ramp hull), guards | 1 |
 | `build_house.py` door option | `"leaf": {"separate": true, "hinge": …}` → closed leaf as its own mesh + `doors.json` (importer adds the BP component) | 1 (fix) |
 | `dogleg_stair` | `(B, C, floors, risers, x_left, x_half, x_land, x_right, y_back, …)`: back-wall dog-leg, spine, guards, hulls (house #1 only for now) | 1 |
+| `MATERIALS` + **Lamp** | new slot at the end: lit lantern glass (a glass MI with emissive) | 2 |
+| `moulding_run` | `(B, x0, x1, z, prof, mat, y, caps, hub_v)`: straight swept moulding (cornice, band, hood, plinth cap) with capped ends | 2 |
+| `frame_run` | `(B, x0, x1, z0, z1, prof, mat, y)`: architrave up both jambs and over the head | 2 |
+| `studded_leaf` | `(B, w, h, frame_mat, panel_mat, rows, t, stile, sunk, stud, pitch, ring)`: iron-framed timber leaf, one panel column, studs, ring knocker | 2 |
+| `wall_lantern` | `(B, cx, y_wall, z_foot, out, iron, glass)`: back plate, curved arm, six-sided lantern | 2 |
+| `console` | `(B, xc, y_wall, z_top, mat, out, height, width)`: S-scroll console under a hood | 2 |
+| `gable_coping` | `(B, x0, x1, outline, h, mat, inner_want)`: coping along a roof outline, upright steps closed | 2 |
+| `slope_rib` | `(B, xc, w, a, b, h, mat)`: rib lying on a roof slope | 2 |
+| `lattice_bars` | `(B, x0, x1, z0, z1, pitch, width, y_back, y_front, mat)`: diamond lattice in a rectangle | 2 |
+| `build_house.separate_leaf`, `gable_outline` | one hinged leaf as its own mesh (DOORS); the side-wall roof outline | 2 |
 
-`build_house.py` builder types: `townhouse_flat` (house #1). The spec format is in `specs/ClockmakersNarrowTownhouse.json`.
+`build_house.py` builder types: `townhouse_flat` (house #1, spec `specs/ClockmakersNarrowTownhouse.json`) and `townhouse_gable` (house #2, spec `specs/GuildmastersRowhouse.json`). `place_house_ue.py` takes `"nav_bounds": false` (no NavBounds volume; from house #2 on).
 
 ## 6. Status
 - **LOOK APPROVED:** yes (2026-11-13). The user, on the pilot: "The ClockmakersNarrowTownhouse geometry, material generation, and lighting tests are successful … mark House 1 as 100% complete." The next task starts house #2.
@@ -178,7 +212,7 @@ Build order = row order. Status is one of `todo`, `in progress`, `waiting for lo
 | # | Status | Folder | Plot (section 8) | Est. size W×D×H | Front faces |
 |---|---|---|---|---|---|
 | 1 | done (100%) | ClockmakersNarrowTownhouse | G1 slot 1 | 6.0 × 6.64 × 19.0 (21.0 to the pots) | −Y |
-| 2 | todo | GuildmastersRowhouse | G1 slot 2 | 8.0 × 7.0 × 17.5 | −Y |
+| 2 | done | GuildmastersRowhouse | G1 slot 2 | 8.0 × 6.64 × 16.5 (17.5 to the pots) | −Y |
 | 3 | todo | SilversmithsOrnateAtelier | G1 slot 4 | 9.0 × 8.8 × 22.6 | −Y |
 | 4 | todo | AlchemistsMansardTenement | G1 slot 6 | 10.8 × 7.7 × 15.3 | −Y |
 | 5 | todo | BookbindersMansardAtelier | G1 slot 8 | 10.4 × 8.9 × 16.3 | −Y |
@@ -230,7 +264,15 @@ Palette lists the dominant clusters from `palette.json` (sRGB hex, % of texels),
 **#2 GuildmastersRowhouse** (`9909a371-bb89-460e-8771-045ff7cebee2`)
 - Pieces: 4 storeys of cream ashlar with channelled ground-floor rustication. 3 bays of tall sash windows with moulded surrounds. A central double timber door with a fanlight and two wall lanterns. A heavy cornice, a flat roof with 2 skylights and one chimney.
 - Palette: #c7b7a2:18 #afa08d:16 #e0d0b9:13; door/timber #785d4a:12.
-- Result: _not built_.
+- **Result: DONE, 2026-11-13** (under the strict rules of section 0: no captures, no material or lighting tests, no 5 m check).
+  - What the Meshy model really is: 3 storeys, not 4. A tall rusticated ground floor (plinth 0–1.14 m, channelled blocks on 0.465 m courses, set 0.11–0.14 m **behind** the upper facade, quoins at the corners), a band at 6.86–7.30 m, two floors of ashlar with 3 bays of 2×4 sash windows (moulded architraves, sills on brackets, cornice hoods), and a cornice at 14.38–15.36 m (0.49 m proud). The roof is a **gable roof** between coped side walls, not a flat roof. A gutter runs behind the cornice. The front slope (z 15.36→16.08) carries 8 light ribs (the "skylights"), then comes an upright stone step to the ridge (16.48) and a long back slope at 16° to the back eave. The chimney (3 clay pots) is on the left. The door bay has steps, pedestals, pilasters with sunk panels, scroll consoles, an architrave and a hood 0.72 m proud. The double door is iron-framed timber with studs and ring knockers, under a lattice transom. Two iron wall lanterns.
+  - Scale 9.2 (the Meshy facade 0.870 → 8.0 m). Size 8.0 × 6.64 m (depth stretched from the Meshy 6.21 m to the plot), cornice top 15.36, ridge 16.48, back eave 15.15, pots 17.48. Ground floor inside at 0.48 (threshold), ceiling 15.0.
+  - Doors: two closed leaves, `SM_House_GuildmastersRowhouse_Door` (left hinge, BP component `Door` at (268.5, −27, 48) cm, opens with yaw −90) and `…_Door_1` (right hinge, `Door_1` at (531.5, −27, 48) cm, opens with yaw +90). Each is 1.315 × 3.805 m with its own box collision. The doorway is 2.64 × 5.12 m (threshold 0.48 to 5.60, transom from 4.29).
+  - Placed as `House_GuildmastersRowhouse` at (19372, 5756, 1300), yaw 180: world x 18572–19372, butting onto house #1 with no gap (section 8). Nothing was hidden: the old row houses 00172–00183 are no longer in the level. No NavBounds (`"nav_bounds": false`).
+  - Materials: 15 `MI_House_GuildmastersRowhouse_*` (Lamp is new). Targets measured on the Meshy front (`specs/GuildmastersRowhouse_colors.json`, overlay checked). Slot use on this house: Stone = ashlar walls; Trim = cornice, band, architraves, sills, hoods, door surround; Gauged = plinth, steps, chimney stack, roof ribs; Metal = window frames (brown-grey paint); Bronze = black iron (door frame and studs, transom, lanterns); Door = door panels; Lamp = lantern glass (emissive 1.5); Roof = slate. Brick, Brass and Dial are unused (house #1 values).
+  - Checks: audit 0 see-through rays (street, both sides, lower town, above); Ext 10715 faces, 16 UCX hulls, Nanite on.
+  - Files: `specs/GuildmastersRowhouse.json`, `specs/GuildmastersRowhouse_colors.json`, `build/GuildmastersRowhouse/` (`.blend`, Ext + Door + Door_1 FBX, `doors.json`). Measuring pictures and clay renders: `Saved/HouseCheck/GuildmastersRowhouse/{measure,study,clay}` (not in git).
+  - Gotchas: the plinth cap ran across the doorway until mouldings got `"breaks"`. The audit planes over the roof must stop below the coping top, or rays aimed over the wall edge count as "see-through" while they really pass outside the house.
 
 **#3 SilversmithsOrnateAtelier** (`469e6db6-6948-4dfa-9972-b66795d3a463`)
 - Pieces: 5 storeys of cream ashlar with 3 bays. Cast-iron balconies with ornate railings on the 2nd and 3rd floors, and a roof gallery with a railing. A small square **clock cupola** on top with a clock face and a spire finial. A shopfront ground floor.
@@ -407,6 +449,8 @@ The user approved this on 2026-11-13: "ring + next streets", and "facade exact, 
 9. High Spire Tavern 24852–25792
 10. Water Wardens 25812–27128
 
+**Changed by house #2 (2026-11-13):** slot 2 moved 0.2 m to x 18572–19372, so house #2 butts onto house #1 (a closed terrace, no slit between the two). The old row houses `Cathedral_RowHouse_00172` … `00183` are **no longer in the level** (only 00171 is left, hidden by house #1), so the G1 slots are empty ground and there is nothing to hide. Keep each new G1 house against its built neighbour where it can be.
+
 The slots are built out of x order (see the build order). Keep each slot's left edge fixed and leave any slack at its right end. If a built house turns out wider than its slot, shift only the slots that aren't built yet and record the change here.
 
 The survey data for every plot (bounds, open sides, street z) is in `Saved/HouseCheck/district_plots.json`. Saved/ is not in git, so re-run `SourceArt/Houses/tools/survey_plots_ue.py` if it's missing.
@@ -422,3 +466,5 @@ The survey data for every plot (bounds, open sides, street z) is in `Saved/House
 - 2026-11-13: Scope change by the user: from house #2 on, only the outside matters. The inside is one empty space (no floors, stairs or NavMesh), and the main door is closed but built as a separate leaf so it can open later. House #1 stays as built.
 - 2026-11-13: The user: "every house should have a door … the house should look identical to the Meshy reference". House #1's front door is now closed as a separate leaf (`SM_House_…_Door`, BP component `Door`, colour 1.00), and the ledger asks for every Meshy door, closed, on every house.
 - 2026-11-13: Added section 1a, Lessons: everything that cost time on house #1, with what to do instead. The task prompt now says to read the scope, rules and lessons first.
+- 2026-11-13: The user's strict rules are now section 0: the Meshy model is a visual and colour guide only; no screenshots or captures; no lighting, exposure or material tests; no 5 m checks for now; the house is done once the import and placement scripts run.
+- 2026-11-13: House #2 GuildmastersRowhouse done: a 3-storey ashlar row house with a gable roof, a grand double door and lanterns, an empty shell inside, placed against house #1. New builder type `townhouse_gable`, `"interior": "shell"`, double separate leaves, the **Lamp** slot, kit pieces for mouldings, architraves, the studded leaf, lanterns, consoles, copings, roof ribs and lattices, and the measuring tools `raycast_meshy.py` and `profile_meshy.py`.

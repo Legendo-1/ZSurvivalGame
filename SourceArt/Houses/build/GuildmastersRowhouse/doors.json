@@ -1,0 +1,24 @@
+[
+ {
+  "mesh": "SM_House_GuildmastersRowhouse_Door",
+  "component": "Door",
+  "location_cm": [
+   268.5,
+   -27.0,
+   48.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ },
+ {
+  "mesh": "SM_House_GuildmastersRowhouse_Door_1",
+  "component": "Door_1",
+  "location_cm": [
+   531.5,
+   -27.0,
+   48.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": 90.0
+ }
+]

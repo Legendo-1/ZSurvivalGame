@@ -209,13 +209,278 @@ def build_townhouse_flat(spec):
     return E, I, hulls
 
 
-BUILDERS = {"townhouse_flat": build_townhouse_flat}
+# ---------------------------------------------------------------------------------------------
+# townhouse_gable (house #2 on): a terraced house with a gable roof between two coped gable walls, a facade of
+# zones at their own depths (a recessed rusticated ground floor), swept mouldings, architrave windows with sills,
+# brackets and hoods, a grand double door, wall lanterns and an empty shell inside (spec "interior": "shell")
+# ---------------------------------------------------------------------------------------------
+def separate_leaf(E, hinge_x, left, w, h, y_front, z0, t, make, seed):
+    """One closed door leaf as its own mesh (DOORS), in hinge space: origin on the hinge axis at the foot, the leaf
+    along +x (left hinge) or -x (right hinge), its thickness t on -y, so that it fills y_front..y_front + t when
+    closed. make(B) builds the leaf in leaf space (x 0..w, y 0..t, z 0..h)."""
+    hinge = (hinge_x, y_front + t, z0)
+    shift = gk.translate(0.0 if left else -w, -t, 0.0)
+    D, P = hk.Builder(hk.MATERIALS, seed=seed), hk.Builder(hk.MATERIALS, seed=seed)
+    P.stack = [E.stack[-1] @ gk.translate(*hinge)]
+    for B in (D, P):
+        B.push(shift)
+        make(B)
+        B.pop()
+    m = E.stack[-1]
+    DOORS.append({"builder": D, "preview": P, "hull": hk.box_pts(0.0 if left else -w, w if left else 0.0, -t, 0.0, 0.0, h),
+                  "hinge": xf(E, [hinge])[0], "facade_yaw": math.degrees(math.atan2(m[1, 0], m[0, 0])), "left": left})
+
+
+def gable_outline(spec):
+    """The roof outline over the side walls, [(y, z), ...] front to back: cornice top, gutter, front slope, the
+    upright step to the ridge, back slope down to the back eave."""
+    D, rf = spec["depth"], spec["roof"]
+    top = spec["front"]["top"]
+    yt, zt = rf["front_top"]
+    eave = rf["ridge"] - rf["back_pitch"] * (D - yt)
+    return [(0.0, top), (rf["gutter_y"], top), (yt, zt), (yt, rf["ridge"]), (D, eave)], eave
+
+
+def build_townhouse_gable(spec):
+    W, D, t = spec["width"], spec["depth"], spec["wall"]
+    F0, CEIL = spec["floor"], spec["ceiling"]
+    fr, rf = spec["front"], spec["roof"]
+    TOP = fr["top"]
+    outline, eave = gable_outline(spec)
+    E, I = hk.Builder(hk.MATERIALS, seed=11), hk.Builder(hk.MATERIALS, seed=12)
+    hulls = []
+    dr = fr["door"]
+    door_hole = (dr["x0"], dr["x1"], 0.0, dr["z_top"])
+    ws = fr["window_style"]
+    win_holes = [(w["x0"], w["x1"], w["z0"], w["z1"]) for w in fr["windows"]]
+
+    # --- front (wall coordinates = house coordinates) -----------------------------------------
+    for k, zn in enumerate(fr["zones"]):
+        holes = [h for h in [door_hole] + win_holes if h[2] < zn["z1"] and h[3] > zn["z0"]]
+        if zn["kind"] == "blocks":
+            E.push(gk.translate(0.0, zn["y"], 0.0))
+            hk.rubble_face(E, 0.0, W, zn["z0"], zn["z1"], zn["mat"], holes=holes, course=zn["course"], length=tuple(zn["length"]),
+                           chamfer=zn["chamfer"], jitter=zn["jitter"], seed=7 + 13 * k)
+            E.pop()
+        else:
+            hk.flat_face(E, 0.0, W, zn["z0"], zn["z1"], zn["mat"], holes=holes, y=zn["y"], cell=0.6)
+        q = zn.get("quoins")
+        if q:                                   # corner blocks standing proud of a recessed zone, alternating length
+            n = max(1, round((zn["z1"] - zn["z0"]) / zn["course"]))
+            hc = (zn["z1"] - zn["z0"]) / n
+            for i in range(n):
+                za, zb = zn["z0"] + i * hc + 0.006, zn["z0"] + (i + 1) * hc - 0.006
+                ln = q["length"][i % 2]
+                hk.block(E, 0.0, ln, q["y"], zn["y"] + 0.02, za, zb, zn["mat"], faces="yXzZ")
+                hk.block(E, W - ln, W, q["y"], zn["y"] + 0.02, za, zb, zn["mat"], faces="yxzZ")
+    for mo in fr["mouldings"]:
+        pieces = [(0.0, W, 0.0, 1.0)]
+        for bx0, bx1 in mo.get("breaks", []):          # e.g. a plinth cap stopping at the door's pedestals
+            pieces = hk._minus(pieces, (bx0, bx1, -1.0, 2.0))
+        for px0, px1, _a, _b in pieces:
+            hk.moulding_run(E, px0, px1, mo["z"], mo["profile"], mo["mat"], y=mo["y"], hub_v=mo.get("hub_v"))
+    # windows: frame and glass, reveals, architrave, sill on brackets, hood
+    for w in fr["windows"]:
+        x0, x1, z0, z1 = w["x0"], w["x1"], w["z0"], w["z1"]
+        rec = ws["rec"]
+        c, r = ws["panes"]
+        hk.sash_window(E, x0, x1, z0, z1, ws["frame"], ws["glass"], c, r, y=rec, depth=ws["depth"])
+        hk.reveal(E, (x0, x1, z0, z1), 0.0, rec, ws["reveal_mat"], sides="lrt")
+        hk.reveal(I, (x0, x1, z0, z1), rec, t, "Plaster")
+        ar = ws["architrave"]
+        hk.frame_run(E, x0, x1, z0, z1, ar["profile"], ar["mat"])
+        aw = max(p[0] for p in ar["profile"])
+        s = ws["sill"]
+        zs = z0 - s["drop"]
+        hk.sill(E, x0 - s["ext"], x1 + s["ext"], zs, s["mat"], h=s["h"], proud=s["proud"], back=rec)
+        b = ws["brackets"]
+        zb1 = zs - s["h"] - b["gap"]
+        for bx0 in (x0 - aw, x1 + aw - b["w"]):
+            hk.block(E, bx0, bx0 + b["w"], -b["proud"], 0.0, zb1 - b["h"], zb1, b["mat"], faces="xXyzZ")
+        hd = ws["hood"]
+        hk.moulding_run(E, x0 - hd["ext"], x1 + hd["ext"], z1 + aw + hd["gap"] - 0.02, hd["profile"], hd["mat"])
+    # door: steps, pedestals, pilasters with sunk panels, consoles, architrave, hood, reveals, transom, two leaves
+    for st in dr["steps"]:
+        hk.block(E, st["x0"], st["x1"], st["y0"], t, st["z0"], st["z1"], st["mat"], faces="xXyZ")
+        hulls.append(hk.box_pts(st["x0"], st["x1"], st["y0"], t, st["z0"], st["z1"]))
+    pd = dr["pedestals"]
+    yg = fr["zones"][1]["y"]                  # the plane of the recessed ground floor
+    for px0, px1 in pd["x"]:
+        hk.block(E, px0, px1, pd["front"], yg, 0.0, pd["z1"], pd["mat"], faces="xXyZ")
+        hk.block(E, px0, px1, pd["cap_front"], yg, pd["z1"], pd["cap"], pd["mat"], faces="xXyZ")
+        hulls.append(hk.box_pts(px0, px1, pd["front"], yg, 0.0, pd["cap"]))
+    pl = dr["pilasters"]
+    for px0, px1 in pl["x"]:
+        m, pz = pl["panel_margin"], pl["panel_z"]
+        panel = (px0 + m, px1 - m, pz[0], pz[1])
+        hk.flat_face(E, px0, px1, pl["z0"], pl["z1"], pl["mat"], holes=[panel], y=pl["front"])
+        hk.flat_face(E, *panel, pl["mat"], y=pl["panel_front"])
+        hk.reveal(E, panel, pl["front"], pl["panel_front"], pl["mat"])
+        hk.block(E, px0, px1, pl["front"], yg, pl["z0"], pl["z1"], pl["mat"], faces="xX")
+        hulls.append(hk.box_pts(px0, px1, pl["front"], yg, pl["z0"], pl["z1"]))
+    cs = dr["consoles"]
+    for cx in cs["x"]:
+        hk.console(E, cx, cs["y_wall"], cs["z_top"], cs["mat"], out=cs["out"], height=cs["height"], width=cs["width"])
+    ar = dr["architrave"]
+    hk.frame_run(E, dr["x0"], dr["x1"], ar["z0"], dr["z_top"], ar["profile"], ar["mat"], y=ar["y"])
+    hd = dr["hood"]
+    hk.moulding_run(E, hd["x0"], hd["x1"], hd["z"], hd["profile"], hd["mat"], y=hd["y"], hub_v=hd.get("hub_v"))
+    x0, x1, zf, ztop = dr["x0"], dr["x1"], dr["z_floor"], dr["z_top"]
+    ly, lt, ltop = dr["leaf_y"], dr["leaf_t"], dr["leaf_top"]
+    tr = dr["transom"]
+    hk.reveal(E, (x0, x1, zf, ztop), yg, ly, dr["reveal_mat"], sides="lrt")
+    hk.reveal(E, (x0, x1, ltop, ztop), ly, tr["back_y"], dr["reveal_mat"], sides="lrt")
+    hk.reveal(I, (x0, x1, zf, ltop), ly + lt, t, "Plaster", sides="lr")
+    hk.reveal(I, (x0, x1, zf, ztop), tr["back_y"], t, "Plaster", sides="t")
+    hk.reveal(I, (x0, x1, ltop, ztop), tr["back_y"], t, "Plaster", sides="lr")
+    # transom: a studded rail, then two lattice lights either side of a mullion, in an iron frame
+    fm = dr["frame_mat"]
+    xm = (x0 + x1) / 2
+    lights = [(x0 + tr["side"], xm - tr["mullion"] / 2, tr["rail_top"], tr["grille_top"]),
+              (xm + tr["mullion"] / 2, x1 - tr["side"], tr["rail_top"], tr["grille_top"])]
+    hk.flat_face(E, x0, x1, ltop, ztop, fm, holes=lights, y=ly)
+    hk.flat_face(E, x0, x1, ltop, ztop, fm, holes=lights, y=tr["back_y"], inward=True)
+    hk.rect(E, (x0, ly, ltop), (x1, ly, ltop), (x1, tr["back_y"], ltop), (x0, tr["back_y"], ltop), fm, (0, 0, -1))
+    for lx0, lx1, lz0, lz1 in lights:
+        hk.reveal(E, (lx0, lx1, lz0, lz1), ly, tr["back_y"], fm)
+        for yy, want in ((tr["glass_y"] - 0.001, (0, -1, 0)), (tr["glass_y"] + 0.001, (0, 1, 0))):
+            hk.rect(E, (lx0, yy, lz0), (lx1, yy, lz0), (lx1, yy, lz1), (lx0, yy, lz1), "Glass", want)
+        hk.lattice_bars(E, lx0, lx1, lz0, lz1, tr["lattice"], 0.025, tr["glass_y"] - 0.003, tr["glass_y"] - 0.025, fm)
+    zr = (ltop + tr["rail_top"]) / 2
+    n = int((x1 - x0 - 0.2) / 0.12)
+    for j in range(n + 1):
+        sx = x0 + 0.1 + (x1 - x0 - 0.2) * j / n
+        hk.block(E, sx - 0.0175, sx + 0.0175, ly - 0.0175, ly, zr - 0.0175, zr + 0.0175, fm, faces="xXyzZ")
+    # the two leaves, each its own mesh hinged at the jamb
+    wl = (x1 - x0 - 0.01) / 2
+    hl = ltop - zf - 0.005
+    rows = [tuple(r) for r in dr["panel_rows"]]
+    sh, sm = dr["stile"]["hinge"], dr["stile"]["meeting"]
+    rg = dr["ring"]
+    for k, left in enumerate((True, False)):
+        stile = (sh, sm) if left else (sm, sh)
+        rx = rg["from_hinge"] if left else wl - rg["from_hinge"]
+
+        def make(B, stile=stile, rx=rx):
+            hk.studded_leaf(B, wl, hl, fm, dr["panel_mat"], rows, t=lt, stile=stile, ring=(rx, rg["z"], rg["r"]))
+        separate_leaf(E, (x0 + 0.005) if left else (x1 - 0.005), left, wl, hl, ly, zf, lt, make, seed=31 + k)
+    # lanterns
+    for ln in fr["lanterns"]:
+        hk.wall_lantern(E, ln["x"], fr["lantern_wall_y"], ln["z"], ln["out"], fm, "Lamp")
+    holes = [door_hole] + win_holes
+    hk.wall_core(E, W, 0.0, TOP, t, holes=holes)
+    hk.flat_face(I, t, W - t, F0, CEIL, "Plaster", holes=[(x0, x1, zf, ztop)] + win_holes, y=t, inward=True)
+    hulls += [hk.box_pts(0.0, x0, 0.0, t, 0.0, TOP), hk.box_pts(x1, W, 0.0, t, 0.0, TOP), hk.box_pts(x0, x1, 0.0, t, ztop, TOP)]
+
+    # --- sides: zones from the front zones' heights, each starting behind the front at its own depth; the gable above
+    sd = spec["sides"]
+    bands = sorted([(z["z0"], z["z1"], z["side_y"], z) for z in fr["zones"]] + [(g["z0"], g["z1"], g["side_y"], None) for g in fr["gaps"]])
+    for side in ("right", "left"):
+        m, L = hk.facade_frame(side, W, D)
+        E.push(m)
+        I.push(m)
+        for k, (za, zb, sy, zn) in enumerate(bands):
+            xa, xb = (sy, L) if side == "right" else (0.0, L - sy)
+            if zn is not None and zn["kind"] == "blocks":
+                hk.rubble_face(E, xa, xb, za, zb, sd["mat"], course=zn["course"], length=tuple(sd["length"]), chamfer=sd["chamfer"],
+                               jitter=sd["jitter"], seed=101 + 7 * k + (0 if side == "right" else 50))
+            else:
+                hk.flat_face(E, xa, xb, za, zb, zn["mat"] if zn is not None else sd["mat"], cell=0.6)
+        hk.wall_core(E, L, 0.0, TOP, t)
+        hk.flat_face(I, t, L - t, F0, CEIL, "Plaster", y=t, inward=True)
+        E.pop()
+        I.pop()
+    for X, nx in ((0.0, -1.0), (W, 1.0)):
+        for (ya, za), (yb, zb) in zip(outline, outline[1:]):
+            if yb - ya > 1e-6:
+                hk.rect(E, (X, ya, TOP), (X, yb, TOP), (X, yb, zb + rf["coping"]["h"]), (X, ya, za + rf["coping"]["h"]), sd["gable_mat"], (nx, 0, 0))
+        hulls.append(hk.box_pts(min(X, X - nx * t), max(X, X - nx * t), 0.0, D, 0.0, TOP))
+    cp = rf["coping"]
+    hk.gable_coping(E, 0.0, cp["w"], outline, cp["h"], cp["mat"], (1, 0, 0))
+    hk.gable_coping(E, W - cp["w"], W, outline, cp["h"], cp["mat"], (-1, 0, 0))
+
+    # --- back ------------------------------------------------------------------------------
+    bk = spec["back"]
+    m, L = hk.facade_frame("back", W, D)
+    E.push(m)
+    I.push(m)
+    hk.rubble_face(E, 0.0, L, 0.0, eave, bk["mat"], course=bk["course"], length=tuple(bk["length"]), chamfer=bk["chamfer"],
+                   jitter=bk["jitter"], seed=301)
+    hk.wall_core(E, L, 0.0, eave, t)
+    hk.flat_face(I, t, L - t, F0, CEIL, "Plaster", y=t, inward=True)
+    E.pop()
+    I.pop()
+    fa = bk["fascia"]
+    hk.block(E, 0.0, W, D, D + fa["proud"], eave - fa["drop"], eave + fa["rise"], fa["mat"], faces="xXYzZ")
+    hulls.append(hk.box_pts(0.0, W, D - t, D, 0.0, eave))
+
+    # --- roof between the copings ----------------------------------------------------------
+    c = cp["w"]
+    gy = rf["gutter_y"]
+    yt, zt = rf["front_top"]
+    hk.rect(E, (c, 0.0, TOP), (W - c, 0.0, TOP), (W - c, gy, TOP), (c, gy, TOP), rf["mat"], (0, 0, 1))
+    hk.rect(E, (c, gy, TOP), (W - c, gy, TOP), (W - c, yt, zt), (c, yt, zt), rf["mat"], (0, -(zt - TOP), yt - gy))
+    hk.rect(E, (c, yt, zt), (W - c, yt, zt), (W - c, yt, rf["ridge"]), (c, yt, rf["ridge"]), rf["step_mat"], (0, -1, 0))
+    hk.rect(E, (c, yt, rf["ridge"]), (W - c, yt, rf["ridge"]), (W - c, D, eave), (c, D, eave), rf["mat"], (0, rf["ridge"] - eave, D - yt))
+    lp = rf["lip"]
+    hk.block(E, c, W - c, yt - lp["proud"], yt, lp["z0"], rf["ridge"], rf["step_mat"], faces="xXyzZ")
+    fl = rf["flashing"]
+    hk.block(E, c, W - c, fl["y0"], fl["y1"], TOP, TOP + fl["h"], fl["mat"], faces="yYZ")
+    rb = rf["ribs"]
+    for xc in rb["x"]:
+        hk.slope_rib(E, xc, rb["w"], (gy, TOP), (yt, zt), rb["h"], rb["mat"])
+    hulls.append([(x, y, z) for x in (0.0, W) for y, z in ((0.0, CEIL), (0.0, TOP), (gy, TOP), (yt, zt), (yt, CEIL))])
+    hulls.append([(x, y, z) for x in (0.0, W) for y, z in ((yt, CEIL), (yt, rf["ridge"]), (D, eave), (D, CEIL))])
+    for ch in spec.get("chimneys", []):
+        hulls += hk.chimney(E, ch["x0"], ch["x1"], ch["y0"], ch["y1"], ch["z0"], ch["z1"], ch["mat"], ch["cap_mat"], "Clay",
+                            pots=ch["pots"], cap_h=ch["cap_h"], pot_h=ch["pot_h"], pot_r=ch["pot_r"])
+
+    # --- inside: one empty room (floor at the threshold, ceiling under the roof) ----------------
+    hk.rect(I, (t, t, F0), (W - t, t, F0), (W - t, D - t, F0), (t, D - t, F0), "Timber", (0, 0, 1))
+    hk.rect(I, (t, t, CEIL), (W - t, t, CEIL), (W - t, D - t, CEIL), (t, D - t, CEIL), "Plaster", (0, 0, -1))
+    hulls.append(hk.box_pts(t, W - t, t, D - t, -0.3, F0))
+    return E, I, hulls
+
+
+BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable}
 
 
 # ---------------------------------------------------------------------------------------------
 # audit eyes and planes, renders
 # ---------------------------------------------------------------------------------------------
+def audit_setup_gable(spec):
+    """Outside eyes only (the door is closed, nobody stands inside): street, both sides, the lower town, above."""
+    W, D, t = spec["width"], spec["depth"], spec["wall"]
+    top = spec["front"]["top"] - 0.05
+    outline, eave = gable_outline(spec)
+    street = [("lane left", (1.0, -4.5, 1.7)), ("lane door", (4.0, -4.5, 1.7)), ("lane right", (7.0, -4.5, 1.7)),
+              ("lane high", (4.0, -6.0, 9.0)), ("lane low left", (-1.5, -2.5, 1.0))]
+    return [("front", (0.0, t / 2, 0.0), (1, 0, 0), (0.03, W - 0.03, 0.02, top), 0.03, street),
+            ("right", (W - t / 2, 0.0, 0.0), (0, 1, 0), (0.03, D - 0.03, 0.02, top), 0.04,
+             [("plaza", (W + 6.0, D / 2, 1.7)), ("plaza front", (W + 4.0, -3.0, 6.0))]),
+            ("left", (t / 2, 0.0, 0.0), (0, 1, 0), (0.03, D - 0.03, 0.02, top), 0.04,
+             [("left side", (-6.0, D / 2, 4.0)), ("left high", (-5.0, -2.0, 18.0))]),
+            ("back", (0.0, D - t / 2, 0.0), (1, 0, 0), (0.03, W - 0.03, 0.02, eave - 0.05), 0.04,
+             [("lower town", (4.0, D + 9.0, 6.0)), ("lower town left", (-2.0, D + 7.0, 12.0))]),
+            ("roof front", (0.0, 1.2, 0.0), (1, 0, 0), (0.05, W - 0.05, 14.0, 15.7), 0.04,
+             [("above front", (W / 2, -4.0, 22.0)), ("above", (W / 2, D / 2, 26.0))]),
+            ("roof back", (0.0, D / 2 + 0.6, 0.0), (1, 0, 0), (0.05, W - 0.05, 14.0, 15.9), 0.04,
+             [("above back", (W / 2, D + 5.0, 22.0)), ("above", (W / 2, D / 2, 26.0))])]
+
+
+def shots_gable(spec):
+    W, D = spec["width"], spec["depth"]
+    H = spec["roof"]["ridge"]
+    return [("iso", (W + 9.0, -14.0, 12.0), (W / 2, D / 2, H / 2), 35, 1200, 1600),
+            ("front_eye", (W / 2 - 1.0, -5.0, 1.7), (W / 2, 0.0, 6.0), 18, 1200, 1500),
+            ("door_close", (4.0, -3.2, 2.2), (4.0, 0.0, 3.0), 24, 1200, 1200),
+            ("roof", (W + 3.0, -4.0, H + 6.0), (W / 2, D / 2, H - 1.0), 28, 1400, 1000),
+            ("back", (W / 2 - 4.0, D + 16.0, 6.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
+
+
 def audit_setup(spec):
+    if spec["type"] == "townhouse_gable":
+        return audit_setup_gable(spec)
     W, D, t = spec["width"], spec["depth"], spec["wall"]
     floors, top = spec["floors"], spec["cornice"]["z"] + gk.ENTABLATURE_H - 0.05
     st = spec["stair"]
@@ -249,6 +514,8 @@ def audit_setup(spec):
 
 
 def shots(spec):
+    if spec["type"] == "townhouse_gable":
+        return shots_gable(spec)
     W, D = spec["width"], spec["depth"]
     H = spec["cornice"]["z"] + gk.ENTABLATURE_H
     F = spec["floors"]
@@ -365,11 +632,19 @@ def main():
         print(f"CAVITY ext {gk.bake_cavity(ext):.3f}")
         clear_dirt(inn)                 # inside: big plain quads whose corners all sit in corners; keep them clean
         print(f"WEATHER {gk.bake_weather(ext, stone=('Stone', 'Trim', 'Brick', 'Gauged'))}")
+    shell = spec.get("interior") == "shell"
+    if shell:                           # one empty room: its faces go into the Ext mesh (no Int mesh)
+        bpy.ops.object.select_all(action='DESELECT')
+        ext.select_set(True)
+        inn.select_set(True)
+        bpy.context.view_layer.objects.active = ext
+        bpy.ops.object.join()
+        inn = None
     ucx = [hull_object(h, f"UCX_SM_House_{FOLDER}_Ext_{i:02d}") for i, h in enumerate(hulls)]
     for ob in ucx:
         ob.display_type = 'WIRE'
         ob.hide_render = True
-    for ob in (ext, inn):
+    for ob in [o for o in (ext, inn) if o is not None]:
         co = np.empty(len(ob.data.vertices) * 3, dtype=np.float32)
         ob.data.vertices.foreach_get("co", co)
         co = co.reshape(-1, 3)
@@ -378,7 +653,8 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, f"{FOLDER}.blend"))
     export([ext] + ucx, os.path.join(OUT, f"SM_House_{FOLDER}_Ext.fbx"))
-    export([inn], os.path.join(OUT, f"SM_House_{FOLDER}_Int.fbx"))
+    if inn is not None:
+        export([inn], os.path.join(OUT, f"SM_House_{FOLDER}_Int.fbx"))
     # separate door leaves: one FBX each (hinge space, with its own UCX box) and doors.json for import_house_ue.py
     doors, previews = [], []
     for k, d in enumerate(DOORS):
@@ -408,10 +684,10 @@ def main():
             print(f"AUDIT plane '{name}'")
             # the grid is moved off round numbers by under 2 mm: a sight line aimed exactly at the edge of an opening
             # grazes coincident edges (a ray tracer's artefact, not a gap); a real gap still shows on its neighbours
-            total += gk.audit_plane([ext, inn] + previews, origin, udir, u0 + 0.0013, u1, z0 + 0.0017, z1, eyes, step=step)
+            total += gk.audit_plane([o for o in (ext, inn) if o is not None] + previews, origin, udir, u0 + 0.0013, u1, z0 + 0.0017, z1, eyes, step=step)
         print(f"AUDIT total see-through rays: {total}")
     if args.renders:
-        render([ext, inn] + previews, args.renders)
+        render([o for o in (ext, inn) if o is not None] + previews, args.renders)
 
 
 main()
