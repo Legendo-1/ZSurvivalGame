@@ -5,7 +5,7 @@ Chat history and the session scratchpad are gone after `/clear`, so anything the
 
 **Task prompt, to paste after `/clear`:**
 
-> Read SourceArt/Houses/HOUSE_LEDGER.md and do the next incomplete house.
+> Read SourceArt/Houses/HOUSE_LEDGER.md (scope, rules and lessons first) and do the next incomplete house.
 
 **Scope (the user, 2026-11-13; applies from house #2 on):** only the **outside** matters: how the house looks. Inside, leave **one empty space**: no floors, stairs, rooms, guards or NavMesh. **Every house has its door(s)**: every door the Meshy model shows is built, **closed** and in place, so that from the outside **the house looks identical to the Meshy reference**. Each leaf is a separate piece that **can be made to open later** (section 3, "Inside and door"). **House #1 keeps its full interior** (it was built before this decision); its front door is now closed like the others.
 
@@ -20,8 +20,46 @@ Chat history and the session scratchpad are gone after `/clear`, so anything the
 8. **Run the editor scripts yourself** through remote execution (section 4). Never ask the user to paste logs. Never start `UnrealEditor-Cmd.exe`.
 9. If something blocks the house, set its status to `blocked`, say why in its notes, and stop. Don't skip ahead silently.
 
+## 1a. Lessons: time lost on house #1 (read before every house, and add to it)
+Each line is a mistake that cost real time, and what to do instead. **When something costs you more than two attempts, add it here before you stop.**
+
+**Scope and attention**
+1. **Interior work.** Stairs, guards, floor collision and a NavMesh hunt that never succeeded took most of house #1's time. Now: the inside is one empty space (scope note). Never build stairs or floors, and never debug the NavMesh.
+2. **Doors left open.** House #1's door was modelled standing open, so the facade no longer looked like the Meshy model, and the user had to point it out. Now: every Meshy door is closed and in place (`"leaf": {"separate": true}`), and the outside must look identical to the reference.
+3. **Debugging without a budget.** If a check fails and two or three focused tries don't find the cause, write it down under the house as "open", tell the user, and move on. No long hunts.
+4. **Ledger written only at the end.** Update the house's row and details after each major step (spec, build, import, place), so an interruption loses nothing.
+
+**Captures**
+5. **Too many captures.** The user asked me to stop. Take only what the routine needs: one base-colour telephoto front (for the colour match), one three-quarter view, and close-ups of the door and one window. No interior views. Don't re-shoot to tune lighting.
+6. **Lit captures at night.** They are blown out or blue, whatever the fills (6000 cd and even 300 cd were too much). Judge colour and shape only on `SCS_BASE_COLOR` captures.
+7. **Black base-colour captures.** They were never black: they have alpha 0, and OpenImageIO premultiplies. `color_match.py` and `crop.py` handle it now. Don't read those PNGs with other code without `oiio:UnassociatedAlpha`.
+8. **Orthographic captures.** They come out empty in UE 5.8. Use the telephoto: 400 m away, `"only": ["House_<Folder>"]`, fov = 2·atan(half width / distance) (see `Saved/HouseCheck/ClockmakersNarrowTownhouse/views_o.json`).
+
+**Materials and colour**
+9. **Wrong texture means.** The CC0 PNG exports hold linear 16-bit values, so brick came out 3× too bright. The right means are in `make_house_materials_ue.py`. Trust them; don't re-measure.
+10. **Two colours on one slot.** The clock plate shared "Metal" with the window frames. Before building, sample every distinct colour area of the Meshy facade (`color_match.py` on `m_front.png`) and give each its own slot (append new slots at the end).
+11. **Colour samples on the wrong surface.** Sample boxes landed on the brass bosses and the open door. Always write `--overlay` and look at it once before trusting the numbers.
+
+**Geometry and the audit**
+12. **Audit leaks**, all fixed in the kit; use the kit and don't hand-build walls or windows:
+   - the joint slit where a block zone meets a flat zone (`rubble_face` seals it);
+   - hollow walls (`wall_core`);
+   - coincident two-sided glass (`sash_window` sets the two sides 2 mm apart);
+   - reveals that skipped the frame zone (reveal from `rec` to `t`);
+   - grid points exactly on edges (the audit grid is offset).
+13. **Dirt from corner vertices.** Big flat quads take crevice dirt from their corner vertices. Exterior flat walls use `cell=0.6`; interior faces get no dirt (`clear_dirt`).
+
+**Measuring and the site**
+14. **Measuring at Meshy scale first.** Run `measure_meshy.py` once at the estimated scale with `--ppm 100`: grid lines are then whole metres and crops are 1 px = 1 cm.
+15. **Unknown level geometry in the plot.** House #1 found the stepped-street gate wall late. In step 3, map the plot with downward traces (house #1's probe: a 20 cm grid of `line_trace_single`, labelling each hit actor) before deciding the footprint.
+
+**Editor and tools**
+16. **Waiting on the NavMesh build.** The poll grepped "True" from "navigation system True". If you ever wait on a build, grep "being built: False". You shouldn't need to, now that the scope has no NavMesh.
+17. **Editing collision from Python.** Editing `agg_geom` convex elements on a duplicate didn't take effect, so the test proved nothing. Change collision in the build, then re-import.
+18. **`hidden_actors` and `set_editor_property`.** That property can't be set on a capture component. Use `hide_actor_components(actor)` / `show_only_actor_components(actor)` (`ncap.py` does).
+
 ## 1b. Per-house routine
-1. **Read** this ledger: the house's row and details, its plot group (section 8), the conventions and the kit index. Set the house's status to `in progress`.
+1. **Read** this ledger: the scope note, the rules, the lessons (section 1a), the house's row and details, its plot group (section 8), the conventions and the kit index. Set the house's status to `in progress`.
 2. **Study the template.** Look at `ref_*.png`, then load `model.glb` in Blender and take section drawings with `SourceArt/Cathedral/v3/tools/template_slices.py`, adapted to the GLB. Decide the scale (section 3), then measure storey heights, bay widths, opening sizes, cornices and the roofline.
 3. **Fit the plot.** Find the slot's exact area. Check the 5 m rule and which side is the street, and list the old actors that overlap. Decide the real depth (section 8, depth rule).
 4. **Write `specs/<Folder>.json`:** scale, footprint, storeys, bays, openings, **every door of the Meshy model** (`"leaf": {"separate": true}`), roof, materials and palette (no room layout). Measure the palette for each surface by sampling `model_textures/base_color.png` at UVs picked on each surface, not from the raw k-means clusters.
@@ -383,3 +421,4 @@ The survey data for every plot (bounds, open sides, street z) is in `Saved/House
 - 2026-11-13: House #1 ClockmakersNarrowTownhouse done (the pilot). The user approved the look and marked it 100% complete. It created `house_kit.py` (with the permanent **Bronze** slot), `build_house.py`, the three `*_ue.py` editor scripts and the tools `measure_meshy.py`, `check_5m.py`, `color_match.py`, `house_capture.py` and `ue_house.py`. `ncap.py` gained `hide`, `only` and `ortho`, and `crop.py` now keeps alpha-0 captures readable.
 - 2026-11-13: Scope change by the user: from house #2 on, only the outside matters. The inside is one empty space (no floors, stairs or NavMesh), and the main door is closed but built as a separate leaf so it can open later. House #1 stays as built.
 - 2026-11-13: The user: "every house should have a door … the house should look identical to the Meshy reference". House #1's front door is now closed as a separate leaf (`SM_House_…_Door`, BP component `Door`, colour 1.00), and the ledger asks for every Meshy door, closed, on every house.
+- 2026-11-13: Added section 1a, Lessons: everything that cost time on house #1, with what to do instead. The task prompt now says to read the scope, rules and lessons first.
