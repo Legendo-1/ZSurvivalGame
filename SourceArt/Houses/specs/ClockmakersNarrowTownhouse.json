@@ -26,7 +26,7 @@
    "openings": [
     {"kind": "door", "x0": 2.83, "x1": 4.07, "z0": 0.0, "z1": 3.45, "transom": 0.50, "transom_panes": 3,
      "surround": {"w": 0.37, "proud": 0.05, "cap": [3.46, 3.76], "cap_proud": 0.09},
-     "leaf": {"cols": 2, "rows": 3, "open_deg": 95, "hinge": "left"}},
+     "leaf": {"cols": 2, "rows": 3, "hinge": "left", "separate": true}},
     {"kind": "window", "x0": 0.95, "x1": 1.91, "z0": 1.58, "z1": 3.07, "panes": [2, 3],
      "sill": {"h": 0.12, "ext": 0.05, "proud": 0.05}, "head": {"kind": "lintel", "z0": 3.07, "z1": 3.35, "ext": 0.09}},
     {"kind": "window", "x0": 1.15, "x1": 2.15, "z0": 5.20, "z1": 7.36, "panes": [2, 4],
@@ -78,7 +78,7 @@
   "Brick":   {"tex": "brick", "target": [0.082, 0.041, 0.027], "gain": 1.02, "ta": 0.95, "normal": 1.0, "dirt": 0.5},
   "Gauged":  {"tex": "plaster", "target": [0.093, 0.046, 0.031], "gain": 0.96, "ta": 0.5, "normal": 0.6},
   "Trim":    {"tex": "plaster", "target": [0.289, 0.260, 0.211], "gain": 1.12, "ta": 0.55, "normal": 0.6, "dirt": 0.6, "variation": 0.06},
-  "Door":    {"tex": "timber", "target": [0.095, 0.074, 0.051], "gain": 1.1, "ta": 0.5, "normal": 0.8},
+  "Door":    {"tex": "timber", "target": [0.095, 0.074, 0.051], "gain": [1.47, 1.51, 1.59], "ta": 0.5, "normal": 0.8},
   "Metal":   {"tex": "slate", "target": [0.025, 0.020, 0.016], "gain": 1.0, "ta": 0.4, "normal": 0.3, "rough": 0.6, "metal": 0.3},
   "Glass":   {"glass": true, "target": [0.050, 0.052, 0.056], "gain": 1.14, "emissive": 0.02},
   "Bronze":  {"tex": "slate", "target": [0.078, 0.054, 0.039], "gain": 1.0, "ta": 0.5, "normal": 0.5, "rough": 0.55, "metal": 0.5},

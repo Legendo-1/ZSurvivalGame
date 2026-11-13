@@ -58,6 +58,9 @@ def zone_at(zones, z):
     return zones[-1]
 
 
+DOORS = []      # separate door leaves ("leaf": {"separate": true}), filled by opening(), written out by main()
+
+
 def opening(E, I, op, t, zones, floor0, hulls):
     """One window or door in wall coordinates. Returns the hole to leave in the wall faces."""
     x0, x1, z0, z1 = op["x0"], op["x1"], op["z0"], op["z1"]
@@ -98,6 +101,25 @@ def opening(E, I, op, t, zones, floor0, hulls):
         cp = sr.get("cap_proud", 0.09)
         hk.block(E, x0 - w - 0.03, x1 + w + 0.03, -cp, 0.0, sr["cap"][0], sr["cap"][1], "Trim", faces="xXyzZ")
     lf = op.get("leaf")
+    if lf and lf.get("separate"):
+        # Closed leaf as its own mesh SM_House_<Folder>_Door, in hinge space: origin on the hinge axis at the foot of
+        # the leaf, the leaf along +x (left hinge) or -x (right hinge), its 6 cm thickness on -y, so it fills the frame
+        # at y rec..rec+0.06 when closed and swings into the doorway (not into the reveal) when it opens later.
+        w = x1 - x0 - 0.01
+        h = ztr - floor0 - 0.01 if tr > 0 else z1 - floor0 - 0.01
+        left = lf.get("hinge", "left") == "left"
+        hinge = (x0 if left else x1, rec + 0.06, floor0)
+        shift = gk.translate(0.0 if left else -w, -0.06, 0.0)
+        D, P = hk.Builder(hk.MATERIALS, seed=31 + len(DOORS)), hk.Builder(hk.MATERIALS, seed=31 + len(DOORS))
+        P.stack = [E.stack[-1] @ gk.translate(*hinge)]           # the same leaf in house space, for the audit and renders
+        for B in (D, P):
+            B.push(shift)
+            hk.panel_leaf(B, w, h, "Door", t=0.06, cols=lf.get("cols", 2), rows=lf.get("rows", 3))
+            B.pop()
+        m = E.stack[-1]
+        DOORS.append({"builder": D, "preview": P, "hull": hk.box_pts(0.0 if left else -w, w if left else 0.0, -0.06, 0.0, 0.0, h),
+                      "hinge": xf(E, [hinge])[0], "facade_yaw": math.degrees(math.atan2(m[1, 0], m[0, 0])), "left": left})
+        return (x0, x1, 0.0, z1)
     if lf:
         w = x1 - x0
         h = ztr - floor0 - 0.01 if tr > 0 else z1 - floor0 - 0.01
@@ -357,6 +379,28 @@ def main():
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, f"{FOLDER}.blend"))
     export([ext] + ucx, os.path.join(OUT, f"SM_House_{FOLDER}_Ext.fbx"))
     export([inn], os.path.join(OUT, f"SM_House_{FOLDER}_Int.fbx"))
+    # separate door leaves: one FBX each (hinge space, with its own UCX box) and doors.json for import_house_ue.py
+    doors, previews = [], []
+    for k, d in enumerate(DOORS):
+        name = f"SM_House_{FOLDER}_Door" + ("" if k == 0 else f"_{k}")
+        ob = to_object_named(d["builder"], name)
+        if not args.no_bake:
+            gk.bake_cavity(ob)
+        hull = hull_object(d["hull"], f"UCX_{name}_00")
+        hull.display_type, hull.hide_render = 'WIRE', True
+        export([ob, hull], os.path.join(OUT, name + ".fbx"))
+        ob.hide_render = True             # it sits at the origin in hinge space; the renders use the house-space preview
+        hx, hy, hz = d["hinge"]
+        # Unreal: mesh y = -Blender y, so the component's yaw is minus the facade's turn; opening inwards is a further
+        # -90 (left hinge) or +90 (right hinge) degrees of yaw on the Door component
+        doors.append({"mesh": name, "component": name.replace(f"SM_House_{FOLDER}_", ""), "location_cm": [100 * hx, -100 * hy, 100 * hz],
+                      "yaw": -d["facade_yaw"], "open_yaw_delta": -90.0 if d["left"] else 90.0})
+        previews.append(d["preview"].to_object(name + "_preview", hk.COLORS))
+    with open(os.path.join(OUT, "doors.json"), "w", encoding="utf-8") as f:
+        json.dump(doors, f, indent=1)
+    if doors:
+        print("DOORS", doors)
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, f"{FOLDER}.blend"))
     print("EXPORTED", OUT)
     if args.audit:
         total = 0
@@ -364,10 +408,10 @@ def main():
             print(f"AUDIT plane '{name}'")
             # the grid is moved off round numbers by under 2 mm: a sight line aimed exactly at the edge of an opening
             # grazes coincident edges (a ray tracer's artefact, not a gap); a real gap still shows on its neighbours
-            total += gk.audit_plane([ext, inn], origin, udir, u0 + 0.0013, u1, z0 + 0.0017, z1, eyes, step=step)
+            total += gk.audit_plane([ext, inn] + previews, origin, udir, u0 + 0.0013, u1, z0 + 0.0017, z1, eyes, step=step)
         print(f"AUDIT total see-through rays: {total}")
     if args.renders:
-        render([ext, inn], args.renders)
+        render([ext, inn] + previews, args.renders)
 
 
 main()

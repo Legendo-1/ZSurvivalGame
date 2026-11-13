@@ -1,0 +1,13 @@
+[
+ {
+  "mesh": "SM_House_ClockmakersNarrowTownhouse_Door",
+  "component": "Door",
+  "location_cm": [
+   283.0,
+   -18.0,
+   18.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ }
+]

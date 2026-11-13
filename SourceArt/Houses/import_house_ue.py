@@ -12,6 +12,7 @@ What it fixes after the import (the scripted Interchange import ignores parts of
 The Blueprint holds both meshes at its origin. Its origin is the house's front-left corner at street level (house
 space); see the ledger, section 3, for the transform to the level.
 """
+import json
 import os
 
 import unreal
@@ -22,7 +23,11 @@ SRC = os.path.join(PROJECT, "SourceArt", "Houses", "build", FOLDER)
 DEST = f"/Game/Buildings/Houses/{FOLDER}"
 MATS = f"{DEST}/Materials/MI_House_{FOLDER}_{{}}"
 PIPELINE = "/Game/Buildings/Houses/Tools/IP_HouseImport"
-PARTS = ("Ext", "Int")
+# parts: Ext always; Int when its FBX exists (house #1); one Door part per entry of doors.json (separate door leaves,
+# hinge space, with their own UCX box). The Door components sit at the hinge; see doors.json for the opening yaw.
+DOORS = json.load(open(os.path.join(SRC, "doors.json"), encoding="utf-8")) if os.path.exists(os.path.join(SRC, "doors.json")) else []
+PARTS = ("Ext",) + (("Int",) if os.path.exists(os.path.join(SRC, f"SM_House_{FOLDER}_Int.fbx")) else ()) + tuple(d["component"] for d in DOORS)
+DOOR_AT = {d["component"]: d for d in DOORS}
 
 eal = unreal.EditorAssetLibrary
 sub = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
@@ -92,11 +97,11 @@ for part in PARTS:
             log(f"WARNING: {name}: no material for slot '{slot}'")
         elif sm.get_editor_property("material_interface") != mat:
             mesh.set_material(i, mat)
-    if part == "Ext":
+    if part == "Ext" or part in DOOR_AT:
         log(f"{name}: {sub.get_convex_collision_count(mesh)} UCX collision hulls")
     elif sub.get_simple_collision_count(mesh) + sub.get_convex_collision_count(mesh) > 0:
         sub.remove_collisions(mesh)
-    if part != "Ext":
+    if part == "Int":
         body = mesh.get_editor_property("body_setup")
         if body:
             body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_SIMPLE_AS_COMPLEX)
@@ -142,8 +147,10 @@ for part, mesh in meshes.items():
         comp = lib.get_object(lib.get_data(handle))
     comp.set_editor_property("static_mesh", mesh)
     comp.set_editor_property("mobility", unreal.ComponentMobility.STATIC)
-    comp.set_editor_property("relative_location", unreal.Vector(0, 0, 0))
-    if part != "Ext":
+    d = DOOR_AT.get(part)
+    comp.set_editor_property("relative_location", unreal.Vector(*d["location_cm"]) if d else unreal.Vector(0, 0, 0))
+    comp.set_editor_property("relative_rotation", unreal.Rotator(roll=0.0, pitch=0.0, yaw=d["yaw"] if d else 0.0))
+    if part == "Int":
         comp.set_collision_profile_name("NoCollision")
         comp.set_editor_property("can_ever_affect_navigation", False)    # the NavMesh follows the Ext collision only
 unreal.BlueprintEditorLibrary.compile_blueprint(bp)
