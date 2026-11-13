@@ -48,10 +48,10 @@ Chat history and the session scratchpad are gone after `/clear`, so anything the
   - Folder `/Game/Buildings/Houses/<Folder>/`.
   - Meshes `SM_House_<Folder>_Ext` (exterior), `SM_House_<Folder>_Int` (interior: floors, inner walls, stairs) and `SM_House_<Folder>_Col` (collision only, if needed).
   - Blueprint `BP_House_<Folder>`. Level actor label `House_<Folder>`.
-  - Materials `MI_House_<Folder>_<Surface>`, with Surface one of Brick, Plaster, Stone, Trim, Timber, Shutter, Door, Roof, Metal, Copper, Glass.
+  - Materials `MI_House_<Folder>_<Surface>` in `/Game/Buildings/Houses/<Folder>/Materials/`. Surface = an FBX slot of `house_kit.MATERIALS`: Stone, Brick, Gauged (gauged-brick arches, chimney caps), Trim, Door, Metal (dark paint: window frames, clock marks), Glass, Brass, Dial, Clay (chimney pots), Roof, Plaster, Timber, **Bronze** (added by house #1 for the clock plate; it is now a permanent slot). Add new slots **only at the end** of the list (Shutter, Copper … when a house needs them), so earlier houses keep their slot order.
 - **Source files:** `SourceArt/Houses/specs/<Folder>.json` is the house spec. `SourceArt/Houses/build/<Folder>/` holds the `.blend` and `.fbx` (committed, like the cathedral v3 files).
 - **Blender house space:** metres, origin at the **front-left corner at street level**. +X runs along the frontage (to the right when you face the front door), the front face is at y = 0 and the house extends to +Y. Z is up, with z = 0 at the street in front of the main door.
-- **To the level:** the FBX export (axis_forward −Z, up Y, as `build_common.py` does) gives UE mesh y = −Blender y. **House #1 must verify this on import and record the exact actor transform formula here.**
+- **To the level (verified by house #1):** UE mesh = (100·bx, −100·by, 100·bz) cm. Actor location = world position of the house origin (front-left corner, street level). **Yaw = (direction the front faces) − 90°**: front −Y → yaw 180, +Y → 0, +X → −90, −X → 90. With yaw 180: world = (Lx − 100·bx, Ly + 100·by, Lz + 100·bz). Note that the "left" of a facade (viewer facing the door) is world +X when the front faces −Y.
 - **Playability:**
   - Doorways at least 1.2 m wide × 2.3 m high.
   - About 3.4 m floor to floor, ground floor 3.6–4.0 m. Inner wall 0.15 m, outer wall 0.35–0.5 m.
@@ -62,7 +62,7 @@ Chat history and the session scratchpad are gone after `/clear`, so anything the
 - **The 5 m rule:** every house wall is at least 5 m from the cathedral's walls and buttresses. Check it against the `BP_GironaCathedral_V3` components, not its bounding box: the box includes the stairs and front terrace.
 - **Materials:** tiling textures on the mesh's own UVs at 2 m per repeat, as in the cathedral. Master `/Game/CityArt/Materials/M_Cathedral_Stone`, with vertex colour R = block tone, G = crevice dirt, B = streaks, A = macro. The CC0 sets in `/Game/CityArt/Textures/CC0/` are ashlar, brick, cobble, plaster, slate and timber. There is no roof-tile, rubble-stone or copper set yet: if a house needs one, download a CC0 set (for example from ambientCG) only after asking the user, then record it here. Make the per-house instances with `make_house_materials_ue.py` (house #1 creates it), tinted to the palette.
 - **Colour match target:** under `SCS_BASE_COLOR`, the average of each surface on the new house should be within about 5% of the same surface on the Meshy model from the same view.
-- **Replacing old houses:** hide the old actors with `set_is_temporarily_hidden_in_editor` plus Hidden in Game and NoCollision, and **never delete** them. Record their labels in the house row so the change can be undone.
+- **Replacing old houses:** hide the old actors with `set_is_temporarily_hidden_in_editor` plus Hidden in Game, NoCollision and `can_ever_affect_navigation` off (`place_house_ue.py` does all four), and **never delete** them. Record their labels in the house row so the change can be undone.
 
 ## 4. Commands (Windows, Git Bash)
 ```
@@ -76,7 +76,22 @@ PY="/c/Program Files/Blender Foundation/Blender 5.2/5.2/python/bin/python.exe"  
 ```
 - The editor keeps Python globals between remote runs, so give script switches unique names (`HOUSE_NAME = ...`).
 - A remote run longer than the 600 s tool timeout keeps running, so wait for it before sending another.
-- **Captures:** `SourceArt/Cathedral/v3/tools/ncap.py` is a template (`__OUT__`, `__MODE__`, `__VIEWS__`, `__FILLS__`). It was filled in by a scratchpad wrapper (`nshoot.sh`) that no longer exists. **House #1 must add a repo runner** `SourceArt/Houses/tools/house_capture.py` (fill the template, then run spawn, tick about 30 times over separate remote calls, export, done) and record its usage here. Nanite pages stream in over editor ticks, so a single-call capture looks badly simplified.
+- **House pipeline (added by house #1):**
+  ```
+  "$BL" -b --factory-startup --python SourceArt/Houses/tools/measure_meshy.py -- <Folder> <out> --scale S --ppm 100   # m_front/back/left/right(_grid).png, m_info.json
+  "$PY" -I SourceArt/Houses/tools/color_match.py <rects.json> <picA> col0,row0,ppm,sign [<picB> map] [--overlay out.png]
+  "$BL" -b --factory-startup --python SourceArt/Houses/build_house.py -- --spec SourceArt/Houses/specs/<Folder>.json --audit [--renders <dir>]
+  "$PY" -I SourceArt/Houses/tools/ue_house.py SourceArt/Houses/make_house_materials_ue.py <Folder>
+  "$PY" -I SourceArt/Houses/tools/ue_house.py SourceArt/Houses/import_house_ue.py <Folder>     # meshes + BP_House_<Folder>
+  "$PY" -I SourceArt/Houses/tools/ue_house.py SourceArt/Houses/place_house_ue.py <Folder>      # hide old, place, NavBounds, save level
+  "$BL" -b --factory-startup --python SourceArt/Houses/tools/check_5m.py -- x0 x1 y0 y1 z0 z1 [--blend <house.blend> --place Lx Ly Lz yaw]
+  "$PY" -I SourceArt/Houses/tools/house_capture.py <views.json> <out dir> [--ticks 30]
+  ```
+- **Captures:** `house_capture.py` fills `ncap.py` and runs spawn, ticks, export, done over one connection. View keys: `name pos at fov w h base`, plus optional `hide` / `only` (actor labels) and `ortho`. **Ortho captures come out empty in 5.8**; for a front matched to `m_front.png` use a telephoto 400 m away with `"only": ["House_<Folder>"]` (fov = 2·atan(half width / distance)). The night level's auto exposure blows out fills: keep fills ≤ 300 cd outside, ≤ 60 cd inside, or use base-colour views.
+- **Playability:** `"$PY" -I SourceArt/Houses/tools/ue_house.py SourceArt/Houses/check_playability_ue.py <Folder> HOUSE_STEP=traces|negative|build|nav`. `traces` sweeps the player capsule along the route, `negative` runs sweeps that must be blocked, `build` starts a NavMesh rebuild, and `nav` reports coverage and a street-to-top-floor path. Note that `nav` prints "navigation system True", so don't grep its output for "True" to wait on the build.
+- **Git:** `SourceArt/Houses/build/` matches the `Build/` rule in `.gitignore` (case-insensitive on Windows), so add the `.blend` and `.fbx` with `git add -f` (they go through LFS). Leave out `.blend1`.
+- **Reading captures:** base-colour PNGs have alpha 0, and OpenImageIO premultiplies, so they read as black unless you set `oiio:UnassociatedAlpha` (done in `color_match.py` and `crop.py`).
+- **Texture means:** Unreal exports the CC0 albedos as 16-bit PNGs holding **linear** values (take the raw mean), but plaster as an 8-bit sRGB TGA. The correct means are in `make_house_materials_ue.py`.
 - **Night level:** for readable captures, use `SCS_BASE_COLOR` views (`"base": true`) or temporary PointLight fills.
 - **Known editor quirks:** scripted FBX import turns Nanite on and makes placeholder materials, so fix both after import. Set `recompute_normals` and `compute_weighted_normals` off, which makes a build take about 20 s instead of 165 s. A new mesh needs `set_material(i, mat)` per slot. Count UCX hulls with `get_convex_collision_count`. Patterns to copy are in `SourceArt/Cathedral/v3/import_cathedral_v3_ue.py` and `make_cathedral_v3_bp_ue.py`.
 
@@ -92,11 +107,27 @@ House #1 creates `house_kit.py`, which imports `SourceArt/Cathedral/v3/gothic_ki
 
 | Function | Signature (short) | Added by house |
 |---|---|---|
-| _(none yet)_ | | |
+| `MATERIALS`, `COLORS` | FBX slot list (append only; **Bronze** added permanently by #1) | 1 |
+| `facade_frame` | `(side, W, D) -> (matrix, length)`; side front/right/back/left | 1 |
+| `rect`, `block`, `flat_face` | quad with a fixed UV offset; box; wall face with holes (`inward`, `cell` grid) | 1 |
+| `reveal` | `(B, hole, y0, y1, mat, sides="lrtb")` | 1 |
+| `rubble_face` | `block_wall` with rounded blocks plus joint-plate seals above and below the zone | 1 |
+| `wall_core` | `(B, L, z0, z1, t, holes)` hidden mid-wall plates and lids (keeps the audit at 0) | 1 |
+| `sash_window` | `(B, x0, x1, z0, z1, frame, glass, cols, rows, y, depth)`, two-sided glass 2 mm apart | 1 |
+| `sill`, `lintel`, `gauged_arch` | stone sill, flat lintel, gauged-brick flat arch | 1 |
+| `panel_leaf` | panelled door leaf in its own frame (hinge at x = 0) | 1 |
+| `clock_dial` | `(B, cx, cz, half, r, plate, ring, dial, marks, brass)` Meshy-style clock | 1 |
+| `plan_loop`, `band_profile`, `band_loop` | string courses round the house | 1 |
+| `cornice_loop` | entablature round the house plus the parapet coping | 1 |
+| `chimney` | stack, cap and clay pots; returns a hull | 1 |
+| `box_pts`, `slab_rects`, `flight`, `prism_bar`, `balustrade`, `balustrade_y` | slabs, a straight flight (ramp hull), guards | 1 |
+| `dogleg_stair` | `(B, C, floors, risers, x_left, x_half, x_land, x_right, y_back, …)`: back-wall dog-leg, spine, guards, hulls | 1 |
+
+`build_house.py` builder types: `townhouse_flat` (house #1). The spec format is in `specs/ClockmakersNarrowTownhouse.json`.
 
 ## 6. Status
-- **LOOK APPROVED:** no. House #1 (the pilot) must be shown to the user, and the user says yes.
-- **Fix list:** none.
+- **LOOK APPROVED:** yes (2026-11-13). The user, on the pilot: "The ClockmakersNarrowTownhouse geometry, material generation, and lighting tests are successful … mark House 1 as 100% complete." The next task starts house #2.
+- **Fix list:** none yet. Open question for the user: should the NavMesh gap on house #1's stair (see #1, "Open") be fixed before house #2? Every later house with stairs will likely hit the same problem.
 - **Open questions for the user:** see section 8.
 
 ## 7. House table
@@ -105,7 +136,7 @@ Build order = row order. Status is one of `todo`, `in progress`, `waiting for lo
 
 | # | Status | Folder | Plot (section 8) | Est. size W×D×H | Front faces |
 |---|---|---|---|---|---|
-| 1 | todo | ClockmakersNarrowTownhouse | G1 slot 1 | 6.0 × 7.9 × 20 | −Y |
+| 1 | done (100%) | ClockmakersNarrowTownhouse | G1 slot 1 | 6.0 × 6.64 × 19.0 (21.0 to the pots) | −Y |
 | 2 | todo | GuildmastersRowhouse | G1 slot 2 | 8.0 × 7.0 × 17.5 | −Y |
 | 3 | todo | SilversmithsOrnateAtelier | G1 slot 4 | 9.0 × 8.8 × 22.6 | −Y |
 | 4 | todo | AlchemistsMansardTenement | G1 slot 6 | 10.8 × 7.7 × 15.3 | −Y |
@@ -143,6 +174,15 @@ Palette lists the dominant clusters from `palette.json` (sRGB hex, % of texels),
 - Pieces: 5 storeys, 2 bays wide. Coursed pale rubble/ashlar stone for the ground and 1st floor. Red-brown brick for the 2nd–4th floors, with stone string courses at the brick base and between the 3rd and 4th floors. A flat roof behind a stone parapet with a moulded cornice, and a brick chimney with 2 clay pots. Dark 6-over-6 sash windows with stone sills and brick flat-arch heads. A round **clock face** (gold dial, Roman numerals) centred on the 3rd floor between two narrow windows (`gothic_kit.clock_face`). A panelled timber front door in a stone surround, with a transom, plus one small window beside it.
 - Palette: stone #a79f91:16 #8f8779:14 #c0b8a8:11; brick #42332a:12 #67483a:4; dark trim #564f46:13.
 - Rooms: one room per floor, plus the stair along the side wall at the back. The plot is only about 6.6 m deep and 6 m wide, so the inside is about 5.2 × 5.8 m. Stair core about 1.2 × 5 m. The roof is reachable through a hatch (optional).
+- **Result: DONE (100%), 2026-11-13; look approved by the user.**
+  - Scale 11.05 (the Meshy wall is 0.543 wide, which gives 6.0 m). Size 6.0 × 6.64 m (depth cut to the plot), cornice top 18.98 m, pots 21.03 m. Floors 0.18 / 4.20 / 8.25 / 11.60 / 14.90, ceiling 17.75, roof deck 18.05.
+  - Dog-leg stair against the back wall (x_half 1.55, x_land 4.40, 1.2 m flights, 24/24/20/20 risers), guards with full-height collision. The front door stands open. No roof access.
+  - Placed as `House_ClockmakersNarrowTownhouse` at (18572, 5756, 1300), yaw 180. `House_ClockmakersNarrowTownhouse_NavBounds` was added. Hidden (not deleted): `Cathedral_RowHouse_00171`.
+  - Files: `specs/ClockmakersNarrowTownhouse.json`, `specs/ClockmakersNarrowTownhouse_colors.json`, `build/ClockmakersNarrowTownhouse/` (`.blend`, Ext/Int FBX). Assets are in `/Game/Buildings/Houses/ClockmakersNarrowTownhouse/` (14 MIs, including Bronze).
+  - Checks: audit 0 see-through rays; 45 UCX hulls; 5 m rule 5.31 m (cornice corner to the nave buttresses; walls 5.68 m). Colour match against the Meshy front (B/A luminance): stone 1.01, brick 1.04, trim 1.00, gauged 0.95, dial 0.96, glass 0.88 (gain then raised to 1.14).
+  - Gotchas: the stepped-street gate wall (`Girona_SteppedStreet_00030`, x 17920–18000, y 5580–6220, top z 2037) pokes 0.28 m into the plot's right edge. It sits inside the wall thickness, and its front end stands 1.8 m out into the lane.
+  - Playability (`check_playability_ue.py`): the player capsule (radius 35, half height 90) passes all 46 route segments, from the street through the door, up every flight and across every landing, to the top room. The negative self-test is blocked by the front wall, a stair-well guard, the back wall and a ceiling, as it should be.
+  - **Open: NavMesh does not cover the stair.** Every room has NavMesh, but the flights, half landings and most landings don't, so AI can't climb past the ground floor. The collision is right: 45 hulls in the right places, complete triangle lists, consistent winding, and the physics traces agree. Which stair parts get NavMesh changes with the tile size (10 m vs 5 m) and with placement (copies in empty sky at yaw 0 and 180 showed different gaps). Also ruled out: the hidden old house, the Int mesh, nav modifiers, and simple-as-complex collision. Every experiment was undone: tile size is back to 10 m and the Ext collision flag to default. Next ideas: draw the NavMesh in a debug view, try the region and layer partitioning settings, or add NavLinkProxies between floors as a workaround.
 - Result: _not built_.
 
 **#2 GuildmastersRowhouse** (`9909a371-bb89-460e-8771-045ff7cebee2`)
@@ -336,3 +376,4 @@ The survey data for every plot (bounds, open sides, street z) is in `Saved/House
 
 ## 10. Log
 - 2026-11-13: Task 0 done. Downloaded the 30 textured GLBs (the textured one is the OLDER task of each Meshy pair; the newer is an untextured companion). Rendered references, palettes and contact sheets, surveyed the district, wrote the plot plan, and created this ledger. The user approved: kit rebuild, empty interiors (rooms and stairs), replace district houses, one house per task with `/clear` between, ring + next streets, facade exact with depth fitted to the plot.
+- 2026-11-13: House #1 ClockmakersNarrowTownhouse done (the pilot). The user approved the look and marked it 100% complete. It created `house_kit.py` (with the permanent **Bronze** slot), `build_house.py`, the three `*_ue.py` editor scripts and the tools `measure_meshy.py`, `check_5m.py`, `color_match.py`, `house_capture.py` and `ue_house.py`. `ncap.py` gained `hide`, `only` and `ortho`, and `crop.py` now keeps alpha-0 captures readable.

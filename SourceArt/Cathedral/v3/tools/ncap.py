@@ -26,6 +26,20 @@ if MODE == "spawn":
         cc.set_editor_property("fov_angle", v.get("fov", 70))
         cc.set_editor_property("capture_every_frame", False); cc.set_editor_property("capture_on_movement", False)
         cc.set_editor_property("always_persist_rendering_state", True)
+        if v.get("ortho"):                     # optional: orthographic, "ortho" = width in cm
+            cc.set_editor_property("projection_type", unreal.CameraProjectionMode.ORTHOGRAPHIC)
+            cc.set_editor_property("ortho_width", float(v["ortho"]))
+            cc.set_editor_property("auto_calculate_ortho_planes", False)   # the automatic planes clip everything away
+            cc.set_editor_property("update_ortho_planes", False)
+        if v.get("only"):                      # optional: labels of the only actors this view shows
+            cc.set_editor_property("primitive_render_mode", unreal.SceneCapturePrimitiveRenderMode.PRM_USE_SHOW_ONLY_LIST)
+            for a in eas.get_all_level_actors():
+                if a.get_actor_label() in v["only"]:
+                    cc.show_only_actor_components(a)
+        if v.get("hide"):                      # optional: labels of actors this view leaves out
+            for a in eas.get_all_level_actors():
+                if a.get_actor_label() in v["hide"]:
+                    cc.hide_actor_components(a)
 elif MODE == "tick":
     for a in caps.values(): a.get_component_by_class(unreal.SceneCaptureComponent2D).capture_scene()
 elif MODE == "export":

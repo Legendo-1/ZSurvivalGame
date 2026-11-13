@@ -1,0 +1,92 @@
+{
+ "folder": "ClockmakersNarrowTownhouse",
+ "type": "townhouse_flat",
+ "meshy_task": "4b2ecae8-b61c-43fc-90ab-0350f80191b1",
+ "notes": "House #1, the pilot. Scale 11.05 (Meshy wall width 0.543 -> 6.0 m, the slot). Facade measured on m_front.png (100 px/m) of SourceArt/Houses/tools/measure_meshy.py; the Meshy depth (7.56 m) is cut to the plot (6.64 m). Floor levels from the window sills (about 0.8 m above each floor).",
+ "scale": 11.05,
+ "width": 6.0,
+ "depth": 6.64,
+ "wall": 0.4,
+ "floors": [0.18, 4.20, 8.25, 11.60, 14.90],
+ "slab": 0.30,
+ "ceiling": 17.75,
+ "roof": {"kind": "flat", "deck": 18.05, "mat": "Roof"},
+ "cornice": {"z": 18.06, "mat": "Trim", "dentils": true},
+ "zones": [
+  {"kind": "blocks", "mat": "Stone", "z0": 0.0, "z1": 8.27, "course": 0.40, "length": [0.45, 1.05], "chamfer": 0.035, "jitter": 0.012},
+  {"kind": "flat", "mat": "Brick", "z0": 8.27, "z1": 18.06}
+ ],
+ "bands": [
+  {"z0": 8.27, "z1": 8.54, "proud": 0.10, "mat": "Trim"},
+  {"z0": 14.84, "z1": 15.12, "proud": 0.08, "mat": "Trim"}
+ ],
+ "chimneys": [{"x0": 0.0, "x1": 0.75, "y0": 2.3, "y1": 4.3, "z1": 20.04, "mat": "Brick", "cap_mat": "Gauged", "pots": 2, "cap_h": 0.26, "pot_h": 0.73}],
+ "facades": {
+  "front": {
+   "openings": [
+    {"kind": "door", "x0": 2.83, "x1": 4.07, "z0": 0.0, "z1": 3.45, "transom": 0.50, "transom_panes": 3,
+     "surround": {"w": 0.37, "proud": 0.05, "cap": [3.46, 3.76], "cap_proud": 0.09},
+     "leaf": {"cols": 2, "rows": 3, "open_deg": 95, "hinge": "left"}},
+    {"kind": "window", "x0": 0.95, "x1": 1.91, "z0": 1.58, "z1": 3.07, "panes": [2, 3],
+     "sill": {"h": 0.12, "ext": 0.05, "proud": 0.05}, "head": {"kind": "lintel", "z0": 3.07, "z1": 3.35, "ext": 0.09}},
+    {"kind": "window", "x0": 1.15, "x1": 2.15, "z0": 5.20, "z1": 7.36, "panes": [2, 4],
+     "sill": {"h": 0.24, "ext": 0.12, "proud": 0.07}, "head": {"kind": "lintel", "z0": 7.38, "z1": 7.69, "ext": 0.17}},
+    {"kind": "window", "x0": 3.85, "x1": 4.85, "z0": 5.20, "z1": 7.36, "panes": [2, 4],
+     "sill": {"h": 0.24, "ext": 0.12, "proud": 0.07}, "head": {"kind": "lintel", "z0": 7.38, "z1": 7.69, "ext": 0.17}},
+    {"kind": "window", "x0": 1.15, "x1": 2.15, "z0": 9.07, "z1": 11.25, "panes": [2, 4],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 11.25, "z1": 11.58, "splay": 0.12, "n": 9}},
+    {"kind": "window", "x0": 3.85, "x1": 4.85, "z0": 9.07, "z1": 11.25, "panes": [2, 4],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 11.25, "z1": 11.58, "splay": 0.12, "n": 9}},
+    {"kind": "window", "x0": 0.95, "x1": 1.52, "z0": 12.37, "z1": 14.29, "panes": [1, 4],
+     "sill": {"h": 0.18, "ext": 0.07}, "head": {"kind": "arch", "z0": 14.29, "z1": 14.64, "splay": 0.10, "n": 7}},
+    {"kind": "window", "x0": 4.48, "x1": 5.05, "z0": 12.37, "z1": 14.29, "panes": [1, 4],
+     "sill": {"h": 0.18, "ext": 0.07}, "head": {"kind": "arch", "z0": 14.29, "z1": 14.64, "splay": 0.10, "n": 7}},
+    {"kind": "window", "x0": 1.15, "x1": 2.15, "z0": 15.63, "z1": 17.35, "panes": [2, 3],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 17.38, "z1": 17.74, "splay": 0.12, "n": 9}},
+    {"kind": "window", "x0": 3.85, "x1": 4.85, "z0": 15.63, "z1": 17.35, "panes": [2, 3],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 17.38, "z1": 17.74, "splay": 0.12, "n": 9}}
+   ],
+   "features": [{"kind": "clock", "cx": 3.0, "cz": 13.37, "half": 1.2, "r": 1.02}]
+  },
+  "back": {
+   "openings": [
+    {"kind": "window", "x0": 1.15, "x1": 2.15, "z0": 5.20, "z1": 7.36, "panes": [2, 4], "sill": {"h": 0.18, "ext": 0.12}},
+    {"kind": "window", "x0": 3.85, "x1": 4.85, "z0": 5.20, "z1": 7.36, "panes": [2, 4], "sill": {"h": 0.18, "ext": 0.12}},
+    {"kind": "window", "x0": 1.15, "x1": 2.15, "z0": 9.07, "z1": 11.25, "panes": [2, 4],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 11.25, "z1": 11.58, "splay": 0.12, "n": 9}},
+    {"kind": "window", "x0": 3.85, "x1": 4.85, "z0": 9.07, "z1": 11.25, "panes": [2, 4],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 11.25, "z1": 11.58, "splay": 0.12, "n": 9}},
+    {"kind": "window", "x0": 1.15, "x1": 2.15, "z0": 12.40, "z1": 14.10, "panes": [2, 3],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 14.10, "z1": 14.45, "splay": 0.12, "n": 9}},
+    {"kind": "window", "x0": 3.85, "x1": 4.85, "z0": 12.40, "z1": 14.10, "panes": [2, 3],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 14.10, "z1": 14.45, "splay": 0.12, "n": 9}},
+    {"kind": "window", "x0": 1.15, "x1": 2.15, "z0": 15.63, "z1": 17.35, "panes": [2, 3],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 17.38, "z1": 17.74, "splay": 0.12, "n": 9}},
+    {"kind": "window", "x0": 3.85, "x1": 4.85, "z0": 15.63, "z1": 17.35, "panes": [2, 3],
+     "sill": {"h": 0.18, "ext": 0.08}, "head": {"kind": "arch", "z0": 17.38, "z1": 17.74, "splay": 0.12, "n": 9}}
+   ]
+  },
+  "left": {},
+  "right": {}
+ },
+ "stair": {"kind": "dogleg_back", "x_half": 1.55, "x_land": 4.40, "flight_width": 1.2, "spine": 0.12, "risers": [24, 24, 20, 20], "guard": 1.0},
+ "meshy_front": {"file": "C:/Users/Lenovo/Documents/Unreal Projects/ZSurvivalGame/Saved/HouseCheck/ClockmakersNarrowTownhouse/measure/m_front.png",
+                 "col0": 63.3, "row0": 2153.1, "ppm": 100},
+ "place": {"location": [18572, 5756, 1300], "yaw": 180, "hide": ["Cathedral_RowHouse_00171"]},
+ "materials": {
+  "Stone":   {"tex": "plaster", "target": [0.328, 0.292, 0.234], "gain": 1.15, "ta": 0.7, "normal": 0.9, "dirt": 0.6, "variation": 0.14},
+  "Brick":   {"tex": "brick", "target": [0.082, 0.041, 0.027], "gain": 1.02, "ta": 0.95, "normal": 1.0, "dirt": 0.5},
+  "Gauged":  {"tex": "plaster", "target": [0.093, 0.046, 0.031], "gain": 0.96, "ta": 0.5, "normal": 0.6},
+  "Trim":    {"tex": "plaster", "target": [0.289, 0.260, 0.211], "gain": 1.12, "ta": 0.55, "normal": 0.6, "dirt": 0.6, "variation": 0.06},
+  "Door":    {"tex": "timber", "target": [0.095, 0.074, 0.051], "gain": 1.1, "ta": 0.5, "normal": 0.8},
+  "Metal":   {"tex": "slate", "target": [0.025, 0.020, 0.016], "gain": 1.0, "ta": 0.4, "normal": 0.3, "rough": 0.6, "metal": 0.3},
+  "Glass":   {"glass": true, "target": [0.050, 0.052, 0.056], "gain": 1.14, "emissive": 0.02},
+  "Bronze":  {"tex": "slate", "target": [0.078, 0.054, 0.039], "gain": 1.0, "ta": 0.5, "normal": 0.5, "rough": 0.55, "metal": 0.5},
+  "Brass":   {"tex": "plaster", "target": [0.42, 0.30, 0.13], "gain": 1.1, "ta": 0.3, "normal": 0.3, "rough": 0.45, "metal": 0.85, "dirt": 0.3},
+  "Dial":    {"tex": "plaster", "target": [0.45, 0.35, 0.20], "gain": 1.26, "ta": 0.3, "normal": 0.3, "dirt": 0.4},
+  "Clay":    {"tex": "plaster", "target": [0.30, 0.15, 0.09], "gain": 1.1, "ta": 0.5},
+  "Roof":    {"tex": "cobble", "target": [0.09, 0.08, 0.065], "gain": 1.1, "ta": 0.8},
+  "Plaster": {"tex": "plaster", "target": [0.55, 0.52, 0.46], "gain": 1.0, "ta": 0.35, "normal": 0.4, "dirt": 0.0, "streak": 0.0, "variation": 0.03, "macro": 0.1},
+  "Timber":  {"tex": "timber", "target": [0.12, 0.08, 0.05], "gain": 1.0, "ta": 1.0, "dirt": 0.0, "streak": 0.0}
+ }
+}

@@ -4,7 +4,11 @@ import OpenImageIO as oiio
 src, dst = sys.argv[1], sys.argv[2]
 x0, y0, x1, y1 = (int(v) for v in sys.argv[3:7])
 scale = float(sys.argv[7]) if len(sys.argv) > 7 else 1.0
-buf = oiio.ImageBuf(src)
+cfg = oiio.ImageSpec()
+cfg.attribute("oiio:UnassociatedAlpha", 1)    # Unreal base-colour captures have alpha 0: keep the colour
+buf = oiio.ImageBuf(src, 0, 0, cfg)
+if buf.spec().nchannels > 3:
+    buf = oiio.ImageBufAlgo.channels(buf, (0, 1, 2))
 spec = buf.spec()
 x0, y0, x1, y1 = max(0, x0), max(0, y0), min(spec.width, x1), min(spec.height, y1)
 cut = oiio.ImageBufAlgo.cut(buf, oiio.ROI(x0, x1, y0, y1))
