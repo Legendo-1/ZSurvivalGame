@@ -1,6 +1,6 @@
-"""Creates /Game/Buildings/Cathedral/BP_GironaCathedral: the Meshy shell plus the left portal in one actor.
+"""Creates /Game/Buildings/Cathedral/BP_GironaCathedral: the Meshy shell plus the side portal in one actor.
 
-Both meshes share one coordinate space (see build_left_portal.py), so both components sit at the
+Both meshes share one coordinate space (see build_side_portal.py), so both components sit at the
 actor's origin with no offset. Drag the Blueprint into a level to place the whole cathedral.
 
 Run in the open editor (Output Log, Python mode):
@@ -11,7 +11,7 @@ import unreal
 FOLDER = "/Game/Buildings/Cathedral"
 BP_NAME = "BP_GironaCathedral"
 BP_PATH = f"{FOLDER}/{BP_NAME}"
-PARTS = [("Shell", f"{FOLDER}/SM_GironaCathedral_Shell"), ("LeftPortal", f"{FOLDER}/SM_Girona_LeftPortal")]
+PARTS = [("Shell", f"{FOLDER}/SM_GironaCathedral_Shell"), ("SidePortal", f"{FOLDER}/SM_Girona_SidePortal")]
 
 eal = unreal.EditorAssetLibrary
 sds = unreal.get_engine_subsystem(unreal.SubobjectDataSubsystem)
