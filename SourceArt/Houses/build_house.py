@@ -837,9 +837,10 @@ def mansard_roof(E, spec, prof, hulls):
             hk.rect(E, (X, ya, za - th), (X, yb, zb - th), (X, yb, zb + s), (X, ya, za + s), mat, (nx, 0, 0))
     for (y, z), ny in ((pts[0], -1.0), (pts[-1], 1.0)):          # eave edges
         hk.rect(E, (X0, y, z - th), (X1, y, z - th), (X1, y, z + rf["step"]), (X0, y, z + rf["step"]), mat, (0, ny, 0))
-    gu = spec["gutter"]
-    hk.block(E, X0 + 0.03, X1 - 0.03, gu["y0"], 0.0, gu["z0"], gu["z1"], gu["mat"], faces="xXyzZ")
-    hk.block(E, X0 + 0.03, X1 - 0.03, D, D - gu["y0"], gu["z0"], gu["z1"], gu["mat"], faces="xXYzZ")
+    gu = spec.get("gutter")                                       # house #6 has none
+    if gu:
+        hk.block(E, X0 + 0.03, X1 - 0.03, gu["y0"], 0.0, gu["z0"], gu["z1"], gu["mat"], faces="xXyzZ")
+        hk.block(E, X0 + 0.03, X1 - 0.03, D, D - gu["y0"], gu["z0"], gu["z1"], gu["mat"], faces="xXYzZ")
     hulls.append([(x, y, z) for x in (X0, X1) for y, z in prof] + [(x, y, spec["ceiling"]) for x in (X0, X1) for y in (0.0, D)])
 
 
@@ -1093,6 +1094,7 @@ def zinc_dormer(E, spec, front, xc, hulls):
     under a pediment, stone cheeks down to the roof, and a metal gable roof whose front edge is the raking cornice."""
     dm = spec["dormers"]
     mat, rmat = dm["mat"], dm["roof"]
+    trim = dm.get("trim", mat)          # house #6: timber architrave, sill, head beam and bargeboards on a plaster face
     hw, ww, yf, z0 = dm["half"], dm["win_half"], dm["front"], dm["z0"]
     wz0, wz1 = dm["win"]
     pd = dm["pediment"]
@@ -1107,15 +1109,17 @@ def zinc_dormer(E, spec, front, xc, hulls):
     E.push(gk.translate(0.0, yf, 0.0))
     hk.outline_face(E, top, z0, mat, holes=[hole])
     ar = dm["architrave"]
-    hk.frame_run(E, *hole, ar["profile"], mat)
+    hk.frame_run(E, *hole, ar["profile"], trim)
     E.pop()
     hk.sash_window(E, xc - ww, xc + ww, wz0, wz1, "Metal", "Glass", dm["panes"][0], dm["panes"][1], y=yf + dm["rec"], depth=dm["depth"], fw=0.05,
                    meeting=False)
-    hk.reveal(E, hole, yf, yf + dm["rec"], mat, sides="lrt")
+    hk.reveal(E, hole, yf, yf + dm["rec"], trim, sides="lrt")
     sl = dm["sill"]
-    hk.block(E, xc - sl["half"], xc + sl["half"], yf - sl["proud"], yf + dm["rec"], sl["z0"], wz0, mat, faces="xXyzZ")
+    hk.block(E, xc - sl["half"], xc + sl["half"], yf - sl["proud"], yf + dm["rec"], sl["z0"], wz0, trim, faces="xXyzZ")
     en = dm["entablature"]
-    hk.block(E, xc - en["half"], xc + en["half"], yf - en["proud"], yf, en["z0"], ez, mat, faces="xXyzZ")
+    hk.block(E, xc - en["half"], xc + en["half"], yf - en["proud"], yf, en["z0"], ez, trim, faces="xXyzZ")
+    for px0, px1 in dm.get("posts", []):                          # house #6: timber posts either side of the window
+        hk.block(E, px0, px1, yf - en["proud"], yf, z0, en["z0"], trim, faces="xXyz")
     # cheeks: from the front back to where the main roof reaches their top, the foot 5 cm under the roof
     ztop = under(xc + hw)
     ys, zs = [p[0] for p in front], [p[1] for p in front]
@@ -1129,9 +1133,9 @@ def zinc_dormer(E, spec, front, xc, hulls):
         xe = xc + sx * eh
         hk.rect(E, (xe, yfr, ez), (xe, ybk, ez), (xc, ybk, rz), (xc, yfr, rz), rmat, (sx * s, 0.0, 1.0))
         hk.rect(E, (xe, yfr, ez - th), (xe, ybk, ez - th), (xe, ybk, ez), (xe, yfr, ez), rmat, (sx, 0, 0))                # eave edge
-        hk.rect(E, (xe, yfr, ez - th), (xc, yfr, rz - th), (xc, yfr, rz), (xe, yfr, ez), mat, (0, -1, 0))                  # raking cornice
+        hk.rect(E, (xe, yfr, ez - th), (xc, yfr, rz - th), (xc, yfr, rz), (xe, yfr, ez), trim, (0, -1, 0))                 # raking cornice
         dn = (-sx * s, 0.0, -1.0)
-        hk.rect(E, (xe, yfr, ez - th), (xc, yfr, rz - th), (xc, yf, rz - th), (xe, yf, ez - th), mat, dn)                  # front soffit
+        hk.rect(E, (xe, yfr, ez - th), (xc, yfr, rz - th), (xc, yf, rz - th), (xe, yf, ez - th), trim, dn)                 # front soffit
         xw = xc + sx * hw
         hk.rect(E, (xe, yf, ez - th), (xw, yf, under(xw)), (xw, ybk, under(xw)), (xe, ybk, ez - th), rmat, dn)            # side soffit
     hulls.append(xf(E, hk.box_pts(xc - eh, xc + eh, yfr, ybk, z0, rz)))
@@ -1225,8 +1229,265 @@ def build_townhouse_zinc(spec):
     return E, I, hulls
 
 
+# ---------------------------------------------------------------------------------------------
+# townhouse_jetty (house #6 on): a half-timbered house over a stone ground floor. The ground floor (house space:
+# x 0..W, y 0..D) is ashlar on a plinth, its front opened by a deep round-arched porch (archivolt on imposts, a stone
+# soffit back to a tympanum with a barred window and a painted fascia) in front of a timber shopfront with a glazed
+# door; narrow arched passages run through the piers from both sides into the porch. Above it, timber-framed storeys
+# (spec "storeys"), each a box of its own that may jetty out over the one below, with plaster infill, posts, rails,
+# braces, plates and bressummers, casement windows with open plank shutters, jetty soffits and corbels. A gable roof
+# from the spec's profile (eave, optional kick points, ridge, back eave: the ridge need not be in the middle) over gable walls framed up to
+# its underside, a timber-and-plaster dormer, and a wrought-iron hanging sign. One empty shell inside.
+# ---------------------------------------------------------------------------------------------
+def jetty_mirror(wl, L):
+    """A wall spec mirrored end for end (the left side as the mirror image of the right)."""
+    out = {k: v for k, v in wl.items() if k not in ("posts", "rails", "plates", "braces", "windows", "mirror")}
+    out["posts"] = [[L - b, L - a] for a, b in wl.get("posts", [])]
+    out["rails"] = [[L - b, L - a, c, d] for a, b, c, d in wl.get("rails", [])]
+    out["plates"] = [[L - b, L - a, c, d, p] for a, b, c, d, p in wl.get("plates", [])]
+    out["braces"] = [[L - xa, za, L - xb, zb] for xa, za, xb, zb in wl.get("braces", [])]
+    out["windows"] = [[L - b, L - a, c, d, n, m] for a, b, c, d, n, m in wl.get("windows", [])]
+    return out
+
+
+def jetty_wall(E, I, wl, L, z0, top, t, ws, hulls):
+    """One timber-framed wall in wall coordinates (infill plane y = 0) from z0 up to `top` (a height, or a top outline
+    [(x, z), ...] such as a gable under the roof): plaster infill with window holes, the hidden core, the inner face,
+    the framing (house_kit.timber_members), casement windows with reveals and open shutters. Adds its hull."""
+    flat = not isinstance(top, list)
+    outline = [(0.0, top), (L, top)] if flat else top
+    wins = [tuple(w[:4]) for w in wl.get("windows", [])]
+    if flat:
+        hk.flat_face(E, 0.0, L, z0, top, "Plaster", holes=wins, cell=0.6)
+        hk.wall_core(E, L, z0, top, t, holes=wins)
+        hk.flat_face(I, 0.0, L, z0, top, "Plaster", holes=wins, y=t, inward=True)
+    else:
+        hk.outline_face(E, outline, z0, "Plaster", holes=wins)
+        for yc, inward in ((t / 2 - 0.001, False), (t / 2 + 0.001, True)):
+            hk.outline_face(E, outline, z0, "Plaster", holes=wins, y=yc, inward=inward, var=0.2)
+        hk.outline_face(I, [(x, z - 0.03) for x, z in outline], z0, "Plaster", holes=wins, y=t, inward=True)
+        hk.rect(E, (0.0, 0.0, z0 - 0.01), (L, 0.0, z0 - 0.01), (L, t, z0 - 0.01), (0.0, t, z0 - 0.01), "Plaster", (0, 0, 1), 0.2)
+    hk.timber_members(E, wl, z0, top if flat else outline)
+    sh = ws["shutter"]
+    for x0, x1, wz0, wz1, c, r in wl.get("windows", []):
+        hole = (x0, x1, wz0, wz1)
+        hk.sash_window(E, x0, x1, wz0, wz1, ws["frame"], "Glass", c, r, y=ws["rec"], depth=ws["depth"], fw=ws["fw"], meeting=False)
+        hk.reveal(E, hole, 0.0, ws["rec"], "Timber")
+        hk.reveal(I, hole, ws["rec"], t, "Plaster")
+        if wl.get("shutters"):
+            g, w = sh["gap"], sh["w"]
+            hk.plank_shutter(E, x0 - g - w, x0 - g, wz0, wz1, -0.08, sh["mat"], sh["iron"], hinge="r")
+            hk.plank_shutter(E, x1 + g, x1 + g + w, wz0, wz1, -0.08, sh["mat"], sh["iron"], hinge="l")
+    hulls.append(xf(E, [(x, y, z) for x, z in outline for y in (0.0, t)] + [(x, y, z0) for x in (0.0, L) for y in (0.0, t)]))
+
+
+def jetty_storey(E, I, spec, st, prof, hulls):
+    """One timber-framed storey: four walls round the box st["x"] x (st["front"]..st["back"]) from st["z"][0] to
+    st["z"][1], or with "top": "roof" up to the roof's underside (gables on the sides)."""
+    th = spec["roof"]["thick"]
+    xl, xr = st["x"]
+    yf, yb = st["front"], st["back"]
+    z0, z1 = st["z"]
+
+    def under(y):
+        return roof_z(prof, y) - th
+    inner_ys = [p[0] for p in prof if yf < p[0] < yb]
+    frames = {"front": ((xl, yf), (xr, yf)), "right": ((xr, yf), (xr, yb)), "back": ((xr, yb), (xl, yb)), "left": ((xl, yb), (xl, yf))}
+    for side in ("front", "right", "back", "left"):
+        m, L = gk.wall_frame(*frames[side])
+        wl = st["walls"].get(side, {})
+        if "mirror" in wl:
+            wl = jetty_mirror(st["walls"][wl["mirror"]], L)
+        if st.get("top") != "roof":
+            top = z1
+        elif side == "front":
+            top = under(yf)
+        elif side == "back":
+            top = under(yb)
+        else:
+            ys = [yf] + inner_ys + [yb]
+            pts = [((y - yf) if side == "right" else (yb - y), under(y)) for y in ys]
+            top = sorted(pts)
+        E.push(m)
+        I.push(m)
+        jetty_wall(E, I, wl, L, z0, top, st["t"], spec["window_style"], hulls)
+        E.pop()
+        I.pop()
+
+
+def jetty_ground(E, I, spec, hulls):
+    """The stone ground floor (house coordinates): plinth, ashlar faces, the arched porch with its archivolt, imposts,
+    soffit, tympanum (barred window, fascia) and porch ceiling, the side passages through the piers, the timber
+    shopfront with its glazed door (a separate leaf), the inner faces and the collision."""
+    W, D, F0 = spec["width"], spec["depth"], spec["floor"]
+    g = spec["ground"]
+    t, Z1, stone = g["t"], g["z1"], g["stone"]
+    pl, ar, tn, sp = g["plinth"], g["arch"], g["tunnel"], g["shop"]
+    xc, zs, r, ro = ar["xc"], ar["spring"], ar["r"], ar["ring"]
+    xa, xb = xc - r, xc + r
+    ty, tz, tt = ar["tympanum_y"], ar["tympanum_z"], ar["tympanum_t"]
+    ys, s_t = sp["y"], sp["t"]
+    tr, tsp = tn["r"], tn["spring"]
+
+    def tunnel(c):
+        return (c - tr, c + tr, 0.0, tsp + tr)
+    # front: plinth, the face round the archivolt, spandrels, archivolt, imposts, the arch soffit back to the tympanum
+    zinc_plinth(E, W, pl, [(xa, xb, 0.0, pl["z1"])], [])
+    hk.reveal(E, (xa, xb, 0.0, pl["z1"]), -pl["proud"], 0.0, pl["mat"], sides="lr")
+    hk.flat_face(E, 0.0, W, pl["z1"], Z1, stone, holes=[(xc - ro, xc + ro, zs, ar["top"]), (xa, xb, 0.0, zs)], cell=0.6)
+    hk.arch_spandrels(E, xc, zs, ro, xc - ro, xc + ro, ar["top"], 0.0, stone)
+    hk.arch_ring(E, xc, zs, r, ro, -ar["ring_proud"], ar["ring_mat"])
+    hk.arch_intrados(E, xc, zs, r, -ar["ring_proud"], ty, stone)
+    im = ar["impost"]
+    for a, b in ((-im["out"], xa + im["in"]), (xb - im["in"], W + im["out"])):
+        hk.block(E, a, b, -im["proud"], 0.0, im["z0"], im["z1"], im["mat"], faces="xXyYzZ")
+    # the porch's side faces (facing into the porch), with the passages' arched mouths
+    for left in (True, False):
+        m, L = gk.wall_frame((xa, 0.0), (xa, ys)) if left else gk.wall_frame((xb, ys), (xb, 0.0))
+        c = tn["y"] if left else ys - tn["y"]
+        step = (ty, L, tz, zs) if left else (0.0, L - ty, tz, zs)
+        E.push(m)
+        hk.flat_face(E, 0.0, L, 0.0, zs, stone, holes=[tunnel(c), step], cell=0.6)
+        hk.arch_spandrels(E, c, tsp, tr, c - tr, c + tr, tsp + tr, 0.0, stone)
+        E.pop()
+    # tympanum with the barred window, its fascia, lintel and cap; the porch ceiling behind it
+    arc = hk.arc_pts(xc, zs, r, 180.0, 0.0, n=24)
+    gr = g["grille"]
+    gh = (gr["x"][0], gr["x"][1], gr["z"][0], gr["z"][1])
+    E.push(gk.translate(0.0, ty, 0.0))
+    hk.outline_face(E, arc, tz, stone, holes=[gh])
+    hk.barred_window(E, *gh, gr["depth"], stone, gr["frame"], "Glass", "Bronze", cols=gr["cols"], rows=gr["rows"])
+    E.pop()
+    hk.outline_face(I, [(x, z - 0.02) for x, z in arc], tz, "Plaster", holes=[gh], y=ty + tt, inward=True)
+    hk.reveal(I, gh, ty + gr["depth"], ty + tt, "Plaster")
+    fa = g["fascia"]
+    l0, l1, lp = fa["lintel"]
+    hk.block(E, xa, xb, ty - lp, ty, l0, l1, fa["mat"], faces="yzZ")
+    for z0_, z1_, p in ((fa["z"][0], fa["z"][1], fa["proud"]), tuple(fa["cap"])):
+        hw = math.sqrt(r * r - (z1_ - zs) ** 2) - 0.02
+        hk.block(E, xc - hw, xc + hw, ty - p, ty, z0_, z1_, fa["mat"], faces="xXyzZ")
+    hk.rect(E, (xa, ty, tz), (xb, ty, tz), (xb, ys, tz), (xa, ys, tz), stone, (0, 0, -1))
+    # the shopfront on the plane ys: head, stiles, shop windows on stallrisers, door posts, the door and its transom
+    smat = sp["mat"]
+    h0, h1, hp = sp["head"]
+    hk.block(E, xa, xb, ys - hp, ys, h0, h1, smat, faces="yz")
+    st_ = sp["stile"]
+    hk.block(E, xa, xa + st_, ys - 0.06, ys, 0.0, h0, smat, faces="Xy")
+    hk.block(E, xb - st_, xb, ys - 0.06, ys, 0.0, h0, smat, faces="xy")
+    gz0, gz1 = sp["glass_z"]
+    s0, s1, sp_ = sp["sill"]
+    rs = sp["riser"]
+    inner = []
+    for w in sp["windows"]:
+        x0, x1 = w["x"]
+        hk.sash_window(E, x0, x1, gz0, gz1, smat, "Glass", w["panes"][0], w["panes"][1], y=ys, depth=0.06, fw=0.06, meeting=False)
+        hk.reveal(I, (x0, x1, gz0, gz1), ys + 0.06, ys + s_t, "Plaster")
+        hk.block(E, x0, x1, ys - sp_, ys + 0.06, s0, s1, smat, faces="yzZ")
+        mg = rs["margin"]
+        panel = (x0 + mg, x1 - mg, mg, s0 - mg)
+        hk.flat_face(E, x0, x1, 0.0, s0, smat, holes=[panel], y=ys)
+        hk.flat_face(E, *panel, smat, y=ys + rs["sunk"])
+        hk.reveal(E, panel, ys, ys + rs["sunk"], smat)
+        inner.append((x0, x1, gz0, gz1))
+    for px0, px1 in sp["posts"]:
+        hk.block(E, px0, px1, ys - sp["post_proud"], ys, 0.0, h0, smat, faces="xXy")
+    dr = sp["door"]
+    dx0, dx1 = dr["x"]
+    r0, r1 = dr["rail"]
+    ly, lt = dr["leaf_y"], dr["leaf_t"]
+    hk.block(E, dx0, dx1, ys - 0.02, ys + 0.08, r0, r1, smat, faces="yzZ")
+    hk.sash_window(E, dx0, dx1, r1, h0, smat, "Glass", dr["transom_lights"], 1, y=ys, depth=0.06, fw=0.05, meeting=False)
+    hk.reveal(E, (dx0, dx1, 0.0, r0), ys, ys + ly, smat, sides="lr")
+    hk.reveal(I, (dx0, dx1, F0, r0), ys + ly + lt, ys + s_t, "Plaster", sides="lrt")
+    hk.block(E, dx0, dx1, ys - 0.05, ys + s_t, 0.0, F0, stone, faces="yZ")
+    w, h = dx1 - dx0 - 0.01, r0 - F0 - 0.005
+    left = dr.get("hinge", "left") == "left"
+
+    def make(B, w=w, h=h):
+        hk.glazed_leaf(B, w, h, smat, "Glass", smat, t=lt, light=tuple(dr["light"]), grid=tuple(dr["grid"]), panel_z=tuple(dr["panels"]))
+    separate_leaf(E, (dx0 + 0.005) if left else (dx1 - 0.005), left, w, h, ys + ly, F0, lt, make, seed=31 + len(DOORS))
+    inner += [(dx0, dx1, 0.0, r0), (dx0, dx1, r1, h0)]
+    hk.flat_face(I, xa, xb, F0, tz, "Plaster", holes=inner, y=ys + s_t, inward=True)
+    for a, b in ((t, xa), (xb, W - t)):                       # the piers' backs, inside
+        hk.flat_face(I, a, b, F0, Z1, "Plaster", y=ys + s_t, inward=True)
+    # the sides: plinth, face, the passage through the pier (mouth, soffit, jambs), core, inner face
+    for side in ("right", "left"):
+        m, L = hk.facade_frame(side, W, D)
+        E.push(m)
+        I.push(m)
+        c = tn["y"] if side == "right" else D - tn["y"]
+        hole = tunnel(c)
+        zinc_plinth(E, L, pl, [hole], [])
+        hk.reveal(E, (hole[0], hole[1], 0.0, pl["z1"]), -pl["proud"], 0.0, pl["mat"], sides="lr")
+        hk.flat_face(E, 0.0, L, pl["z1"], Z1, stone, holes=[hole], cell=0.6)
+        hk.arch_spandrels(E, c, tsp, tr, hole[0], hole[1], hole[3], 0.0, stone)
+        depth = xa if side == "left" else W - xb
+        hk.arch_intrados(E, c, tsp, tr, 0.0, depth, stone)
+        hk.reveal(E, (hole[0], hole[1], 0.0, tsp), 0.0, depth, stone, sides="lr")
+        hk.wall_core(E, L, 0.0, Z1, t, holes=[hole])
+        a, b = (ys + s_t, D - t) if side == "right" else (t, D - ys - s_t)
+        hk.flat_face(I, a, b, F0, Z1, "Plaster", y=t, inward=True)
+        E.pop()
+        I.pop()
+    m, L = hk.facade_frame("back", W, D)
+    E.push(m)
+    I.push(m)
+    zinc_plinth(E, L, pl, [], [])
+    hk.flat_face(E, 0.0, L, pl["z1"], Z1, stone, cell=0.6)
+    hk.wall_core(E, L, 0.0, Z1, t)
+    hk.flat_face(I, t, L - t, F0, Z1, "Plaster", y=t, inward=True)
+    E.pop()
+    I.pop()
+    # collision: the piers round the passages, the wall over the arch in strips, tympanum, shopfront round the door,
+    # side and back walls, the floor
+    ty0, ty1 = tn["y"] - tr, tn["y"] + tr
+    for x0, x1 in ((0.0, xa), (xb, W)):
+        hulls += [hk.box_pts(x0, x1, 0.0, ty0, 0.0, Z1), hk.box_pts(x0, x1, ty1, ys, 0.0, Z1), hk.box_pts(x0, x1, ty0, ty1, tsp + tr, Z1)]
+    n = 8
+    for k in range(n):
+        u0, u1 = xa + (xb - xa) * k / n, xa + (xb - xa) * (k + 1) / n
+        dmin = min(abs(u0 - xc), abs(u1 - xc)) if not (u0 < xc < u1) else 0.0
+        zl = zs + math.sqrt(max(r * r - dmin * dmin, 0.0))
+        hulls.append(hk.box_pts(u0, u1, 0.0, ty, zl, Z1))
+    hulls.append(hk.box_pts(xa, xb, ty, ys, tz, Z1))
+    hulls += [hk.box_pts(xa, dx0, ys, ys + s_t, 0.0, tz), hk.box_pts(dx1, xb, ys, ys + s_t, 0.0, tz), hk.box_pts(dx0, dx1, ys, ys + s_t, r0, tz)]
+    hulls += [hk.box_pts(0.0, t, ys, D, 0.0, Z1), hk.box_pts(W - t, W, ys, D, 0.0, Z1), hk.box_pts(t, W - t, D - t, D, 0.0, Z1)]
+    hulls.append(hk.box_pts(t, W - t, ys + s_t, D - t, -0.3, F0))
+
+
+def build_townhouse_jetty(spec):
+    W, D, F0, CEIL = spec["width"], spec["depth"], spec["floor"], spec["ceiling"]
+    prof = [tuple(p) for p in spec["roof"]["profile"]]
+    E, I = hk.Builder(hk.MATERIALS, seed=11), hk.Builder(hk.MATERIALS, seed=12)
+    hulls = []
+    jetty_ground(E, I, spec, hulls)
+    for st in spec["storeys"]:
+        jetty_storey(E, I, spec, st, prof, hulls)
+    for so in spec["soffits"]:
+        z = so["z"]
+        for x0, x1, y0, y1 in so["rects"]:
+            hk.rect(E, (x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z), so.get("mat", "Timber"), (0, 0, -1))
+    for co in spec["corbels"]:
+        (y0, y1), (z0, z1), hw = co["y"], co["z"], co["w"] / 2
+        for x in co["x"]:
+            hk.block(E, x - hw, x + hw, y0, y1, z0, z1, "Timber", faces="xXyz")
+    mansard_roof(E, spec, prof, hulls)
+    for xc in spec["dormers"]["x"]:
+        zinc_dormer(E, spec, prof[:max(range(len(prof)), key=lambda k: prof[k][1]) + 1], xc, hulls)
+    sg = spec.get("sign")
+    if sg:
+        hk.hanging_sign(E, sg["x"], sg["y_wall"], sg["z_arm"], sg["reach"], tuple(sg["board"]), sg["mat"])
+    # inside: one empty room from the shop floor up to a ceiling under the roof
+    ig = spec["inside"]
+    x0, x1, y0, y1 = ig["floor"]
+    hk.rect(I, (x0, y0, F0), (x1, y0, F0), (x1, y1, F0), (x0, y1, F0), "Timber", (0, 0, 1))
+    x0, x1, y0, y1 = ig["ceiling"]
+    hk.rect(I, (x0, y0, CEIL), (x1, y0, CEIL), (x1, y1, CEIL), (x0, y1, CEIL), "Plaster", (0, 0, -1))
+    return E, I, hulls
+
+
 BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable, "townhouse_terrace": build_townhouse_terrace,
-            "townhouse_mansard": build_townhouse_mansard, "townhouse_zinc": build_townhouse_zinc}
+            "townhouse_mansard": build_townhouse_mansard, "townhouse_zinc": build_townhouse_zinc, "townhouse_jetty": build_townhouse_jetty}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1344,7 +1605,45 @@ def shots_zinc(spec):
             ("back", (W / 2 - 4.0, D + 18.0, 6.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
 
 
+def audit_setup_jetty(spec):
+    """Outside eyes only: street (into the porch and up the jetties), both sides (through the passages), the lower
+    town, above the roof. Planes run just inside the shell."""
+    W, D = spec["width"], spec["depth"]
+    prof = [tuple(p) for p in spec["roof"]["profile"]]
+    th = spec["roof"]["thick"]
+    CEIL = spec["ceiling"]
+    ys = spec["ground"]["shop"]["y"] + spec["ground"]["shop"]["t"]
+    street = [("lane left", (1.0, -4.5, 1.7)), ("lane door", (3.3, -4.5, 1.7)), ("lane right", (6.2, -4.5, 1.7)),
+              ("lane high", (3.6, -6.0, 9.0)), ("lane low left", (-1.5, -2.5, 1.0)), ("lane low right", (W + 1.5, -2.5, 1.0))]
+    rights = [("plaza", (W + 6.0, D / 2, 1.7)), ("plaza front", (W + 4.0, -3.0, 1.7)), ("plaza high", (W + 6.0, -3.0, 14.0)),
+              ("passage right", (W + 3.0, 1.38, 1.5))]
+    lefts = [("left side", (-6.0, D / 2, 4.0)), ("left high", (-5.0, -2.0, 18.0)), ("passage left", (-3.0, 1.38, 1.5))]
+    above = [("above front", (W / 2, -5.0, 24.0)), ("above", (W / 2, D / 2, 28.0)), ("above back", (W / 2, D + 5.0, 24.0))]
+    lower = [("lower town", (4.0, D + 9.0, 6.0)), ("lower town left", (-2.0, D + 7.0, 12.0))]
+    return [("ground", (0.0, ys + 0.3, 0.0), (1, 0, 0), (0.5, W - 0.5, 0.05, 6.3), 0.04, street + rights[1:2] + rights[3:] + lefts[2:]),
+            ("upper front", (0.0, 0.25, 0.0), (1, 0, 0), (0.1, W - 0.1, 6.45, CEIL - 0.05), 0.04, street),
+            ("right", (W - 0.3, 0.0, 0.0), (0, 1, 0), (ys + 0.1, D - 0.3, 0.05, CEIL - 0.05), 0.04, rights),
+            ("left", (0.3, 0.0, 0.0), (0, 1, 0), (ys + 0.1, D - 0.3, 0.05, CEIL - 0.05), 0.04, lefts),
+            ("back", (0.0, D - 0.3, 0.0), (1, 0, 0), (0.1, W - 0.1, 0.05, roof_z(prof, D) - th - 0.1), 0.04, lower),
+            ("attic front", (0.0, 1.5, 0.0), (1, 0, 0), (0.1, W - 0.1, CEIL + 0.1, roof_z(prof, 1.5) - th - 0.1), 0.05, above + street[3:4]),
+            ("attic back", (0.0, 5.0, 0.0), (1, 0, 0), (0.1, W - 0.1, CEIL + 0.1, roof_z(prof, 5.0) - th - 0.1), 0.05, above + lower)]
+
+
+def shots_jetty(spec):
+    W, D = spec["width"], spec["depth"]
+    H = max(p[1] for p in spec["roof"]["profile"])
+    dx = sum(spec["ground"]["shop"]["door"]["x"]) / 2
+    return [("iso", (W + 11.0, -16.0, 12.0), (W / 2, D / 2, H / 2), 35, 1200, 1600),
+            ("front_eye", (W / 2 - 1.0, -6.0, 1.7), (W / 2, 0.0, 7.5), 16, 1200, 1500),
+            ("door_close", (dx, -4.0, 1.8), (dx, 1.8, 2.0), 24, 1200, 1200),
+            ("roof", (W + 4.0, -6.0, H + 3.0), (W / 2, D / 2, H - 3.0), 28, 1400, 1100),
+            ("side", (W + 16.0, D / 2, 8.0), (W, D / 2, 8.5), 30, 1000, 1500),
+            ("back", (W / 2 - 4.0, D + 18.0, 7.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
+
+
 def audit_setup(spec):
+    if spec["type"] == "townhouse_jetty":
+        return audit_setup_jetty(spec)
     if spec["type"] == "townhouse_gable":
         return audit_setup_gable(spec)
     if spec["type"] == "townhouse_terrace":
@@ -1392,6 +1691,8 @@ def shots(spec):
         return shots_mansard(spec)
     if spec["type"] == "townhouse_zinc":
         return shots_zinc(spec)
+    if spec["type"] == "townhouse_jetty":
+        return shots_jetty(spec)
     W, D = spec["width"], spec["depth"]
     H = spec["cornice"]["z"] + gk.ENTABLATURE_H
     F = spec["floors"]

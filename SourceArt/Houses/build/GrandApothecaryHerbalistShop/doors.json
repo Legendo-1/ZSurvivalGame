@@ -1,0 +1,13 @@
+[
+ {
+  "mesh": "SM_House_GrandApothecaryHerbalistShop_Door",
+  "component": "Door",
+  "location_cm": [
+   270.5,
+   -192.00000000000003,
+   2.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ }
+]

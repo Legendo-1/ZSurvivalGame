@@ -8,7 +8,8 @@ Assumes the map was made with --res 0.02 and --z1 16.0 (change res / z1 below fo
 import sys
 import numpy as np
 dm = np.load(sys.argv[1])
-res, z1 = 0.02, 16.0
+import os
+res, z1 = 0.02, float(os.environ.get("DEPTH_Z1", 16.0))  # DEPTH_Z1 (house #6): the map's --z1, if not 16
 mode, v = sys.argv[2], float(sys.argv[3])
 tol = float(sys.argv[4]) if len(sys.argv) > 4 else 0.02
 minlen = float(sys.argv[5]) if len(sys.argv) > 5 else 0.05

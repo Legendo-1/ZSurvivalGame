@@ -52,7 +52,7 @@ for x in (xs if "--depthmap" not in o else []):
         else:
             org, d = Vector((x, -5.0, z)), Vector((0, 1, 0))
         hit = tree.ray_cast(org, d, 100.0)
-        val = hit[0][0] if along_x else hit[0][1] if hit[0] is not None else None
+        val = None if hit[0] is None else hit[0][0] if along_x else hit[0][1]
         if hit[0] is None:
             print(f"  z {z:6.2f}  -")
         else:

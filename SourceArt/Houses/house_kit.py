@@ -942,3 +942,88 @@ def seam_facet(B, mat, a, b, c, d, pitch=0.78, w=0.04, h=0.035, ribs=True, var=0
     for i in range(1, k):
         xc = a[0] + (b[0] - a[0]) * i / k
         slope_rib(B, xc, w, (a[1], a[2]), (d[1], d[2]), h, mat, var)
+
+
+# ---------------------------------------------------------------------------------------------
+# House #6 (GrandApothecaryHerbalistShop): half-timbering, open plank shutters, a barred window, a hanging shop sign
+# ---------------------------------------------------------------------------------------------
+def timber_members(B, wl, z0, top, var=0.5):
+    """Timber framing proud of a wall's infill plane y = 0 (wall coordinates), from the wall spec wl:
+      "plates": [[x0, x1, z0, z1, proud], ...]   sole plates, bressummers, top plates (the most proud)
+      "posts":  [[x0, x1], ...]                  full height from z0 up to the top (a height, or a top outline
+                                                 [(x, z), ...]: the post stops under its lowest point), 7.5 cm proud
+      "rails":  [[x0, x1, z0, z1], ...]          rails and short studs, 6 cm proud
+      "braces": [[xa, za, xb, zb], ...]          diagonal braces 16 cm wide, 6.5 cm proud
+    Members stand at different depths so that crossing faces never lie on one plane."""
+    def zt(x0, x1):
+        return top if not isinstance(top, (list, tuple)) else min(outline_at(top, x0), outline_at(top, x1))
+    for x0, x1, za, zb, p in wl.get("plates", []):
+        block(B, x0, x1, -p, 0.0, za, zb, "Timber", faces="xXyzZ", var=var)
+    for x0, x1 in wl.get("posts", []):
+        block(B, x0, x1, -0.075, 0.0, z0, zt(x0, x1), "Timber", faces="xXyzZ", var=var)
+    for x0, x1, za, zb in wl.get("rails", []):
+        block(B, x0, x1, -0.06, 0.0, za, zb, "Timber", faces="xXyzZ", var=var)
+    for xa, za, xb, zb in wl.get("braces", []):
+        gk.bar(B, "Timber", (xa, za), (xb, zb), 0.16, 0.0, -0.065, var=var)
+
+
+def plank_shutter(B, x0, x1, z0, z1, y, mat, iron, hinge="l", t=0.045, var=0.5):
+    """Open plank shutter lying against a wall (wall coordinates): a board x0..x1, z0..z1 with its back on the plane y
+    (the face towards -y), two ledgers across it near the top and the bottom, shallow plank joints, and an iron strap
+    hinge on each ledger running from the hinge side ("l" = x0, "r" = x1, the side next to the window)."""
+    block(B, x0, x1, y - t, y, z0, z1, mat, faces="xXyzZ", var=var)
+    yf = y - t
+    w, h = x1 - x0, z1 - z0
+    for k in (1, 2):                                          # plank joints
+        x = x0 + w * k / 3
+        block(B, x - 0.006, x + 0.006, yf - 0.003, yf, z0 + 0.02, z1 - 0.02, mat, faces="xXy", var=var)
+    for zc in (z0 + 0.11 * h, z1 - 0.11 * h):
+        block(B, x0 + 0.03, x1 - 0.03, yf - 0.022, yf, zc - 0.06, zc + 0.06, mat, faces="xXyzZ", var=var)
+        a, b = (x0 - 0.01, x0 + 0.62 * w) if hinge == "l" else (x1 - 0.62 * w, x1 + 0.01)
+        block(B, a, b, yf - 0.03, yf - 0.022, zc - 0.022, zc + 0.022, iron, faces="xXyzZ", var=var)
+
+
+def barred_window(B, x0, x1, z0, z1, depth, stone, frame, glass, iron, cols=4, rows=4, fw=0.09, var=0.5):
+    """Small barred window in a wall face on the plane y = 0 (wall coordinates): a flat frame `fw` wide standing
+    6 cm proud round the hole, reveals back to `depth`, two-sided dark glass there and a grid of square iron bars
+    3 cm in front of it."""
+    for a, b, c, d in ((x0 - fw, x1 + fw, z0 - fw, z0), (x0 - fw, x1 + fw, z1, z1 + fw), (x0 - fw, x0, z0, z1), (x1, x1 + fw, z0, z1)):
+        block(B, a, b, -0.06, 0.0, c, d, frame, faces="xXyzZ", var=var)
+    reveal(B, (x0, x1, z0, z1), 0.0, depth, stone, var=var)
+    for yy, want in ((depth - 0.001, (0, -1, 0)), (depth + 0.001, (0, 1, 0))):
+        rect(B, (x0, yy, z0), (x1, yy, z0), (x1, yy, z1), (x0, yy, z1), glass, want, var=var)
+    yb = depth - 0.03
+    for i in range(1, cols):
+        x = x0 + (x1 - x0) * i / cols
+        block(B, x - 0.014, x + 0.014, yb - 0.028, yb, z0, z1, iron, faces="xXy", var=var)
+    for j in range(1, rows):
+        z = z0 + (z1 - z0) * j / rows
+        block(B, x0, x1, yb - 0.04, yb - 0.012, z - 0.014, z + 0.014, iron, faces="yzZ", var=var)
+
+
+def hanging_sign(B, x, y_wall, z_arm, reach, board, mat, var=0.5):
+    """Wrought-iron shop sign hanging over the street (house coordinates, the wall facing -y at y = y_wall): a wall
+    plate, an arm `reach` long at z_arm with a ball at its end, a curved stay from the plate up the wall to the arm,
+    and a board hung from the arm on two rods: board = (y_near, y_far, z_top, z_side, z_point), a shield shape whose
+    sides run down to z_side and whose foot curves to a point at z_point, with a scroll curl at each lower corner."""
+    block(B, x - 0.05, x + 0.05, y_wall - 0.03, y_wall, z_arm - 0.25, z_arm + 1.1, mat, faces="xXyzZ", var=var)
+    ye = y_wall - reach
+    B.tube([(x, y_wall - 0.03, z_arm), (x, ye, z_arm)], 0.035, mat, sides=8, var=var)
+    B.tube([(x, ye - 0.06 + 0.06 * math.cos(a), z_arm + 0.06 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 9)], 0.04, mat, sides=6, closed=True, var=var)
+    stay = [(x, y_wall - 0.03 - (reach * 0.55) * (1 - math.cos(a)), z_arm + 0.95 * math.sin(math.pi / 2 - a) ** 1.3)
+            for a in np.linspace(0.0, math.pi / 2, 9)]
+    B.tube(stay, 0.022, mat, sides=6, var=var)
+    yn, yfar, zt, zs, zp = board
+    for yy in (yn + 0.12, yfar - 0.12):
+        B.tube([(x, yy, z_arm - 0.03), (x, yy, zt)], 0.012, mat, sides=6, var=var)
+    ym = (yn + yfar) / 2
+    hw = abs(yfar - yn) / 2
+    pts = [(yfar, zt), (yn, zt)] + [(ym + hw * math.cos(a) * (1 if yn > yfar else -1), zs - (zs - zp) * math.sin(a)) for a in np.linspace(0.0, math.pi, 13)]
+    th = 0.03
+    for xx, nx in ((x - th, -1.0), (x + th, 1.0)):
+        B.fan([(xx, yy, zz) for yy, zz in pts], mat, (nx, 0, 0), var=var)
+    for (ya, za), (yb, zb) in zip(pts, pts[1:] + pts[:1]):
+        rect(B, (x - th, ya, za), (x + th, ya, za), (x + th, yb, zb), (x - th, yb, zb), mat, ("from", (x, ym, (zt + zp) / 2)), var)
+    for yy in (yn, yfar):
+        cz = zs - 0.05
+        B.tube([(x, yy + 0.07 * math.cos(a), cz + 0.07 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 11)], 0.012, mat, sides=5, closed=True, var=var)
