@@ -2625,10 +2625,156 @@ def build_townhouse_clocktower(spec):
     return E, I, hulls
 
 
+# ---------------------------------------------------------------------------------------------
+# townhouse_keep (house #12, MagistratesOfficialTenement): a plain coursed-stone block of three storeys. Battered
+# clasping buttresses at the four corners of the ground storey (a plinth, then sloping back to the wall under the first
+# string course); quoins on the corners above; two string courses, a deep frieze course and a projecting coping slab
+# round a flat paved roof deck sunk inside it. Barred windows on the middle storey and narrow shuttered ones on the top
+# storey (sills and head blocks) on every side; on the front an elliptical-arched doorway in a stone surround (jambs,
+# imposts, a voussoir ring) closed by two iron-gated leaves under a fixed tympanum, and an iron wall lantern. One empty
+# room inside.
+# ---------------------------------------------------------------------------------------------
+def keep_door(E, I, spec, L, t, hulls):
+    """The front doorway (front wall coordinates): spandrels, jamb reveals and soffit, surround, ring, threshold, the
+    fixed tympanum with its bars, and the two leaves (DOORS). Returns the hole cut in the wall."""
+    dr = spec["door"]
+    xc, r, zs, rz = dr.get("xc", L / 2), dr["r"], dr["spring"], dr["rz"]
+    x0, x1 = xc - r, xc + r
+    sp, jw, F0 = dr["proud"], dr["jamb"], spec["floor"]
+    ly, lt = dr["leaf_y"], dr["leaf_t"]
+    sm = dr["mat"]
+    hk.arch_spandrels(E, xc, zs, r, x0, x1, zs + rz, 0.0, "Stone", rz=rz)
+    hk.reveal(E, (x0, x1, 0.0, zs), -sp, t, sm, sides="lr")
+    hk.reveal(E, (x0, x1, F0, zs), -sp, t, sm, sides="b")                     # the threshold
+    hk.block(E, x0, x1, -sp, 0.0, 0.0, F0, sm, faces="y")
+    hk.arch_intrados(E, xc, zs, r, -sp, t, sm, rz=rz)
+    iz0, ip = dr["impost"]["z0"], dr["impost"]["proud"]
+    for a, b, f in ((x0 - jw, x0, "xy"), (x1, x1 + jw, "Xy")):
+        hk.block(E, a, b, -sp, 0.0, 0.0, zs, sm, faces=f)                      # jamb blocks
+    ie = dr["impost"]["ext"]
+    for a, b in ((x0 - jw - ie, x0), (x1, x1 + jw + ie)):
+        hk.block(E, a, b, -ip, -sp, iz0, zs, sm, faces="xXyYzZ")              # imposts, in front of the jambs
+    rw = dr["ring"]
+    hk.arch_ring(E, xc, zs, r, r + rw[0], -sp, sm, rz0=rz, rz1=rz + rw[1])
+    # the fixed tympanum: boards both sides, a head rail over the leaves, iron uprights on its face
+    arc = hk.arc_pts(xc, zs, r - 0.005, n=24, rz=rz - 0.005)
+    E.fan([(x, ly, z) for x, z in arc], "Door", (0, -1, 0))
+    E.fan([(x, ly + lt, z) for x, z in arc], "Door", (0, 1, 0))
+    hk.block(E, x0, x1, ly - 0.025, ly + lt, zs - 0.06, zs, "Metal", faces="yYz")
+    n = int(round(2 * r / dr["pitch"]))
+    for k in range(n):
+        x = x0 + 2 * r * (k + 0.5) / n
+        top = zs + rz * math.sqrt(max(0.0, 1 - ((x - xc) / r) ** 2)) - 0.03
+        if top > zs + 0.08:
+            hk.block(E, x - 0.015, x + 0.015, ly - 0.025, ly, zs, top, "Metal", faces="xXyZ")
+    # two iron-gated leaves, hinged at the jambs, meeting in the middle
+    w, h = r - 0.005, zs - 0.06 - F0 - 0.005
+    for left in (True, False):
+        def make(B, w=w, h=h, left=left):
+            hk.grille_leaf(B, w, h, "Door", "Metal", t=lt, pitch=dr["pitch"], rails=tuple(dr["rails"]), hinge="l" if left else "r",
+                           ring=dr["ring_pull"])
+        separate_leaf(E, x0 + 0.005 if left else x1 - 0.005, left, w, h, ly, F0, lt, make, seed=31 + len(DOORS))
+    hulls += [xf(E, hk.box_pts(-sp, x0, 0.0, t, 0.0, spec["frieze"]["z"][0])),
+              xf(E, hk.box_pts(x1, L + sp, 0.0, t, 0.0, spec["frieze"]["z"][0])),
+              xf(E, hk.box_pts(x0, x1, 0.0, t, zs + 0.5 * rz, spec["frieze"]["z"][0]))]
+    return (x0, x1, 0.0, zs + rz)
+
+
+def keep_walls(E, I, spec, hulls):
+    """The four walls (wall coordinates per side): faces, core, inner faces, windows, the door and lantern, quoins."""
+    W, D, t = spec["width"], spec["depth"], spec["wall"]
+    Z1 = spec["frieze"]["z"][0]
+    F0, CEIL = spec["floor"], spec["ceiling"]
+    wins = spec["windows"]
+    for side in ("front", "right", "back", "left"):
+        m, L = hk.facade_frame(side, W, D)
+        E.push(m)
+        I.push(m)
+        holes = []
+        for key, ws in wins.items():
+            for xc in spec["sides"][side][key]:
+                holes.append((xc - ws["w"] / 2, xc + ws["w"] / 2, ws["z"][0], ws["z"][1], key))
+        cut = [h[:4] for h in holes]
+        if side == "front":
+            cut.append(keep_door(E, I, spec, L, t, hulls))
+        else:
+            hulls.append(xf(E, hk.box_pts(0.0, L, 0.0, t, 0.0, Z1)))
+        hk.flat_face(E, 0.0, L, 0.0, Z1, "Stone", holes=cut, cell=0.6)
+        hk.wall_core(E, L, 0.0, Z1, t, holes=cut)
+        hk.flat_face(I, 0.0, L, F0, CEIL, "Plaster", holes=cut, y=t, inward=True)
+        for x0, x1, z0, z1, key in holes:
+            ws = wins[key]
+            rec = ws["rec"]
+            sl, hd = ws["sill"], ws["head"]
+            hk.sill(E, x0 - sl["ext"], x1 + sl["ext"], z0, "Trim", h=sl["h"], proud=sl["proud"], back=rec)
+            hk.lintel(E, x0 - hd["ext"], x1 + hd["ext"], z1, z1 + hd["h"], "Trim", proud=hd["proud"])
+            if ws["kind"] == "bars":
+                hk.grate_window(E, x0, x1, z0, z1, rec, "Stone", "Glass", "Metal", bars=ws["bars"], rails=tuple(ws["rails"]), ext=ws["ext"])
+                hk.reveal(I, (x0, x1, z0, z1), rec, t, "Plaster")
+            else:                                                   # closed plank shutters in the reveal
+                hk.reveal(E, (x0, x1, z0, z1), 0.0, rec, "Stone", sides="lrt")
+                E.push(gk.translate(x0, rec, z0))
+                hk.plank_leaf(E, x1 - x0, z1 - z0, "Timber", "Metal", t=ws["t"], planks=ws["planks"], straps=tuple(ws["straps"]),
+                              strap_h=0.04, ring=0.0)
+                E.pop()
+                hk.reveal(I, (x0, x1, z0, z1), rec + ws["t"], t, "Plaster")
+        # quoins up this face's left corner (the next face's right corner gets the other half)
+        q = spec["quoins"]
+        for k, (za, zb) in enumerate(q["zones"]):
+            hk.quoin_corner(E, za, zb, q["course"], q["long"], q["short"], q["proud"], "Stone", start_long=(k % 2 == 0))
+        if side == "front" and spec.get("lantern"):
+            ln = spec["lantern"]
+            hk.wall_lantern(E, ln["x"], 0.0, ln["z"], ln["out"], "Metal", "Lamp")
+        E.pop()
+        I.pop()
+
+
+def keep_top(E, spec, hulls):
+    """Buttresses, string courses, the frieze course, the coping round the roof deck, the deck."""
+    W, D, t = spec["width"], spec["depth"], spec["wall"]
+    bt = spec["buttress"]
+    prof = [tuple(p) for p in bt["profile"]]
+    for cx, cy, sx, sy in ((0.0, 0.0, -1, -1), (W, 0.0, 1, -1), (W, D, 1, 1), (0.0, D, -1, 1)):
+        hulls.append(hk.corner_block(E, cx, cy, sx, sy, prof, bt["a"], bt["mat"]))
+    for b in spec["bands"]:
+        hk.band_loop(E, W, D, b["z"][0], b["z"][1], b["proud"], "Trim")
+    loop = [(x, y, 0.0) for x, y in hk.plan_loop(W, D)]
+    fz0, fz1 = spec["frieze"]["z"]
+    fp = spec["frieze"]["proud"]
+    E.sweep([(x, y, fz0) for x, y, _ in loop], [[(0.0, 0.0), (fp, 0.0), (fp, fz1 - fz0), (0.0, fz1 - fz0)]], "Trim", closed=True)
+    cp = spec["coping"]
+    cz0, cz1, cpr, cin = cp["z"][0], cp["z"][1], cp["proud"], cp["in"]
+    deck = spec["deck"]
+    E.sweep([(x, y, cz0) for x, y, _ in loop], [[(0.0, 0.0), (cpr, 0.0), (cpr, cz1 - cz0), (-cin, cz1 - cz0), (-cin, deck - cz0)]],
+            "Trim", closed=True)
+    # the paved deck, in cells so the dirt bake varies over it
+    n, k = max(1, int(round((W - 2 * cin) / 1.0))), max(1, int(round((D - 2 * cin) / 1.0)))
+    xs, ys = np.linspace(cin, W - cin, n + 1), np.linspace(cin, D - cin, k + 1)
+    for i in range(n):
+        for j in range(k):
+            hk.rect(E, (xs[i], ys[j], deck), (xs[i + 1], ys[j], deck), (xs[i + 1], ys[j + 1], deck), (xs[i], ys[j + 1], deck), "Roof", (0, 0, 1))
+    hulls.append(hk.box_pts(t, W - t, t, D - t, deck - 0.3, deck))
+    for x0, x1, y0, y1 in ((-cpr, W + cpr, -cpr, t), (-cpr, W + cpr, D - t, D + cpr), (-cpr, t, t, D - t), (W - t, W + cpr, t, D - t)):
+        hulls.append(hk.box_pts(x0, x1, y0, y1, fz0, cz1))
+
+
+def build_townhouse_keep(spec):
+    E, I = hk.Builder(hk.MATERIALS, seed=11), hk.Builder(hk.MATERIALS, seed=12)
+    hulls = []
+    keep_walls(E, I, spec, hulls)
+    keep_top(E, spec, hulls)
+    W, D, t = spec["width"], spec["depth"], spec["wall"]
+    F0, CEIL = spec["floor"], spec["ceiling"]
+    hk.rect(I, (t, t, F0), (W - t, t, F0), (W - t, D - t, F0), (t, D - t, F0), "Timber", (0, 0, 1))
+    hk.rect(I, (t, t, CEIL), (W - t, t, CEIL), (W - t, D - t, CEIL), (t, D - t, CEIL), "Plaster", (0, 0, -1))
+    hulls.append(hk.box_pts(t, W - t, t, D - t, F0 - 0.3, F0))
+    return E, I, hulls
+
+
 BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable, "townhouse_terrace": build_townhouse_terrace,
             "townhouse_mansard": build_townhouse_mansard, "townhouse_zinc": build_townhouse_zinc, "townhouse_jetty": build_townhouse_jetty,
             "townhouse_loft": build_townhouse_loft, "townhouse_stack": build_townhouse_stack, "townhouse_tavern": build_townhouse_tavern,
-            "townhouse_gate": build_townhouse_gate, "townhouse_clocktower": build_townhouse_clocktower}
+            "townhouse_gate": build_townhouse_gate, "townhouse_clocktower": build_townhouse_clocktower, "townhouse_keep": build_townhouse_keep}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -2971,7 +3117,43 @@ def shots_clocktower(spec):
             ("side", (W + 22.0, C, 10.0), (W, C, 12.0), 30, 1000, 1700)]
 
 
+def audit_setup_keep(spec):
+    """Outside eyes only: the lane (into the door and windows), both sides, the back, high up, the roof deck, above.
+    Planes inside the room both ways, under the deck, and in the walls' cores."""
+    W, D, t = spec["width"], spec["depth"], spec["wall"]
+    F0, CEIL, deck = spec["floor"], spec["ceiling"], spec["deck"]
+    street = [("lane door", (W / 2, -4.5, 1.7)), ("lane door low", (W / 2 + 0.4, -2.0, 0.4)), ("lane left", (0.5, -4.0, 1.7)),
+              ("lane right", (W - 0.5, -4.0, 1.7)), ("lane low left", (-1.5, -2.0, 0.6)), ("lane low right", (W + 1.5, -2.0, 0.6)),
+              ("lane mid", (W / 2 - 1.5, -6.0, 5.5)), ("lane top", (W / 2 + 1.0, -7.0, 10.0)), ("lane high", (W / 2, -12.0, 16.0))]
+    sides = [("left", (-6.0, D / 2, 1.7)), ("left mid", (-6.0, D / 2 - 1.0, 5.5)), ("left top", (-8.0, D / 2 + 1.0, 10.0)),
+             ("right", (W + 6.0, D / 2, 1.7)), ("right mid", (W + 6.0, D / 2 + 1.0, 5.5)), ("right top", (W + 8.0, D / 2 - 1.0, 10.0))]
+    back = [("back", (W / 2, D + 6.0, 1.7)), ("back mid", (W / 2 - 1.0, D + 6.0, 5.5)), ("back top", (W / 2 + 1.0, D + 8.0, 10.0))]
+    above = [("above", (W / 2 + 0.5, D / 2 - 0.5, 22.0)), ("deck", (W / 2, D / 2, deck + 1.7)), ("deck corner", (0.8, 0.8, deck + 1.0)),
+             ("above front", (W / 2, -6.0, 18.0)), ("above left", (-6.0, D / 2, 17.0)), ("above back", (W / 2, D + 6.0, 17.0))]
+    outside = street + sides + back + above
+    return [("room x", (W / 2, 0.0, 0.0), (0, 1, 0), (t + 0.05, D - t - 0.05, F0 + 0.05, CEIL - 0.05), 0.06, outside),
+            ("room y", (0.0, D / 2, 0.0), (1, 0, 0), (t + 0.05, W - t - 0.05, F0 + 0.05, CEIL - 0.05), 0.06, outside),
+            ("room front", (0.0, t + 0.3, 0.0), (1, 0, 0), (t + 0.05, W - t - 0.05, F0 + 0.05, CEIL - 0.05), 0.06, outside),
+            ("under deck", (0.0, D / 2, 0.0), (1, 0, 0), (t + 0.05, W - t - 0.05, CEIL + 0.05, deck - 0.05), 0.05, outside),
+            ("front core", (0.0, t / 2, 0.0), (1, 0, 0), (0.05, W - 0.05, 0.05, spec["frieze"]["z"][0] - 0.05), 0.06, outside),
+            ("left core", (t / 2, 0.0, 0.0), (0, 1, 0), (0.05, D - 0.05, 0.05, spec["frieze"]["z"][0] - 0.05), 0.06, outside)]
+
+
+def shots_keep(spec):
+    W, D = spec["width"], spec["depth"]
+    H = spec["coping"]["z"][1]
+    return [("iso", (W + 14.0, -18.0, 14.0), (W / 2, D / 2, H / 2), 30, 1300, 1400),
+            ("iso_left", (-14.0, -16.0, 12.0), (W / 2, D / 2, H / 2), 30, 1300, 1400),
+            ("front_eye", (W / 2 - 1.5, -11.0, 1.7), (W / 2, 0.0, 6.0), 18, 1200, 1500),
+            ("door_close", (W / 2 + 0.6, -4.5, 1.6), (W / 2, 0.0, 1.8), 26, 1200, 1200),
+            ("window_close", (2.1, -3.5, 5.8), (2.1, 0.0, 5.6), 26, 1200, 1200),
+            ("roof", (W + 5.0, -5.0, H + 7.0), (W / 2, D / 2, H), 28, 1400, 1000),
+            ("back", (W / 2 - 4.0, D + 18.0, 6.0), (W / 2, D / 2, H / 2), 32, 1300, 1400)]
+
+
 def audit_setup(spec):
+    if spec["type"] == "townhouse_keep":
+        return audit_setup_keep(spec)
     if spec["type"] == "townhouse_clocktower":
         return audit_setup_clocktower(spec)
     if spec["type"] == "townhouse_gate":
@@ -3034,6 +3216,8 @@ def shots_stack(spec):
 
 
 def shots(spec):
+    if spec["type"] == "townhouse_keep":
+        return shots_keep(spec)
     if spec["type"] == "townhouse_clocktower":
         return shots_clocktower(spec)
     if spec["type"] == "townhouse_gate":

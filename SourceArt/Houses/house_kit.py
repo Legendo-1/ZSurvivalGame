@@ -1346,3 +1346,56 @@ def corner_block(B, cx, cy, sx, sy, prof, a, mat, var=0.5):
     if o > 1e-6:
         B.fan([P(o, -a, z), P(0.0, -a, z), P(0.0, 0.0, z), P(-a, 0.0, z), P(-a, o, z)], mat, (0, 0, 1), var=var, hub=P(o, o, z))
     return [P(u, v, z) for z, o in prof for u, v in ((-a, -a), (-a, o), (o, o), (o, -a))]
+
+
+# ---------------------------------------------------------------------------------------------
+# House #12 (MagistratesOfficialTenement): an iron-gated door leaf, a window behind iron bars
+# ---------------------------------------------------------------------------------------------
+def grille_leaf(B, w, h, board, iron, t=0.08, pitch=0.22, rails=(0.12, 0.5, 0.92), frame=0.05, bar=0.03, hinge="l", ring=0.42,
+                studs=0.18, var=0.5):
+    """Door leaf of dark boards behind an iron grille, in leaf space (x 0..w, y 0..t, z 0..h, its face on y = 0
+    towards -y): the board (shallow joints every `pitch`), an iron frame `frame` wide round its edge, square upright
+    bars at `pitch` and flat rails at the fractions `rails` of h (all 2.5 cm proud of the board), rivet studs every
+    `studs` up the latch-side stile, and (ring > 0) a ring pull on a plate at that fraction of h near the latch side."""
+    block(B, 0.0, w, 0.0, t, 0.0, h, board, var=var)
+    n = max(1, int(round(w / pitch)))
+    for k in range(1, n):
+        x = w * k / n
+        block(B, x - 0.005, x + 0.005, -0.003, 0.0, 0.01, h - 0.01, board, faces="xXy", var=var)
+    f, p = frame, 0.025
+    for a, b, c, d in ((0.0, f, 0.0, h), (w - f, w, 0.0, h), (f, w - f, 0.0, f), (f, w - f, h - f, h)):
+        block(B, a, b, -p, 0.0, c, d, iron, faces="xXyzZ", var=var)
+    for k in range(n):
+        x = w * (k + 0.5) / n
+        if f < x - bar / 2 and x + bar / 2 < w - f:
+            block(B, x - bar / 2, x + bar / 2, -p, 0.0, f, h - f, iron, faces="xXy", var=var)
+    for fr in rails:
+        z = h * fr
+        block(B, f, w - f, -p - 0.012, -p + 0.012, z - 0.03, z + 0.03, iron, faces="yzZ", var=var)
+    xl = w - f / 2 if hinge == "l" else f / 2
+    m = max(2, int(h / studs))
+    for k in range(m + 1):
+        z = f + (h - 2 * f) * k / m
+        block(B, xl - 0.014, xl + 0.014, -p - 0.014, -p, z - 0.014, z + 0.014, iron, faces="xXyzZ", var=var)
+    if ring > 0:
+        xr = w - 0.16 if hinge == "l" else 0.16
+        zr = h * ring
+        block(B, xr - 0.05, xr + 0.05, -p - 0.012, -p, zr - 0.02, zr + 0.12, iron, faces="xXyzZ", var=var)
+        B.tube([(xr + 0.075 * math.sin(q), -p - 0.03, zr - 0.075 * math.cos(q)) for q in np.linspace(0, 2 * math.pi, 13)], 0.012, iron,
+               sides=6, closed=True, var=var)
+
+
+def grate_window(B, x0, x1, z0, z1, rec, stone, glass, iron, bars=6, rails=(0.22, 0.78), ext=0.10, bar=0.032, var=0.5):
+    """Window behind iron bars in a wall face on the plane y = 0 (wall coordinates): reveals (left, right, top) from
+    the face back to `rec`, two-sided dark glass there (the caller adds a sill for the bottom), `bars` square upright
+    bars just inside the face, and flat bars across at the fractions `rails` of the height, running `ext` past the
+    opening on both sides over the wall face."""
+    reveal(B, (x0, x1, z0, z1), 0.0, rec, stone, sides="lrt", var=var)
+    for yy, want in ((rec - 0.001, (0, -1, 0)), (rec + 0.001, (0, 1, 0))):
+        rect(B, (x0, yy, z0), (x1, yy, z0), (x1, yy, z1), (x0, yy, z1), glass, want, var=var)
+    for k in range(bars):
+        x = x0 + (x1 - x0) * (k + 0.5) / bars
+        block(B, x - bar / 2, x + bar / 2, 0.0, bar, z0, z1, iron, faces="xXyY", var=var)
+    for fr in rails:
+        z = z0 + (z1 - z0) * fr
+        block(B, x0 - ext, x1 + ext, -0.022, 0.0, z - 0.025, z + 0.025, iron, faces="xXyzZ", var=var)

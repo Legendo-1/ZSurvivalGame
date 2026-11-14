@@ -1,0 +1,24 @@
+[
+ {
+  "mesh": "SM_House_MagistratesOfficialTenement_Door",
+  "component": "Door",
+  "location_cm": [
+   325.5,
+   -26.0,
+   2.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ },
+ {
+  "mesh": "SM_House_MagistratesOfficialTenement_Door_1",
+  "component": "Door_1",
+  "location_cm": [
+   566.5,
+   -26.0,
+   2.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": 90.0
+ }
+]
