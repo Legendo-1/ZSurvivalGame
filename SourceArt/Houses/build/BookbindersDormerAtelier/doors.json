@@ -1,0 +1,13 @@
+[
+ {
+  "mesh": "SM_House_BookbindersDormerAtelier_Door",
+  "component": "Door",
+  "location_cm": [
+   331.5,
+   -18.0,
+   2.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ }
+]
