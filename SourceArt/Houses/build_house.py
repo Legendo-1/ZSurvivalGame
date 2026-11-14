@@ -2371,10 +2371,264 @@ def build_townhouse_gate(spec):
     return E, I, hulls
 
 
+# ---------------------------------------------------------------------------------------------
+# townhouse_clocktower (house #11, ClockworkEngineersClockTower): a square stone clock tower. A shaft (four plain
+# ashlar walls) on clasping corner buttresses with set-offs, a round-headed plank door on the front, a slit window and
+# a big round-headed gear opening on every face (brass spur gears in a dark recess); over a corbel strip the wider clock
+# stage (a recessed brass plate with a clock dial front and back, open works of gears on the sides), a band and a
+# cornice; round corner turrets on moulded corbels with slits, brass bands, slate cones, brass balls and spikes; a
+# hipped slate roof with an arched dormer on each face; an open lantern (a round arch through each face in stone and
+# brass rings, pilasters and corner piers with pinnacles, gablets) under a square slate spire with brass ribs, two
+# brass balls and a spike. The shaft and stage are one empty space inside.
+# ---------------------------------------------------------------------------------------------
+def tower_frames(C, h):
+    """Wall frames of a square of half size h about (C, C), as townhouse sides: front, right, back, left."""
+    a, b = C - h, C + h
+    return {"front": ((a, a), (b, a)), "right": ((b, a), (b, b)), "back": ((b, b), (a, b)), "left": ((a, b), (a, a))}
+
+
+def clock_shaft(E, I, spec, hulls):
+    """The shaft walls (wall coordinates per side): faces, core, door, slit, gear opening with its gears, corbel strip."""
+    C, sh = spec["centre"], spec["shaft"]
+    H, t, Z1 = sh["half"], sh["t"], sh["z1"]
+    sl, op, dr = sh["slit"], sh["opening"], sh["door"]
+    stage_out = spec["stage"]["half"] - H
+    junk = hk.Builder(hk.MATERIALS, seed=99)                       # inner reveals of openings closed inside the wall
+    for side, (p0, p1) in tower_frames(C, H).items():
+        m, L = gk.wall_frame(p0, p1)
+        xc = L / 2
+        E.push(m)
+        I.push(m)
+        holes = [(xc - sl["r"], xc + sl["r"], sl["z0"], sl["zs"] + sl["r"]), (xc - op["r"], xc + op["r"], op["z0"], op["zs"] + op["r"])]
+        inner_holes = []
+        if side == "front":
+            dh = (xc - dr["r"], xc + dr["r"], dr["z0"], dr["zs"] + dr["r"])
+            holes.append(dh)
+            inner_holes.append(dh)
+        hk.flat_face(E, 0.0, L, 0.0, Z1, "Stone", holes=holes, cell=0.6)
+        hk.wall_core(E, L, 0.0, Z1, t, holes=holes)
+        hk.flat_face(I, 0.0, L, spec["floor"], spec["ceiling"], "Plaster", holes=inner_holes, y=t, inward=True)
+        # the slit window: a stone surround, dark two-sided glass
+        hk.arched_opening(E, junk, xc, sl["z0"], sl["zs"], sl["r"], t, sl["rec"], "Stone", trim="Trim", ring_w=sl["ring"], proud=sl["proud"],
+                          sill_h=sl["sill"], inner_from=sl["rec"])
+        arched_glass(E, xc, sl["z0"], sl["zs"], sl["r"], sl["rec"])
+        # the gear opening: a surround, the recess closed by a dark back, gears standing in it
+        r, z0, zs, rec = op["r"], op["z0"], op["zs"], op["rec"]
+        hk.arched_opening(E, junk, xc, z0, zs, r, t, rec, "Stone", trim="Trim", ring_w=op["ring"], proud=op["proud"], sill_h=op["sill"],
+                          inner_from=rec)
+        hk.rect(E, (xc - r, rec, z0), (xc + r, rec, z0), (xc + r, rec, zs), (xc - r, rec, zs), op["back"], (0, -1, 0))
+        E.fan([(x, rec, z) for x, z in hk.arc_pts(xc, zs, r, n=24)], op["back"], (0, -1, 0))
+        for g in spec["gears"][side]:
+            hk.spur_gear(E, xc + g["dx"], g["z"], g["y"], g["r"], g["teeth"], "Brass", spokes=g["spokes"], phase=g["phase"], axle="Metal")
+        # the corbel strip from the shaft face out to the clock stage's face (its ends run into the turret corbels)
+        c0, c1 = sh["corbel"]
+        hk.rect(E, (0.0, 0.0, c0), (L, 0.0, c0), (L, -stage_out, c1), (0.0, -stage_out, c1), "Trim", (0, -1, -0.5))
+        if side == "front":                                       # the round-headed plank door, as on the tavern tower
+            r, z0, zs = dr["r"], dr["z0"], dr["zs"]
+            ly, lt = dr["leaf_y"], dr["leaf_t"]
+            hk.arched_opening(E, I, xc, z0, zs, r, t, ly, "Stone", trim="Trim", ring_w=dr["ring"], proud=dr["proud"], sill_h=0.0,
+                              inner_from=ly + lt)
+            arc = hk.arc_pts(xc, zs, r - 0.005, n=24)
+            E.fan([(x, ly, z) for x, z in arc], dr["mat"], (0, -1, 0))               # the fixed tympanum over the leaf
+            E.fan([(x, ly + lt, z) for x, z in arc], dr["mat"], (0, 1, 0))
+            hk.reveal(E, (xc - r, xc + r, z0, zs), -dr["proud"], ly, "Stone", sides="b")       # the threshold
+            hk.block(E, xc - r, xc + r, ly, ly + lt, zs - 0.06, zs, dr["mat"], faces="yYz")
+            w, h = 2 * r - 0.01, zs - 0.06 - z0 - 0.005
+
+            def make(B, w=w, h=h):
+                hk.plank_leaf(B, w, h, dr["mat"], dr["iron"], t=lt, planks=dr["planks"], straps=tuple(dr["straps"]), hinge="l", ring=0.45)
+            separate_leaf(E, xc - r + 0.005, True, w, h, ly, z0, lt, make, seed=31 + len(DOORS))
+            hulls += [xf(E, hk.box_pts(0.0, xc - r, 0.0, t, 0.0, Z1)), xf(E, hk.box_pts(xc + r, L, 0.0, t, 0.0, Z1)),
+                      xf(E, hk.box_pts(xc - r, xc + r, 0.0, t, zs + r, Z1))]
+        else:
+            hulls.append(xf(E, hk.box_pts(0.0, L, 0.0, t, 0.0, Z1)))
+        E.pop()
+        I.pop()
+    # clasping buttresses at the four corners
+    bt = spec["buttress"]
+    prof = [tuple(p) for p in bt["profile"]]
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            hulls.append(hk.corner_block(E, C + sx * H, C + sy * H, sx, sy, prof, bt["a"], "Stone"))
+
+
+def clock_stage(E, spec, hulls):
+    """The clock stage: walls on the wider square, plate recesses with the clocks (front, back) or open works (sides),
+    the band at its foot and the cornice; the corner turrets on their corbels."""
+    C, sg, sh = spec["centre"], spec["stage"], spec["shaft"]
+    S, z0, z1 = sg["half"], sg["z0"], sg["z1"]
+    ts = S - (sh["half"] - sh["t"])                               # down to the shaft's inner plane
+    pl = sg["plate"]
+    for side, (p0, p1) in tower_frames(C, S).items():
+        m, L = gk.wall_frame(p0, p1)
+        xc, ph, cz, rc = L / 2, pl["half"], pl["cz"], pl["recess"]
+        hole = (xc - ph, xc + ph, cz - ph + 0.06, cz + ph - 0.06)
+        E.push(m)
+        hk.flat_face(E, 0.0, L, z0, z1, "Trim", holes=[hole], cell=0.6)
+        hk.wall_core(E, L, z0, z1, ts)
+        hk.reveal(E, hole, 0.0, rc, "Trim")
+        E.push(gk.translate(0.0, rc + pl["proud"], 0.0))         # the plate's front face closes the recess at y = rc
+        hz = ph - 0.06                                           # the plate is a little lower than wide, as on the Meshy
+        if side in sg["clock"]:
+            E.push(gk.translate(xc, 0.0, cz) @ np.diag([1.0, 1.0, hz / ph, 1.0]) @ gk.translate(-xc, 0.0, -cz))
+            hk.clock_dial(E, xc, cz, ph, pl["r"], "Brass", "Brass", "Dial", "Metal", brass="Metal", plate_proud=pl["proud"], rosette="Brass", centre="Brass")
+            E.pop()
+        else:
+            E.push(gk.translate(xc, 0.0, cz) @ np.diag([1.0, 1.0, hz / ph, 1.0]) @ gk.translate(-xc, 0.0, -cz))
+            hk.blank_dial(E, xc, cz, ph, pl["r"], "Brass", "Brass", "Bronze", plate_proud=pl["proud"])
+            E.pop()
+            for g in sg["works"]:
+                hk.spur_gear(E, xc + g["dx"], cz + g["dz"], -pl["proud"] - 0.11, g["r"], g["teeth"], "Brass", t=0.06,
+                             spokes=g["spokes"], phase=g["phase"], axle="Metal")
+        E.pop()
+        E.pop()
+    E.push(gk.translate(C - S, C - S, 0.0))
+    b0, b1, bp = sg["band"]
+    hk.band_loop(E, 2 * S, 2 * S, b0, b1, bp, "Trim")
+    c0, c1, cp = sg["cornice"]
+    hk.band_loop(E, 2 * S, 2 * S, c0, c1, cp, "Trim")
+    E.pop()
+    hulls.append(hk.box_pts(C - S, C + S, C - S, C + S, z0, sg["cornice"][1]))
+    # the corner turrets
+    tu = spec["turret"]
+    r = tu["r"]
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            cx, cy = C + sx * tu["at"], C + sy * tu["at"]
+            E.lathe([[tuple(p) for p in tu["corbel"]]], "Trim", segs=24, center=(cx, cy, 0.0), smooth=False)
+            E.lathe([[(r, tu["corbel"][-1][1]), (r, tu["top"])]], "Trim", segs=24, center=(cx, cy, 0.0), smooth=True)
+            ba0, ba1, br = tu["band"]
+            E.lathe([[(r, ba0), (br, ba0), (br, ba1)]], "Brass", segs=24, center=(cx, cy, 0.0), smooth=False)
+            cr, apex = tu["cone"]
+            E.lathe([[(br, ba1), (cr, ba1), (cr, ba1 + 0.04), (0.001, apex)]], "Roof", segs=16, center=(cx, cy, 0.0), smooth=False)
+            E.push(gk.translate(cx, cy, apex - 0.04))
+            gk.ball(E, "Brass", tu["ball"])
+            E.pop()
+            s0, s1, sr = tu["spike"]
+            hk.spike_finial(E, cx, cy, s0 - 0.04, s1, "Metal", r=sr)
+            for ang in ((0.0 if sx > 0 else 180.0), (90.0 if sy > 0 else 270.0)):   # slits on the two outer faces
+                E.push(gk.translate(cx, cy, 0.0) @ gk.rot_z(ang))
+                for za, zb in tu["slits"]:
+                    hk.block(E, r - 0.012, r + 0.012, -0.045, 0.045, za, zb, "Metal", faces="XyYzZ")
+                E.pop()
+            ring = [(cx + r * math.cos(a), cy + r * math.sin(a)) for a in np.radians(np.arange(0, 360, 45))]
+            hulls.append([(x, y, z) for x, y in ring for z in (tu["corbel"][2][1], tu["top"])] + [(cx, cy, tu["corbel"][0][1])])
+            hulls.append([(cx + cr * math.cos(a), cy + cr * math.sin(a), ba1) for a in np.radians(np.arange(0, 360, 45))] + [(cx, cy, apex)])
+
+
+def clock_roof(E, spec, hulls):
+    """The hipped roof over the stage with an arched dormer on each face, and the lantern's base on its flat top."""
+    C, S = spec["centre"], spec["stage"]["half"]
+    rf = spec["roof"]
+    rings = [tuple(r) for r in rf["rings"]]
+    cs = hk.spire_rings(E, C - S, C + S, C - S, C + S, rings, "Roof", rf["soffit"], pitch=rf["pitch"], step=rf["step"])
+    hulls.append([p for c in (cs[0], cs[-1]) for p in c])
+    dm = rf["dormer"]
+    w = dm["win"]
+    for side, (p0, p1) in tower_frames(C, S).items():
+        m, L = gk.wall_frame(p0, p1)
+        xc = L / 2
+        E.push(m)
+        hk.arched_block(E, xc, dm["w"], dm["z0"], dm["spring"], dm["front"], dm["back"], "Trim")
+        E.push(gk.translate(0.0, dm["front"], 0.0))
+        arched_glass(E, xc, w["z0"], w["zs"], w["r"], -0.006)
+        rr = w["r"] + dm["ring"]
+        hk.arch_ring(E, xc, w["zs"], w["r"], rr, -0.03, "Brass")
+        hk.block(E, xc - rr, xc - w["r"], -0.03, 0.0, w["z0"], w["zs"], "Brass", faces="xXyz")
+        hk.block(E, xc + w["r"], xc + rr, -0.03, 0.0, w["z0"], w["zs"], "Brass", faces="xXyz")
+        hk.block(E, xc - rr - 0.02, xc + rr + 0.02, -0.05, 0.0, w["z0"] - 0.05, w["z0"], "Brass", faces="xXyzZ")
+        E.pop()
+        E.pop()
+    ln = spec["lantern"]
+    for (za, zb, h), mat in ((ln["band"], "Brass"), (ln["ledge"], "Trim")):
+        hk.block(E, C - h, C + h, C - h, C + h, za, zb, mat, faces="xXyYzZ")
+    hulls.append(hk.box_pts(C - ln["ledge"][2], C + ln["ledge"][2], C - ln["ledge"][2], C + ln["ledge"][2], ln["band"][0], ln["ledge"][1]))
+
+
+def clock_lantern(E, spec, hulls):
+    """The open lantern: four thin walls with a round arch through each (stone and brass rings), pilasters and corner
+    piers with pinnacles, a gablet over each arch, a ceiling under the spire; the spire, its ribs, balls and spike."""
+    C, ln = spec["centre"], spec["lantern"]
+    h, t, z0, z1 = ln["half"], ln["t"], ln["ledge"][1], ln["z1"]
+    ar, pi, pa, gb = ln["arch"], ln["pier"], ln["pilaster"], ln["gablet"]
+    r, zs = ar["r"], ar["zs"]
+    for side, (p0, p1) in tower_frames(C, h).items():
+        m, L = gk.wall_frame(p0, p1)
+        xc = L / 2
+        hole = (xc - r, xc + r, z0, zs + r)
+        E.push(m)
+
+        def faces():
+            hk.flat_face(E, 0.0, L, z0, z1, "Trim", holes=[hole])
+            hk.arch_spandrels(E, xc, zs, r, xc - r, xc + r, zs + r, 0.0, "Trim")
+        hk.both_faces(E, t / 2, faces)
+        hk.reveal(E, hole[:2] + (z0, zs), 0.0, t, "Trim", sides="lr")
+        hk.arch_intrados(E, xc, zs, r, 0.0, t, "Trim")
+        r1, r2 = r + ar["ring"], r + ar["ring"] + ar["gold"]
+        hk.arch_ring(E, xc, zs, r, r1, -0.04, "Trim")
+        hk.arch_ring(E, xc, zs, r1, r2, -0.06, "Brass")
+        hk.arch_intrados(E, xc, zs, r1, -0.06, -0.04, "Brass")       # the brass ring's inner edge in front of the stone one
+        for xa, xb, pr, mat in ((xc - r1, xc - r, 0.04, "Trim"), (xc + r, xc + r1, 0.04, "Trim"), (xc - r2, xc - r1, 0.06, "Brass"), (xc + r1, xc + r2, 0.06, "Brass")):
+            hk.block(E, xa, xb, -pr, 0.0, z0, zs, mat, faces="xXyZ")
+        for sgn in (-1, 1):                                        # pilasters with pinnacles
+            x = xc + sgn * pa["dx"]
+            hk.block(E, x - pa["w"] / 2, x + pa["w"] / 2, -pa["proud"], 0.0, z0, pa["top"], "Trim", faces="xXyZ")
+            hk.spike_finial(E, x, -pa["proud"] / 2, pa["top"] - 0.01, pa["pinnacle"], "Trim", r=pa["pr"])
+        # the gablet over the arch, running back into the spire, with brass rakes
+        g0, g1, gp, gf, gk_ = xc - gb["half"], xc + gb["half"], gb["peak"], -gb["front"], gb["back"]
+        tri = [(g0, gb["z0"]), (g1, gb["z0"]), (xc, gp)]
+        E.fan([(x, gf, z) for x, z in tri], "Trim", (0, -1, 0))
+        for (xa, za), (xb, zb), nx in (((g0, gb["z0"]), (xc, gp), -1.0), ((xc, gp), (g1, gb["z0"]), 1.0)):
+            hk.rect(E, (xa, gf, za), (xb, gf, zb), (xb, gk_, zb), (xa, gk_, za), "Trim", (nx * (gp - gb["z0"]), 0.0, gb["half"]))
+            gk.bar(E, "Brass", (xa, za), (xb, zb), 0.06, gf - 0.001, gf - 0.03)
+        hk.rect(E, (g0, gf, gb["z0"]), (g1, gf, gb["z0"]), (g1, 0.0, gb["z0"]), (g0, 0.0, gb["z0"]), "Trim", (0, 0, -1))
+        E.pop()
+    for sx in (-1, 1):                                             # corner piers with pinnacles
+        for sy in (-1, 1):
+            px, py = C + sx * h, C + sy * h
+            hk.block(E, px - pi["half"], px + pi["half"], py - pi["half"], py + pi["half"], z0, pi["top"], "Trim", faces="xXyYZ")
+            hk.spike_finial(E, px, py, pi["top"] - 0.01, pi["pinnacle"], "Trim", r=pi["pr"])
+    hk.rect(E, (C - h, C - h, z1 - 0.001), (C + h, C - h, z1 - 0.001), (C + h, C + h, z1 - 0.001), (C - h, C + h, z1 - 0.001), "Trim", (0, 0, -1))
+    for k in range(4):                                             # wall hulls round the arches
+        q = gk.translate(C, C, 0.0) @ gk.rot_z(90.0 * k)
+        for xa, xb, za, zb in ((-h, -r, z0, z1), (r, h, z0, z1), (-r, r, zs + r, z1)):
+            pts = np.array([(x, y, z, 1.0) for x in (xa, xb) for y in (-h, -h + t) for z in (za, zb)])
+            hulls.append((pts @ q.T)[:, :3].tolist())
+    # the spire, brass ribs up the middle of each face, the balls and the spike
+    sp = spec["spire"]
+    rings = [tuple(rg) for rg in sp["rings"]]
+    cs = hk.spire_rings(E, C - h, C + h, C - h, C + h, rings, "Roof", sp["soffit"], pitch=sp["pitch"], step=sp["step"])
+    hulls.append([p for c in (cs[0], cs[-1]) for p in c])
+    (za, ia, _), (zb, ib, _) = rings[0], rings[-1]
+    rw, rh = sp["rib"]
+    for k in range(4):
+        E.push(gk.translate(C, C, 0.0) @ gk.rot_z(90.0 * k) @ gk.translate(-C, -C, 0.0))
+        hk.slope_rib(E, C, rw, (C - h + ia, za + 0.03), (C - h + ib, zb), rh, "Brass")
+        E.pop()
+    E.lathe([[tuple(p) for p in sp["balls"]]], "Brass", segs=24, center=(C, C, 0.0), smooth=True)
+    s0, s1, sr = sp["spike"]
+    hk.spike_finial(E, C, C, s0, s1, "Metal", r=sr)
+
+
+def build_townhouse_clocktower(spec):
+    E, I = hk.Builder(hk.MATERIALS, seed=11), hk.Builder(hk.MATERIALS, seed=12)
+    hulls = []
+    clock_shaft(E, I, spec, hulls)
+    clock_stage(E, spec, hulls)
+    clock_roof(E, spec, hulls)
+    clock_lantern(E, spec, hulls)
+    C, i = spec["centre"], spec["shaft"]["half"] - spec["shaft"]["t"]
+    F0, CEIL = spec["floor"], spec["ceiling"]
+    hk.rect(I, (C - i, C - i, F0), (C + i, C - i, F0), (C + i, C + i, F0), (C - i, C + i, F0), "Timber", (0, 0, 1))
+    hk.rect(I, (C - i, C - i, CEIL), (C + i, C - i, CEIL), (C + i, C + i, CEIL), (C - i, C + i, CEIL), "Plaster", (0, 0, -1))
+    hulls.append(hk.box_pts(C - i, C + i, C - i, C + i, F0 - 0.3, F0))
+    return E, I, hulls
+
+
 BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable, "townhouse_terrace": build_townhouse_terrace,
             "townhouse_mansard": build_townhouse_mansard, "townhouse_zinc": build_townhouse_zinc, "townhouse_jetty": build_townhouse_jetty,
             "townhouse_loft": build_townhouse_loft, "townhouse_stack": build_townhouse_stack, "townhouse_tavern": build_townhouse_tavern,
-            "townhouse_gate": build_townhouse_gate}
+            "townhouse_gate": build_townhouse_gate, "townhouse_clocktower": build_townhouse_clocktower}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -2676,7 +2930,50 @@ def shots_gate(spec):
             ("back", (W / 2 - 4.0, D + 22.0, 2.0), (W / 2, D / 2, H / 2 - 1.0), 32, 1400, 1400)]
 
 
+def audit_setup_clocktower(spec):
+    """Outside eyes only: the lane (into the door, slit, gear opening), both sides, the back above the drop, high up
+    round the stage, the roof and the lantern (through its arches), above. Planes inside the shaft and stage, the
+    roof, the spire, the turrets and the turret corbels."""
+    W, D, C = spec["width"], spec["depth"], spec["centre"]
+    i = spec["shaft"]["half"] - spec["shaft"]["t"]
+    CEIL = spec["ceiling"]
+    tu = spec["turret"]
+    street = [("lane door", (C, -4.5, 1.7)), ("lane left", (0.5, -4.0, 1.7)), ("lane right", (W - 0.5, -4.0, 1.7)),
+              ("lane low left", (-1.5, -2.0, 0.6)), ("lane low right", (W + 1.5, -2.0, 0.6)),
+              ("lane gears", (C + 0.6, -6.0, 9.0)), ("lane gears low", (C - 0.8, -3.0, 6.0)), ("lane high", (C, -10.0, 14.0)),
+              ("lane very high", (C - 2.0, -12.0, 22.0)), ("lane lantern", (C + 0.3, -8.0, 19.3))]
+    sides = [("left", (-6.0, C, 1.7)), ("left gears", (-6.0, C - 0.5, 9.0)), ("left high", (-8.0, C + 1.0, 15.0)), ("left lantern", (-6.0, C, 19.3)),
+             ("right", (W + 6.0, C, 1.7)), ("right gears", (W + 6.0, C + 0.5, 9.5)), ("right high", (W + 8.0, C - 1.0, 17.0)),
+             ("right lantern", (W + 6.0, C + 0.2, 19.6))]
+    back = [("back", (C, D + 6.0, 1.7)), ("back gears", (C - 0.4, D + 8.0, 9.0)), ("back high", (C + 1.0, D + 10.0, 16.0)),
+            ("back lantern", (C, D + 7.0, 19.3))]
+    above = [("above", (C + 0.5, C - 0.5, 30.0)), ("above front", (C, -6.0, 26.0)), ("above left", (-6.0, C, 24.0)), ("above back", (C, D + 6.0, 25.0))]
+    outside = street + sides + back + above
+    out = [("shaft x", (C, 0.0, 0.0), (0, 1, 0), (C - i + 0.05, C + i - 0.05, 0.05, CEIL - 0.05), 0.06, outside),
+           ("shaft y", (0.0, C, 0.0), (1, 0, 0), (C - i + 0.05, C + i - 0.05, 0.05, CEIL - 0.05), 0.06, outside),
+           ("roof", (0.0, C, 0.0), (1, 0, 0), (C - 1.2, C + 1.2, spec["stage"]["cornice"][1] + 0.1, 18.15), 0.05, outside),
+           ("spire", (0.0, C, 0.0), (1, 0, 0), (C - 0.42, C + 0.42, spec["spire"]["soffit"] + 0.08, 22.0), 0.04, outside)]
+    for sx in (-1, 1):
+        cx = C + sx * tu["at"]
+        out.append((f"turret {sx}", (cx, 0.0, 0.0), (0, 1, 0), (C - tu["at"] - 0.2, C - tu["at"] + 0.2, 11.9, tu["top"] - 0.05), 0.04, outside))
+    return out
+
+
+def shots_clocktower(spec):
+    W, D, C = spec["width"], spec["depth"], spec["centre"]
+    H = spec["spire"]["spike"][1]
+    return [("iso", (W + 16.0, -22.0, 16.0), (C, C, H / 2), 30, 1000, 1700),
+            ("iso_left", (-16.0, -20.0, 14.0), (C, C, H / 2), 30, 1000, 1700),
+            ("front_eye", (C, -12.0, 1.7), (C, 0.0, 11.0), 16, 900, 1600),
+            ("door_close", (C, -4.5, 1.6), (C, 0.0, 1.6), 24, 1200, 1200),
+            ("stage", (C - 3.0, -9.0, 14.0), (C, C, 14.0), 26, 1200, 1200),
+            ("top", (C - 6.0, -8.0, 22.0), (C, C, 19.5), 24, 1200, 1200),
+            ("side", (W + 22.0, C, 10.0), (W, C, 12.0), 30, 1000, 1700)]
+
+
 def audit_setup(spec):
+    if spec["type"] == "townhouse_clocktower":
+        return audit_setup_clocktower(spec)
     if spec["type"] == "townhouse_gate":
         return audit_setup_gate(spec)
     if spec["type"] == "townhouse_tavern":
@@ -2737,6 +3034,8 @@ def shots_stack(spec):
 
 
 def shots(spec):
+    if spec["type"] == "townhouse_clocktower":
+        return shots_clocktower(spec)
     if spec["type"] == "townhouse_gate":
         return shots_gate(spec)
     if spec["type"] == "townhouse_tavern":

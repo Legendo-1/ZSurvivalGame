@@ -1270,3 +1270,79 @@ def spire_rings(B, x0, x1, y0, y1, rings, mat, soffit_z, pitch=0.22, step=0.02, 
         rect(B, lo_a, lo_b, (b[0], b[1], b[2] + step), (a[0], a[1], a[2] + step), mat, outs[s], var)        # fascia
         rect(B, lo_a, lo_b, wall[(s + 1) % 4], wall[s], mat, (0, 0, -1), var)                                  # soffit
     return cs
+
+
+# ---------------------------------------------------------------------------------------------
+# House #11 (ClockworkEngineersClockTower): flat plates from outlines, spur gears, clasping corner blocks
+# ---------------------------------------------------------------------------------------------
+def ring_plate(B, outer, inner, y0, y1, mat, var=0.5):
+    """A flat plate standing in a wall (wall coordinates) between two closed outlines [(x, z), ...], both anticlockwise
+    as a viewer at -y sees them and with the same number of points (inner[k] across from outer[k]): its front face on
+    the plane y0 (facing -y), its back on y1 (facing +y), the outer edge facing out, the inner edge facing the middle.
+    inner=None: a solid plate (front and back fans, star-shaped about the outline's centroid)."""
+    n = len(outer)
+    for k in range(n):
+        j = (k + 1) % n
+        (xa, za), (xb, zb) = outer[k], outer[j]
+        rect(B, (xa, y0, za), (xb, y0, zb), (xb, y1, zb), (xa, y1, za), mat, (zb - za, 0.0, -(xb - xa)), var)
+        if inner is not None:
+            (ia, ka), (ib, kb) = inner[k], inner[j]
+            rect(B, (ia, y0, ka), (ib, y0, kb), (ib, y1, kb), (ia, y1, ka), mat, (-(kb - ka), 0.0, ib - ia), var)
+            for y, want in ((y0, (0, -1, 0)), (y1, (0, 1, 0))):
+                rect(B, (ia, y, ka), (xa, y, za), (xb, y, zb), (ib, y, kb), mat, want, var)
+    if inner is None:
+        for y, want in ((y0, (0, -1, 0)), (y1, (0, 1, 0))):
+            B.fan([(x, y, z) for x, z in outer], mat, want, var=var)
+
+
+def spur_gear(B, cx, cz, y, r, teeth, mat, t=0.07, tooth=None, rim=None, hub=None, spokes=6, spoke_w=None, axle=None, phase=0.0, var=0.5):
+    """A spur gear standing in a wall plane (wall coordinates), seen from -y: a toothed rim (root radius r, teeth
+    `tooth` deep, `rim` wide) with its front face on the plane y and t thick (to y + t), `spokes` flat spokes, a turned
+    hub standing proud of the front and an axle boss (`axle`, default mat). phase turns the teeth and spokes (degrees)."""
+    tooth = tooth or max(0.035, r * 0.09)
+    rim = rim or max(0.05, r * 0.15)
+    hub = hub or max(0.06, r * 0.2)
+    spoke_w = spoke_w or max(0.04, r * 0.12)
+    p = 2 * math.pi / teeth
+    ph = math.radians(phase)
+    outer, inner = [], []
+    for k in range(teeth):
+        for f, rr in ((0.0, r), (0.3, r + tooth), (0.5, r + tooth), (0.8, r)):
+            a = ph + (k + f) * p
+            outer.append((cx + rr * math.cos(a), cz + rr * math.sin(a)))
+            inner.append((cx + (r - rim) * math.cos(a), cz + (r - rim) * math.sin(a)))
+    ring_plate(B, outer, inner, y, y + t, mat, var=var)
+    c = np.array([cx, cz])
+    for k in range(spokes):
+        a = ph + 2 * math.pi * (k + 0.5) / spokes
+        e = np.array([math.cos(a), math.sin(a)])
+        gk.bar(B, mat, c + e * hub * 0.7, c + e * (r - rim + 0.01), spoke_w, y + t * 0.85, y + t * 0.15, var=var)
+    B.push(translate(cx, y, cz) @ gk.FACE_OUT)                    # local z points out of the wall (-y)
+    B.lathe([[(hub, -t * 0.9), (hub, 0.03), (hub * 0.62, 0.03), (hub * 0.62, 0.06)]], mat, segs=20, smooth=False, var=var)
+    B.lathe([[(hub * 0.62, 0.06), (hub * 0.3, 0.06), (hub * 0.3, 0.09), (0.001, 0.09)]], axle or mat, segs=16, smooth=False, var=var)
+    B.pop()
+
+
+def corner_block(B, cx, cy, sx, sy, prof, a, mat, var=0.5):
+    """A clasping buttress round a wall corner (house coordinates). (cx, cy) is the corner where the two outer wall faces
+    meet; sx, sy (+1 / -1) point outwards along x and y. prof [(z, out), ...] bottom up: at height z the block's outer
+    faces stand `out` in front of both wall faces (sloping between points: set-offs and weatherings); along each face it
+    runs back `a` past the corner. Faces: the two outer faces, the two end faces against the walls, a top where the last
+    `out` is not 0. Returns its hull points."""
+    def P(u, v, z):
+        return (cx + sx * u, cy + sy * v, z)
+    for (za, oa), (zb, ob) in zip(prof, prof[1:]):
+        dz, do = zb - za, oa - ob
+        rect(B, P(-a, oa, za), P(oa, oa, za), P(ob, ob, zb), P(-a, ob, zb), mat, (0.0, sy * dz, do), var)
+        rect(B, P(oa, -a, za), P(oa, oa, za), P(ob, ob, zb), P(ob, -a, zb), mat, (sx * dz, 0.0, do), var)
+        for end, want in (((lambda o, z: [P(-a, 0.0, z), P(-a, o, z)]), (-sx, 0.0, 0.0)),
+                          ((lambda o, z: [P(0.0, -a, z), P(o, -a, z)]), (0.0, -sy, 0.0))):
+            lo, hi = end(oa, za), end(ob, zb)
+            pts = [lo[0], lo[1], hi[1], hi[0]]
+            uniq = [q for i, q in enumerate(pts) if math.dist(q, pts[i - 1]) > 1e-6]
+            if len(uniq) >= 3:
+                B.fan(uniq, mat, want, var=var)
+    z, o = prof[-1]
+    if o > 1e-6:
+        B.fan([P(o, -a, z), P(0.0, -a, z), P(0.0, 0.0, z), P(-a, 0.0, z), P(-a, o, z)], mat, (0, 0, 1), var=var, hub=P(o, o, z))
+    return [P(u, v, z) for z, o in prof for u, v in ((-a, -a), (-a, o), (o, o), (o, -a))]

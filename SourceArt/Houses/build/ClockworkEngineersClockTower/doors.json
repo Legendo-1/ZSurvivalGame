@@ -1,0 +1,13 @@
+[
+ {
+  "mesh": "SM_House_ClockworkEngineersClockTower_Door",
+  "component": "Door",
+  "location_cm": [
+   224.49999999999997,
+   -91.99999999999997,
+   0.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ }
+]
