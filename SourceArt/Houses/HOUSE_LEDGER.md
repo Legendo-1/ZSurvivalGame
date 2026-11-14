@@ -67,6 +67,7 @@ Each line is a mistake that cost real time, and what to do instead. **When somet
 16. **Waiting on the NavMesh build.** The poll grepped "True" from "navigation system True". If you ever wait on a build, grep "being built: False". You shouldn't need to, now that the scope has no NavMesh.
 17. **Editing collision from Python.** Editing `agg_geom` convex elements on a duplicate didn't take effect, so the test proved nothing. Change collision in the build, then re-import.
 18. **`hidden_actors` and `set_editor_property`.** That property can't be set on a capture component. Use `hide_actor_components(actor)` / `show_only_actor_components(actor)` (`ncap.py` does).
+19. **Bash heredocs with long Python** (house #3) failed twice with "unexpected EOF while looking for matching `''", even quoted. Write the script to a file (Write tool, scratchpad) and run that, or use Edit for code changes.
 
 ## 1b. Per-house routine
 **Section 0 overrides this routine:** skip the 5 m checks (steps 3 and 9), the captures and colour tuning (step 10), and the capture-based colour check of the door (step 11). The task ends as soon as step 9's placement has run.
@@ -197,8 +198,19 @@ House #1 creates `house_kit.py`, which imports `SourceArt/Cathedral/v3/gothic_ki
 | `slope_rib` | `(B, xc, w, a, b, h, mat)`: rib lying on a roof slope | 2 |
 | `lattice_bars` | `(B, x0, x1, z0, z1, pitch, width, y_back, y_front, mat)`: diamond lattice in a rectangle | 2 |
 | `build_house.separate_leaf`, `gable_outline` | one hinged leaf as its own mesh (DOORS); the side-wall roof outline | 2 |
+| `clock_dial` options | `rosette=` (corner bosses) and `centre=` (centre disc and its ring) materials; both default to `brass` as before | 3 |
+| `both_faces` | `(B, y, fn)`: runs fn twice, the second time mirrored about the plane y (gk.bar iron gets a back) | 3 |
+| `lace_panel` | `(B, x0, x1, z0, z1, y, mat, pitch)`: cast-iron balcony panel: rails, stiles, mid rail, two-sided diamond lattice | 3 |
+| `iron_railing` | `(B, x0, x1, y, z0, h, mat, pitch, spear)`: roof railing: four rails, spear-headed bars, an oval ring per bay | 3 |
+| `cast_column`, `newel` | `(B, cx, cy, z0, z1, mat, r)` turned iron column; `(B, cx, cy, z0, z1, mat, w)` square post with cap and ball | 3 |
+| `spandrel` | `(B, xa, xb, z_spring, z_crown, z_top, y, mat)`: segmental iron arch under a beam, filled with uprights and rings | 3 |
+| `blank_dial` | `(B, cx, cz, half, r, plate, ring, disc)`: clock_dial's plate and ring round a plain disc | 3 |
+| `pyramid_roof` | `(B, cx, cy, half, z0, apex, mat, pitch)`: square tiled pyramid (gk.tile_facet) | 3 |
+| `arched_block` | `(B, cx, w, z0, z_spring, y0, y1, mat)`: round-topped block (dormer, gablet) | 3 |
+| `iron_finial` | `(B, cx, cy, z0, top, mat)`: turned iron spire with two tiers of curling leaves | 3 |
+| `build_house.terrace_ground`, `terrace_windows`, `terrace_pilasters`, `terrace_balcony`, `terrace_cupola` | the parts of `townhouse_terrace` | 3 |
 
-`build_house.py` builder types: `townhouse_flat` (house #1, spec `specs/ClockmakersNarrowTownhouse.json`) and `townhouse_gable` (house #2, spec `specs/GuildmastersRowhouse.json`). `place_house_ue.py` takes `"nav_bounds": false` (no NavBounds volume; from house #2 on).
+`build_house.py` builder types: `townhouse_flat` (house #1, spec `specs/ClockmakersNarrowTownhouse.json`) , `townhouse_gable` (house #2, spec `specs/GuildmastersRowhouse.json`) and `townhouse_terrace` (house #3, spec `specs/SilversmithsOrnateAtelier.json`: a flat roof behind a swept cornice with dentils, a roof railing with corner finials, an optional clock `cupola`; per side a plinth, a rusticated ground floor with `shop` windows and a recessed `door` (pilasters, steps, transom, separate leaf), `fascia`, `corbels`; ashlar upper floors with corner pilasters, `bands` and windows on `storeys`; an optional front `balcony` of two cast-iron storeys). `place_house_ue.py` takes `"nav_bounds": false` (no NavBounds volume; from house #2 on).
 
 ## 6. Status
 - **LOOK APPROVED:** yes (2026-11-13). The user, on the pilot: "The ClockmakersNarrowTownhouse geometry, material generation, and lighting tests are successful … mark House 1 as 100% complete." The next task starts house #2.
@@ -213,7 +225,7 @@ Build order = row order. Status is one of `todo`, `in progress`, `waiting for lo
 |---|---|---|---|---|---|
 | 1 | done (100%) | ClockmakersNarrowTownhouse | G1 slot 1 | 6.0 × 6.64 × 19.0 (21.0 to the pots) | −Y |
 | 2 | done | GuildmastersRowhouse | G1 slot 2 | 8.0 × 6.64 × 16.5 (17.5 to the pots) | −Y |
-| 3 | todo | SilversmithsOrnateAtelier | G1 slot 4 | 9.0 × 8.8 × 22.6 | −Y |
+| 3 | done | SilversmithsOrnateAtelier | G1 slot 4 | 8.05 × 6.64 × 12.5 (21.9 to the finial) | −Y |
 | 4 | todo | AlchemistsMansardTenement | G1 slot 6 | 10.8 × 7.7 × 15.3 | −Y |
 | 5 | todo | BookbindersMansardAtelier | G1 slot 8 | 10.4 × 8.9 × 16.3 | −Y |
 | 6 | todo | GrandApothecaryHerbalistShop | G1 slot 3 | 8.4 × 8.2 × 18.6 | −Y |
@@ -277,7 +289,15 @@ Palette lists the dominant clusters from `palette.json` (sRGB hex, % of texels),
 **#3 SilversmithsOrnateAtelier** (`469e6db6-6948-4dfa-9972-b66795d3a463`)
 - Pieces: 5 storeys of cream ashlar with 3 bays. Cast-iron balconies with ornate railings on the 2nd and 3rd floors, and a roof gallery with a railing. A small square **clock cupola** on top with a clock face and a spire finial. A shopfront ground floor.
 - Palette: #c2b6a4:15 #b1a696:14 #d1c5b3:9; iron #393938:16 #545250:14.
-- Result: _not built_.
+- **Result: DONE, 2026-11-14** (under the strict rules of section 0: no captures, no material or lighting tests, no 5 m check).
+  - What the Meshy model really is: 3 storeys under a flat roof, not 5. A rusticated ground floor 0.08 m proud of the upper wall (plinth 0–1.0 m, 0.15 proud; blocks 1.08–4.02; frieze to 4.38) with two shop windows (stallriser, sill, 2×2 lights under a 3-light transom), a recessed door between pilasters (steps, transom, 2×4-panel leaf), a fascia and four corbels. Two ashlar floors with corner pilasters (sunk panels) and 2×4 windows with architraves, sills and hoods: 3 bays front and back, 2 on each side. A two-storey cast-iron balcony across the front, 1.37 m deep: slabs at 4.38–4.64 and 8.08–8.38, lace railings to 5.56 and 9.38, returns to the wall at both ends, four cast columns with arched spandrels, and newels with balls. A cornice with dentils at 11.78–12.52 (0.37 proud), an iron railing round the roof terrace with four finial posts (to 14.32), and a square clock cupola (2.2 m, 12.52–16.66, cornice to 17.04) with the clock on the front and plain dials on the other three faces, iron pinnacles, a tiled pyramid to 18.80 with an arched dormer, and an iron finial to 21.86. The back repeats the front without the balcony, fascia and corbels; its door leaf sits only 0.28 m deep.
+  - Scale 11.5 (the upper wall, 0.700 Meshy units wide, gives 8.05 m; the model is 1.90 tall, 21.88 m). Size 8.05 × 6.64 m (the Meshy body is 6.77 m deep; shortened to the plot). Floor inside at 0.26 (threshold), ceiling 12.2, roof deck 12.52.
+  - Doors: `SM_House_SilversmithsOrnateAtelier_Door` (front, left hinge, BP component `Door` at (323.5, −46, 26) cm, opens with yaw −90) and `…_Door_1` (back, left hinge as seen from the back, `Door_1` at (471.5, −638, 26) cm, yaw −180, opens with a further −90). Front leaf 1.58 × 2.64 m, back leaf 1.38 × 2.64 m; both doorways are 1.79 × 3.64 m. **The back door opens onto the 10 m drop**: give it a landing and railing before it is ever opened (section 9).
+  - Placed as `House_SilversmithsOrnateAtelier` at (21114, 5756, 1300), yaw 180: walls at world x 20309–21114, cornice 20272–21151 (slot 4's left edge), balcony out to y 5619. Nothing hidden (the plot was empty apart from the town plinth). No NavBounds.
+  - Materials: 15 `MI_House_SilversmithsOrnateAtelier_*`. Targets measured on the Meshy front (`specs/SilversmithsOrnateAtelier_colors.json`, overlay checked). Slot use on this house: Stone = upper ashlar; Gauged = plinth, rusticated ground floor, door pilasters, steps; Trim = cornice, bands, pilasters, frieze, fascia, corbels, architraves, sills, hoods, balcony slabs, and the cupola's base, band, cornice, dial plates and dormer; **Brick = the cupola's walls and piers** (a greyer stone); Metal = window frames; Door = leaves and door frames (near black); Bronze = all the black iron (balcony, railings, posts, pinnacles, finial, clock ring, numerals, hands); Dial = clock dial and the plain discs; Roof = deck and cupola pyramid. Brass, Clay and Lamp are unused.
+  - Checks: audit 0 see-through rays (street, both sides, lower town, above); Ext 44593 faces, 22 UCX hulls, Nanite on.
+  - Files: `specs/SilversmithsOrnateAtelier.json`, `specs/SilversmithsOrnateAtelier_colors.json`, `build/SilversmithsOrnateAtelier/` (`.blend`, Ext + Door + Door_1 FBX, `doors.json`). Measuring pictures, depth maps and clay renders: `Saved/HouseCheck/SilversmithsOrnateAtelier/{measure,study,clay}` (not in git).
+  - Gotchas: house space starts at the upper wall, not at the Meshy bounds (the balcony and cornice stand in front of it): house x = Meshy x − 0.33, house y = Meshy y − 1.374 at scale 11.5. clock_dial's brass centre disc would have come out black (Bronze), so this dial passes `centre="Dial"`.
 
 **#4 AlchemistsMansardTenement** (`743eb1f3-78ed-425b-b031-4ce6c728ab18`)
 - Pieces: rough grey stone with heavy soot streaks (use the `bake_weather` streaks, or a darker vertex tint). 3 storeys plus a slate mansard with 3 gabled dormers. A shopfront ground floor (dark timber, multi-pane). 3 bays.
@@ -449,6 +469,8 @@ The user approved this on 2026-11-13: "ring + next streets", and "facade exact, 
 9. High Spire Tavern 24852–25792
 10. Water Wardens 25812–27128
 
+**Changed by house #3 (2026-11-14):** slot 4 is built from its left edge: cornice at x 20272–21151 (walls 20309–21114). Slot 3 (Grand Apothecary) now has 19372–20272 between houses #2 and #3: 9.0 m, including any cornice overhang.
+
 **Changed by house #2 (2026-11-13):** slot 2 moved 0.2 m to x 18572–19372, so house #2 butts onto house #1 (a closed terrace, no slit between the two). The old row houses `Cathedral_RowHouse_00172` … `00183` are **no longer in the level** (only 00171 is left, hidden by house #1), so the G1 slots are empty ground and there is nothing to hide. Keep each new G1 house against its built neighbour where it can be.
 
 The slots are built out of x order (see the build order). Keep each slot's left edge fixed and leave any slack at its right end. If a built house turns out wider than its slot, shift only the slots that aren't built yet and record the change here.
@@ -458,7 +480,7 @@ The survey data for every plot (bounds, open sides, street z) is in `Saved/House
 ## 9. Open questions and notes for the user
 - **Missing texture sets:** clay roof tiles (Tanners #27), copper sheet (Dockside #29, Distillers #30, maybe Scholars' dome #20) and rough rubble stone. Ask before downloading CC0 sets.
 - **Old open question from the cathedral work, unchanged:** lamp posts `Plaza_GasLamp*` stand 0.6 m in front of the stair terraces.
-- **G1 backs** look over a 10 m drop to the lower town. Any back door or balcony there needs a railing.
+- **G1 backs** look over a 10 m drop to the lower town. Any back door or balcony there needs a railing. House #3 has a closed back door (as in the Meshy model) on that side.
 
 ## 10. Log
 - 2026-11-13: Task 0 done. Downloaded the 30 textured GLBs (the textured one is the OLDER task of each Meshy pair; the newer is an untextured companion). Rendered references, palettes and contact sheets, surveyed the district, wrote the plot plan, and created this ledger. The user approved: kit rebuild, empty interiors (rooms and stairs), replace district houses, one house per task with `/clear` between, ring + next streets, facade exact with depth fitted to the plot.
@@ -468,3 +490,4 @@ The survey data for every plot (bounds, open sides, street z) is in `Saved/House
 - 2026-11-13: Added section 1a, Lessons: everything that cost time on house #1, with what to do instead. The task prompt now says to read the scope, rules and lessons first.
 - 2026-11-13: The user's strict rules are now section 0: the Meshy model is a visual and colour guide only; no screenshots or captures; no lighting, exposure or material tests; no 5 m checks for now; the house is done once the import and placement scripts run.
 - 2026-11-13: House #2 GuildmastersRowhouse done: a 3-storey ashlar row house with a gable roof, a grand double door and lanterns, an empty shell inside, placed against house #1. New builder type `townhouse_gable`, `"interior": "shell"`, double separate leaves, the **Lamp** slot, kit pieces for mouldings, architraves, the studded leaf, lanterns, consoles, copings, roof ribs and lattices, and the measuring tools `raycast_meshy.py` and `profile_meshy.py`.
+- 2026-11-14: House #3 SilversmithsOrnateAtelier done: a 3-storey cream ashlar shop house with a two-storey cast-iron balcony, a railed roof terrace and a clock cupola with a tiled pyramid and iron finial; front and back doors closed as separate leaves. New builder type `townhouse_terrace`, kit pieces for iron lace, railings, cast columns, newels, spandrels, blank dials, pyramid roofs, arched blocks and finials, and the `clock_dial` options `rosette` and `centre`.

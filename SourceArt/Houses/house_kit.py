@@ -186,9 +186,11 @@ def panel_leaf(B, w, h, mat, t=0.06, cols=2, rows=3, frame=0.13, sunk=0.014, var
 # ---------------------------------------------------------------------------------------------
 # Clock (the Clockmaker's facade clock: dark square plate, brass ring, cream dial, black numerals)
 # ---------------------------------------------------------------------------------------------
-def clock_dial(B, cx, cz, half, r, plate, ring_mat, dial_mat, marks, brass=None, hour=10.0, minute=9.0, plate_proud=0.04):
+def clock_dial(B, cx, cz, half, r, plate, ring_mat, dial_mat, marks, brass=None, hour=10.0, minute=9.0, plate_proud=0.04, rosette=None, centre=None):
     """Square plate (half size `half`, standing plate_proud in front of the wall) with brass corner bosses, a brass
     ring round a dial of radius r, a darker brass centre, Roman numerals and minute ticks in `marks`, brass hands.
+    rosette: material of the corner bosses; centre: material of the centre disc and its ring (both default: brass;
+    added by house #3).
     Returns the plate as (x0, x1, z0, z1) and a collision hull."""
     brass = brass or ring_mat
     block(B, cx - half, cx + half, -plate_proud, 0.0, cz - half, cz + half, plate, faces="xXyzZ", var=0.45)
@@ -199,14 +201,14 @@ def clock_dial(B, cx, cz, half, r, plate, ring_mat, dial_mat, marks, brass=None,
     for sx in (-1, 1):
         for sz in (-1, 1):
             B.push(translate(cx + sx * (half - 0.2), 0.0, cz + sz * (half - 0.2)) @ gk.FACE_OUT)
-            gk.rosette(B, brass, 0.12, 0.04, petals=6, layers=2)
+            gk.rosette(B, rosette or brass, 0.12, 0.04, petals=6, layers=2)
             B.pop()
     ang = np.radians(np.linspace(0.0, 360.0, 97)[:-1])
     B.fan([(cx + r * math.cos(a), -0.012, cz + r * math.sin(a)) for a in ang], dial_mat, (0, -1, 0), var=0.5)
-    B.fan([(cx + r * 0.52 * math.cos(a), -0.016, cz + r * 0.52 * math.sin(a)) for a in ang], brass, (0, -1, 0), var=0.3)
+    B.fan([(cx + r * 0.52 * math.cos(a), -0.016, cz + r * 0.52 * math.sin(a)) for a in ang], centre or brass, (0, -1, 0), var=0.3)
     gk.ring(B, ring_mat, cx, cz, r, [[(0.14, 0.0), (0.14, 0.055), (0.11, 0.055)], gk.half_round(0.11, 0.03, 0.055),
                                      [(0.03, 0.055), (0.0, 0.055), (0.0, 0.012)]], segs=96)
-    gk.ring(B, ring_mat, cx, cz, r * 0.52, [[(0.025, 0.016), (0.025, 0.03), (-0.01, 0.03), (-0.01, 0.016)]], segs=72)
+    gk.ring(B, centre or ring_mat, cx, cz, r * 0.52, [[(0.025, 0.016), (0.025, 0.03), (-0.01, 0.03), (-0.01, 0.016)]], segs=72)
     h = r * 0.30
     w, adv = h * 0.105, {"I": h * 0.30, "V": h * 0.60, "X": h * 0.62}
     for hr, text in gk.ROMAN.items():
@@ -607,3 +609,150 @@ def lattice_bars(B, x0, x1, z0, z1, pitch, width, y_back, y_front, mat, var=0.5)
             pts = sorted(set((round(p[0], 6), round(p[1], 6)) for p in pts))
             if len(pts) >= 2 and math.dist(pts[0], pts[-1]) > 0.02:
                 gk.bar(B, mat, pts[0], pts[-1], width, y_back, y_front, var=var)
+
+
+# ---------------------------------------------------------------------------------------------
+# Added by house #3 (SilversmithsOrnateAtelier): cast-iron balcony lace, roof railings, cast columns and newels,
+# spandrel arches, and a square clock cupola (blank dials, tiled pyramid, arched dormer, iron finial)
+# ---------------------------------------------------------------------------------------------
+MIRROR_Y = np.diag([1.0, -1.0, 1.0, 1.0])
+
+
+def both_faces(B, y, fn):
+    """Runs fn() (flat iron drawn in front of the plane y, facing -y, e.g. gk.bar pieces) twice: as is, and mirrored
+    about the plane y, so pierced iron has a back as well as a front."""
+    fn()
+    B.push(translate(0.0, 2.0 * y, 0.0) @ MIRROR_Y)
+    fn()
+    B.pop()
+
+
+def lace_panel(B, x0, x1, z0, z1, y, mat, pitch=0.10, bar_w=0.02, th=0.012, frame=0.035, var=0.5):
+    """Cast-iron balcony panel in the plane y (wall coordinates): bottom and top rails, end stiles, a mid rail and a
+    dense diamond lattice between them, iron on both faces (2 * th thick)."""
+    for a, b, c, d in ((x0, x1, z0, z0 + frame), (x0, x1, z1 - frame, z1), (x0, x0 + frame, z0, z1), (x1 - frame, x1, z0, z1)):
+        block(B, a, b, y - th - 0.004, y + th + 0.004, c, d, mat, var=var)
+    zm = (z0 + z1) / 2
+    block(B, x0 + frame, x1 - frame, y - th, y + th, zm - 0.012, zm + 0.012, mat, faces="yYzZ", var=var)
+    both_faces(B, y, lambda: lattice_bars(B, x0 + frame, x1 - frame, z0 + frame, z1 - frame, pitch, bar_w, y, y - th, mat, var=var))
+
+
+def iron_railing(B, x0, x1, y, z0, h, mat, pitch=0.39, spear=0.12, ends=False, var=0.5):
+    """Roof railing along wall x in the plane y: bottom, top and two mid rails, square bars every ~pitch rising
+    through the top rail to spear heads, and an oval ring between every two bars. ends: bars at x0 and x1 too."""
+    for za, zb in ((z0 + 0.06, z0 + 0.11), (z0 + h - 0.07, z0 + h - 0.02), (z0 + 0.20, z0 + 0.23), (z0 + h - 0.28, z0 + h - 0.25)):
+        block(B, x0, x1, y - 0.025, y + 0.025, za, zb, mat, faces="yYzZ", var=var)
+    n = max(1, int(round((x1 - x0) / pitch)))
+    xs = [x0 + (x1 - x0) * k / n for k in range(n + 1)]
+    for k, x in enumerate(xs):
+        if not ends and k in (0, n):
+            continue
+        block(B, x - 0.013, x + 0.013, y - 0.013, y + 0.013, z0 + 0.06, z0 + h, mat, faces="xXyY", var=var)
+        B.lathe([[(0.032, 0.0), (0.032, 0.025), (0.001, spear)]], mat, segs=4, a0=45.0, a1=405.0, center=(x, y, z0 + h), smooth=False, var=var)
+    zc, rz = z0 + (0.23 + h - 0.28) / 2, (h - 0.28 - 0.23) / 2 - 0.012
+    a = np.radians(np.linspace(0.0, 360.0, 17)[:-1])
+    for xa, xb in zip(xs, xs[1:]):
+        rx = (xb - xa) / 2 - 0.025
+        B.tube([((xa + xb) / 2 + rx * math.cos(q), y, zc + rz * math.sin(q)) for q in a], 0.012, mat, sides=6, closed=True, var=var)
+
+
+def cast_column(B, cx, cy, z0, z1, mat, r=0.055, var=0.5):
+    """Slender cast-iron column (house or wall coordinates) from z0 to z1: moulded base, round shaft with a collar
+    near the top, and a flared capital under a round abacus."""
+    H = z1 - z0
+    prof = [(0.001, 0.0), (0.10, 0.0), (0.10, 0.05), (0.075, 0.09), (0.072, 0.20), (0.085, 0.24), (0.062, 0.28), (r, 0.34),
+            (r, H - 0.42), (0.072, H - 0.39), (0.072, H - 0.34), (r * 0.95, H - 0.32), (0.10, H - 0.08), (0.12, H - 0.06),
+            (0.12, H), (0.001, H)]
+    B.lathe([prof], mat, segs=12, center=(cx, cy, z0), smooth=True, var=var)
+
+
+def newel(B, cx, cy, z0, z1, mat, w=0.10, ball_r=0.065, var=0.5):
+    """Square iron newel post from z0 with a cap and a ball finial; the ball's top is at z1."""
+    zc = z1 - 2 * ball_r
+    block(B, cx - w / 2, cx + w / 2, cy - w / 2, cy + w / 2, z0, zc - 0.04, mat, faces="xXyYz", var=var)
+    block(B, cx - w / 2 - 0.02, cx + w / 2 + 0.02, cy - w / 2 - 0.02, cy + w / 2 + 0.02, zc - 0.04, zc, mat, var=var)
+    B.push(translate(cx, cy, zc))
+    gk.ball(B, mat, ball_r, var=var)
+    B.pop()
+
+
+def spandrel(B, xa, xb, z_spring, z_crown, z_top, y, mat, pitch=0.09, var=0.5):
+    """Cast-iron arched spandrel in the plane y (wall coordinates) between columns at xa and xb: a segmental arch
+    rod from the springing up to the crown, a beam under z_top, and the space between filled with uprights and rings."""
+    half, rise = (xb - xa) / 2, z_crown - z_spring
+    R = (half * half + rise * rise) / (2 * rise)
+    xm, zc0 = (xa + xb) / 2, z_crown - R
+    a0 = math.atan2(z_spring - zc0, xa - xm)
+    a1 = math.atan2(z_spring - zc0, xb - xm)
+    B.tube([(xm + R * math.cos(q), y, zc0 + R * math.sin(q)) for q in np.linspace(a0, a1, 25)], 0.03, mat, sides=6, var=var, flat=0.6)
+    block(B, xa - 0.04, xb + 0.04, y - 0.03, y + 0.03, z_top - 0.07, z_top, mat, var=var)
+
+    def arch_z(x):
+        return zc0 + math.sqrt(max(R * R - (x - xm) ** 2, 0.0))
+    n = max(1, int((xb - xa) / pitch))
+    for k in range(1, n):
+        x = xa + (xb - xa) * k / n
+        za = arch_z(x)
+        if z_top - 0.07 - za > 0.03:
+            block(B, x - 0.008, x + 0.008, y - 0.008, y + 0.008, za, z_top - 0.07, mat, faces="xXyY", var=var)
+    a = np.radians(np.linspace(0.0, 360.0, 13)[:-1])
+    x = xa + 0.16
+    while x < xb - 0.16:
+        free = z_top - 0.07 - arch_z(x)
+        if free > 0.16:
+            r = min(free / 2 - 0.02, 0.13)
+            zc = arch_z(x) + free / 2
+            B.tube([(x + r * math.cos(q), y, zc + r * math.sin(q)) for q in a], 0.011, mat, sides=5, closed=True, var=var)
+            x += 2 * r + 0.06
+        else:
+            x += 0.08
+
+
+def blank_dial(B, cx, cz, half, r, plate, ring_mat, disc_mat, plate_proud=0.04, var=0.5):
+    """The clock_dial plate and ring round a plain disc, with no numerals or hands (the cupola's other faces)."""
+    block(B, cx - half, cx + half, -plate_proud, 0.0, cz - half, cz + half, plate, faces="xXyzZ", var=0.45)
+    B.push(translate(0.0, -plate_proud, 0.0))
+    ang = np.radians(np.linspace(0.0, 360.0, 97)[:-1])
+    B.fan([(cx + r * math.cos(q), -0.012, cz + r * math.sin(q)) for q in ang], disc_mat, (0, -1, 0), var=var)
+    gk.ring(B, ring_mat, cx, cz, r, [[(0.14, 0.0), (0.14, 0.055), (0.11, 0.055)], gk.half_round(0.11, 0.03, 0.055),
+                                     [(0.03, 0.055), (0.0, 0.055), (0.0, 0.012)]], segs=96)
+    B.pop()
+
+
+def pyramid_roof(B, cx, cy, half, z0, apex, mat, pitch=0.2, step=0.02, seed=5):
+    """Square pyramid roof laid in courses of tiles (gothic_kit.tile_facet), eaves `half` from (cx, cy) at z0."""
+    c = [(cx - half, cy - half, z0), (cx + half, cy - half, z0), (cx + half, cy + half, z0), (cx - half, cy + half, z0)]
+    top = (cx, cy, apex)
+    for k in range(4):
+        gk.tile_facet(B, mat, c[k], c[(k + 1) % 4], top, top, pitch=pitch, step=step, seed=seed + k)
+
+
+def arched_block(B, cx, w, z0, z_spring, y0, y1, mat, n=12, var=0.5):
+    """Block w wide from y0 (its front, facing -y) back to y1 with a round top: upright sides up to z_spring and a
+    half circle over them (wall coordinates). A dormer front or a gablet."""
+    r = w / 2
+    arc = [(cx + r * math.cos(q), z_spring + r * math.sin(q)) for q in np.radians(np.linspace(0.0, 180.0, n + 1))]
+    out = [(cx - r, z0), (cx + r, z0)] + arc + [(cx - r, z0)]
+    pts = out[:-1]
+    B.fan([(x, y0, z) for x, z in pts], mat, (0, -1, 0), var=var)
+    B.fan([(x, y1, z) for x, z in pts], mat, (0, 1, 0), var=var)
+    mid = np.array([cx, (z0 + z_spring + r) / 2])
+    for (xa, za), (xb, zb) in zip(out[1:], out[2:]):
+        e = (np.array([xa + xb, za + zb]) / 2) - mid
+        rect(B, (xa, y0, za), (xb, y0, zb), (xb, y1, zb), (xa, y1, za), mat, (e[0], 0.0, e[1]), var)
+
+
+def iron_finial(B, cx, cy, z0, top, mat, var=0.5):
+    """Wrought-iron spire finial from z0 up to top: turned bulbs and collars on a tapering rod, with two tiers of four
+    curling leaves (a fleur-de-lis cresting)."""
+    s = (top - z0) / 3.06
+    prof = [(0.13, 0.0), (0.13, 0.1), (0.06, 0.2), (0.05, 0.6), (0.1, 0.7), (0.1, 0.8), (0.04, 0.9), (0.035, 1.6), (0.09, 1.7),
+            (0.07, 1.85), (0.03, 1.9), (0.025, 2.6), (0.06, 2.65), (0.001, 3.06)]
+    B.lathe([[(r, z * s) for r, z in prof]], mat, segs=10, center=(cx, cy, z0), smooth=True, var=var)
+    for zl, k in ((0.95, 1.0), (1.95, 0.7)):
+        for q in range(4):
+            d = np.array([math.cos(math.pi / 2 * q), math.sin(math.pi / 2 * q), 0.0])
+            base = np.array([cx, cy, z0 + zl * s])
+            pts = [base + d * 0.04, base + d * 0.20 * k + (0, 0, 0.15 * k), base + d * 0.30 * k + (0, 0, 0.38 * k),
+                   base + d * 0.24 * k + (0, 0, 0.58 * k), base + d * 0.13 * k + (0, 0, 0.55 * k), base + d * 0.12 * k + (0, 0, 0.45 * k)]
+            B.tube(pts, [0.03 * k, 0.03 * k, 0.028 * k, 0.024 * k, 0.02 * k, 0.015 * k], mat, sides=6, var=var)

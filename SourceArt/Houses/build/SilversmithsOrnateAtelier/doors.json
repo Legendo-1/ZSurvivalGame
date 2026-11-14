@@ -1,0 +1,24 @@
+[
+ {
+  "mesh": "SM_House_SilversmithsOrnateAtelier_Door",
+  "component": "Door",
+  "location_cm": [
+   323.5,
+   -46.0,
+   26.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ },
+ {
+  "mesh": "SM_House_SilversmithsOrnateAtelier_Door_1",
+  "component": "Door_1",
+  "location_cm": [
+   471.50000000000006,
+   -638.0,
+   26.0
+  ],
+  "yaw": -180.0,
+  "open_yaw_delta": -90.0
+ }
+]
