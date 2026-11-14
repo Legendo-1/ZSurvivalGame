@@ -1,0 +1,13 @@
+[
+ {
+  "mesh": "SM_House_GlassblowersHighDraftFurnace_Door",
+  "component": "Door",
+  "location_cm": [
+   188.49999999999997,
+   -43.0,
+   2.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ }
+]

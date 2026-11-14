@@ -1,0 +1,70 @@
+{
+ "folder": "GlassblowersHighDraftFurnace",
+ "type": "townhouse_stack",
+ "interior": "shell",
+ "meshy_task": "92f0f8a1-4830-4246-a6e1-902d00486af4",
+ "notes": "House space: x 0 = the stone body's left face (Meshy-house x 2.32 at scale 9.5), y 0 = its front face (Meshy-house y 0.36). A narrow ashlar house, 5.11 wide, its gable to the front: side walls to the eaves at 10.5, a slate roof at 54.4 deg from the eaves (-0.28, 10.32) to the ridge (2.555, 14.28), 0.30 m past both gables, bargeboards. Front: a plank door (opening 1.76-3.30 x 0-2.64, a timber frame 0.12 wide, the leaf 0.37 deep) in a stone surround (jambs 0.26 wide, 0.05 proud), a shelf 2.64-2.90 (0.15 proud), a 4x2 transom (2.94-3.56) in a stone frame under a cap (3.60-3.84); a 1x4 window (2.04-3.08 x 8.28-10.06) on a sill under a head; a vent slit (2.43-2.71 x 11.58-12.28) under a small lintel. Back: the slit only. An octagonal brick chimney stack against the left wall: a stone pier (x -2.29..0, 2.94 m along the wall, to 3.40) with a 2x4 window on its outer face, a brick taper to the octagon at 5.00 (apothem 1.17), the shaft tapering to 1.01 at 16.98, a corbelled cap to 18.02 with a sooty flue, five iron bands; tie rods along the left wall at 5.12 and 7.28 round the corners to anchor plates on the front and back (x 0.58), a third at 9.50 between two plates. Depth: the Meshy body is 7.08 m deep, fitted to the 6.64 m plot (the stack stays centred).",
+ "scale": 9.5,
+ "width": 5.11,
+ "depth": 6.64,
+ "floor": 0.02,
+ "ceiling": 10.2,
+ "wall": 0.45,
+ "window_style": {"frame": "Timber", "rec": 0.10, "depth": 0.10, "fw": 0.09, "reveal": "Stone"},
+ "walls": {
+  "front": {
+   "windows": [[2.04, 3.08, 8.28, 10.06, 1, 4], [1.76, 3.30, 2.94, 3.56, 4, 2]],
+   "louvres": [[2.43, 2.71, 11.58, 12.28]], "louvre_mat": "Metal",
+   "blocks": [
+    [1.50, 1.76, -0.05, 0.0, 0.0, 2.64, "Trim"], [3.30, 3.58, -0.05, 0.0, 0.0, 2.64, "Trim"],
+    [1.38, 3.68, -0.15, 0.0, 2.64, 2.90, "Trim"],
+    [1.52, 1.76, -0.03, 0.0, 2.90, 3.60, "Trim"], [3.30, 3.56, -0.03, 0.0, 2.90, 3.60, "Trim"],
+    [1.76, 3.30, -0.03, 0.0, 2.90, 2.94, "Trim"], [1.76, 3.30, -0.03, 0.0, 3.56, 3.60, "Trim"],
+    [1.40, 3.68, -0.09, 0.0, 3.60, 3.84, "Trim"],
+    [1.84, 3.28, -0.08, 0.0, 7.94, 8.18, "Trim"], [1.84, 3.28, -0.08, 0.0, 10.08, 10.32, "Trim"],
+    [2.36, 2.88, -0.04, 0.0, 12.36, 12.60, "Trim"]]},
+  "back": {
+   "louvres": [[2.33, 2.67, 11.58, 12.30]], "louvre_mat": "Metal",
+   "blocks": [[2.25, 2.75, -0.04, 0.0, 12.36, 12.60, "Trim"]]}
+ },
+ "door": {"side": "front", "x": [1.76, 3.30], "z1": 2.64, "reveal": "Stone",
+          "frame": {"w": 0.12, "y": 0.19, "head": 2.34, "mat": "Timber"},
+          "leaf_y": 0.37, "leaf_t": 0.06, "hinge": "left", "mat": "Door", "iron": "Bronze", "planks": 4, "straps": [], "ring": 0.45},
+ "roof": {"mat": "Roof", "overhang": 0.30, "thick": 0.20, "pitch": 0.26, "step": 0.03, "ridge_cap": [0.07, 0.06], "barge": [0.03, 0.06, 0.12],
+          "profile": [[-0.28, 10.32], [2.555, 14.28], [5.39, 10.32]]},
+ "stack": {
+  "cx": -1.045, "cy": 3.33,
+  "pier": {"x": [-2.29, 0.0], "y": [1.86, 4.80], "z1": 3.40, "mat": "Stone", "trim": "Trim",
+           "window": {"y": [2.94, 3.67], "z": [0.72, 1.82], "cols": 2, "rows": 4, "frame": "Timber", "rec": 0.06, "depth": 0.06, "fw": 0.06}},
+  "taper": {"chamfer": 0.12},
+  "shaft": {"z0": [5.00, 1.17], "z1": [16.98, 1.01], "mat": "Brick"},
+  "cap": [[16.98, 1.03], [17.11, 1.03], [17.11, 1.11], [17.31, 1.11], [17.31, 1.18], [17.47, 1.18], [17.47, 1.22], [17.63, 1.22],
+          [17.63, 1.06], [17.95, 1.06], [17.95, 0.97], [18.02, 0.97]],
+  "flue": [0.70, 0.60, "Metal"],
+  "bands": [[5.02, 5.26], [7.16, 7.40], [9.38, 9.62], [12.00, 12.24], [14.50, 14.74]], "band_proud": 0.06, "iron": "Bronze",
+  "ties": [
+   {"z": 5.12, "x": -0.10, "corners": 0.58, "plates": [1.64, 5.02]},
+   {"z": 7.28, "x": -0.10, "corners": 0.58, "plates": [1.64, 5.02]},
+   {"z": 9.50, "x": -0.10, "plates": [1.64, 5.02]}]
+ },
+ "meshy_front": {"file": "C:/Users/Lenovo/Documents/Unreal Projects/ZSurvivalGame/Saved/HouseCheck/GlassblowersHighDraftFurnace/measure/m_front.png",
+                 "col0": 282.0, "row0": 1857.38, "ppm": 100},
+ "place": {"location": [21721, 5756, 1300], "yaw": 180, "hide": [], "nav_bounds": false},
+ "materials": {
+  "Stone":   {"tex": "ashlar", "target": [0.577, 0.502, 0.392], "gain": 1.1, "ta": 0.6, "normal": 0.7, "dirt": 0.4, "streak": 0.3, "variation": 0.06},
+  "Brick":   {"tex": "brick", "target": [0.227, 0.089, 0.049], "gain": 1.02, "ta": 0.95, "normal": 1.0, "dirt": 0.5},
+  "Gauged":  {"tex": "ashlar", "target": [0.577, 0.502, 0.392], "gain": 1.1, "ta": 0.6, "normal": 0.7, "dirt": 0.5},
+  "Trim":    {"tex": "ashlar", "target": [0.601, 0.551, 0.455], "gain": 1.1, "ta": 0.5, "normal": 0.6, "dirt": 0.4, "streak": 0.2, "variation": 0.05},
+  "Door":    {"tex": "timber", "target": [0.064, 0.044, 0.030], "gain": 1.1, "ta": 0.8, "normal": 0.8, "dirt": 0.3},
+  "Metal":   {"tex": "slate", "target": [0.070, 0.072, 0.073], "gain": 1.0, "ta": 0.3, "normal": 0.3, "rough": 0.6},
+  "Glass":   {"glass": true, "target": [0.156, 0.205, 0.231], "gain": 1.0, "emissive": 0.02},
+  "Brass":   {"tex": "plaster", "target": [0.42, 0.3, 0.13], "gain": 1.1, "ta": 0.3, "normal": 0.3, "rough": 0.45, "metal": 0.85, "dirt": 0.3},
+  "Dial":    {"tex": "plaster", "target": [0.712, 0.611, 0.476], "gain": 1.1, "ta": 0.3, "normal": 0.3, "dirt": 0.4},
+  "Clay":    {"tex": "plaster", "target": [0.205, 0.090, 0.047], "gain": 1.1, "ta": 0.5},
+  "Roof":    {"tex": "slate", "target": [0.062, 0.067, 0.075], "gain": 1.1, "ta": 0.5, "normal": 0.5, "rough": 0.6, "dirt": 0.3, "streak": 0.3},
+  "Plaster": {"tex": "plaster", "target": [0.55, 0.52, 0.46], "gain": 1.0, "ta": 0.35, "normal": 0.4, "dirt": 0.0, "streak": 0.0, "variation": 0.03, "macro": 0.1},
+  "Timber":  {"tex": "timber", "target": [0.149, 0.077, 0.037], "gain": 1.1, "ta": 0.8, "normal": 0.8, "dirt": 0.3, "streak": 0.2},
+  "Bronze":  {"tex": "slate", "target": [0.043, 0.044, 0.044], "gain": 1.0, "ta": 0.3, "normal": 0.4, "rough": 0.5, "metal": 0.4},
+  "Lamp":    {"glass": true, "target": [0.954, 0.915, 0.722], "gain": 1.0, "emissive": 1.5, "rough": 0.3}
+ }
+}

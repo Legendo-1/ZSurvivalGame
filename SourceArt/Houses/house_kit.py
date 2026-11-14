@@ -783,10 +783,14 @@ def outline_face(B, outline, z0, mat, holes=(), y=0.0, inward=False, var=0.5, uv
         if xb - xa < 1e-6:
             continue
         ta, tb = outline_at(outline, xa), outline_at(outline, xb)
-        spans = [(z0, None)]
-        for hx0, hx1, hz0, hz1 in (h[:4] for h in holes):
-            if hx0 <= xa + 1e-9 and xb <= hx1 + 1e-9:
-                spans = [(z0, hz0), (hz1, None)]
+        # every hole over this strip, bottom to top (house #8: a strip under several stacked holes used to keep only
+        # the last one; with one hole or none the spans are the same as before)
+        cut = sorted((hz0, hz1) for hx0, hx1, hz0, hz1 in (h[:4] for h in holes) if hx0 <= xa + 1e-9 and xb <= hx1 + 1e-9)
+        spans, zc = [], z0
+        for hz0, hz1 in cut:
+            spans.append((zc, hz0))
+            zc = max(zc, hz1)
+        spans.append((zc, None))
         for za, zb in spans:
             if zb is None:
                 if min(ta, tb) - za > 1e-6:
@@ -1114,3 +1118,93 @@ def hoist_crane(B, xc, y_wall, y_tip, z_beam, beam_h, foot, wheel_r, block_c, bl
     fy, fz = foot
     B.tube([(xc, fy, fz), (xc, ye + 0.30, zb + 0.03)], 0.055, iron, sides=6, var=var)
     block(B, xc - 0.09, xc + 0.09, fy - 0.025, fy, fz, fz + 0.16, iron, faces="xXyzZ", var=var)
+
+
+# ---------------------------------------------------------------------------------------------
+# House #8 (GlassblowersHighDraftFurnace): an octagonal brick chimney stack, iron bands, tie rods, anchor plates
+# ---------------------------------------------------------------------------------------------
+def oct_ring(cx, cy, r, z):
+    """The 8 corners of a regular octagon with apothem r (centre to a flat) whose flats face +-x, +-y and the
+    diagonals, anticlockwise from the lower end of the +x flat (-22.5 degrees). Flat k (corners k, k+1) faces 45k."""
+    rc = r / math.cos(math.pi / 8)
+    return [(cx + rc * math.cos(math.radians(-22.5 + 45 * k)), cy + rc * math.sin(math.radians(-22.5 + 45 * k)), z) for k in range(8)]
+
+
+def rect_ring(cx, cy, hx, hy, c, z):
+    """8 points on a rectangle (half sizes hx, hy, corners chamfered by c), matched one to one with oct_ring's corners:
+    the octagon's +x flat goes to the rectangle's +x side, its diagonal flats to the chamfers."""
+    a, b = hx - c, hy - c
+    pts = [(hx, -b), (hx, b), (a, hy), (-a, hy), (-hx, b), (-hx, -b), (-a, -hy), (a, -hy)]
+    return [(cx + px, cy + py, z) for px, py in pts]
+
+
+def ring_skin(B, lo, hi, mat, var=0.5):
+    """The 8 faces between two rings of 8 points (lo under hi), facing away from the axis through their centres."""
+    c = np.mean(np.asarray(lo + hi, dtype=np.float64), axis=0)
+    for k in range(8):
+        j = (k + 1) % 8
+        rect(B, lo[k], lo[j], hi[j], hi[k], mat, ("from", tuple(c)), var)
+
+
+def octagon_profile(B, cx, cy, prof, mat, var=0.5):
+    """An octagonal shaft turned from a profile [(z, apothem), ...] listed bottom to top: upright or sloping faces,
+    and flat steps where z repeats (facing down where the profile steps out, up where it steps in)."""
+    for (za, ra), (zb, rb) in zip(prof, prof[1:]):
+        dz, dr = zb - za, rb - ra
+        if abs(dz) < 1e-9 and abs(dr) < 1e-9:
+            continue
+        lo, hi = oct_ring(cx, cy, ra, za), oct_ring(cx, cy, rb, zb)
+        for k in range(8):
+            j = (k + 1) % 8
+            th = math.radians(45 * k)
+            rect(B, lo[k], lo[j], hi[j], hi[k], mat, (dz * math.cos(th), dz * math.sin(th), -dr), var)
+
+
+def octagon_band(B, cx, cy, z0, z1, r0, r1, proud, mat, rivets=2, rivet=0.022, var=0.5):
+    """An iron band round an octagonal shaft (apothem r0 at z0, r1 at z1), `proud` thick, with `rivets` round-headed
+    rivets (square studs) on each flat."""
+    octagon_profile(B, cx, cy, [(z0, r0), (z0, r0 + proud), (z1, r1 + proud), (z1, r1)], mat, var=var)
+    zm, r = (z0 + z1) / 2, (r0 + r1) / 2 + proud
+    half = r * math.tan(math.pi / 8)
+    for k in range(8):
+        B.push(translate(cx, cy, 0.0) @ rot_z(45.0 * k))
+        for i in range(rivets):
+            u = -half + 2 * half * (i + 0.5) / rivets
+            block(B, r - 0.004, r + rivet * 0.7, u - rivet, u + rivet, zm - rivet, zm + rivet, mat, faces="xXyYzZ", var=var)
+        B.pop()
+
+
+def axis_frame(c, n):
+    """A frame at point c whose local z points along the unit vector n (x and y any perpendicular pair)."""
+    n = np.asarray(n, dtype=np.float64)
+    n = n / np.linalg.norm(n)
+    ref = np.array([0.0, 0.0, 1.0]) if abs(n[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    ex = np.cross(ref, n)
+    ex /= np.linalg.norm(ex)
+    ey = np.cross(n, ex)
+    m = np.eye(4)
+    m[:3, 0], m[:3, 1], m[:3, 2], m[:3, 3] = ex, ey, n, c
+    return m
+
+
+def anchor_plate(B, c, n, mat, r=0.27, t=0.035, boss_r=0.10, boss_h=0.07, nut=0.05, var=0.5):
+    """A round iron tie-rod anchor plate on a wall: a disc of radius r, t thick, lying on the wall at point c with the
+    wall's outward normal n, a domed boss in its middle and a square nut on the boss."""
+    B.push(axis_frame(c, n))
+    B.lathe([[(r, 0.0), (r, t)], [(r, t), (boss_r, t)], [(boss_r, t), (boss_r * 0.8, t + boss_h)], [(boss_r * 0.8, t + boss_h), (0.0, t + boss_h)]],
+            mat, segs=20, smooth=False, var=var)
+    block(B, -nut, nut, -nut, nut, t + boss_h - 0.005, t + boss_h + 0.035, mat, faces="xXyYZ", var=var)
+    for k in range(6):                                        # bolt heads round the rim
+        a = 2 * math.pi * k / 6
+        x, y = 0.72 * r * math.cos(a), 0.72 * r * math.sin(a)
+        block(B, x - 0.018, x + 0.018, y - 0.018, y + 0.018, t - 0.002, t + 0.02, mat, faces="xXyYZ", var=var)
+    B.pop()
+
+
+def tie_rod(B, pts, mat, r=0.04, knuckle=0.07, var=0.5):
+    """An iron tie rod along a polyline of corner points (house coordinates), a straight round rod per leg and a
+    square knuckle block at every inner corner."""
+    for a, b in zip(pts, pts[1:]):
+        B.tube([a, b], r, mat, sides=8, var=var)
+    for p in pts[1:-1]:
+        block(B, p[0] - knuckle, p[0] + knuckle, p[1] - knuckle, p[1] + knuckle, p[2] - knuckle * 2.2, p[2] + knuckle * 2.2, mat, var=var)
