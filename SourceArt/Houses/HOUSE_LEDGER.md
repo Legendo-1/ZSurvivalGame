@@ -72,6 +72,7 @@ Each line is a mistake that cost real time, and what to do instead. **When somet
 ## 1b. Per-house routine
 **Section 0 overrides this routine:** skip the 5 m checks (steps 3 and 9), the captures and colour tuning (step 10), and the capture-based colour check of the door (step 11). The task ends as soon as step 9's placement has run.
 
+0. **Commit leftover material resaves.** Run `git status`. If the only changes under `Content/Buildings/Houses/` are `MI_House_*` files of houses already marked `done`, commit them first as `chore(houses): resave material instances`. Unreal adds the same 124 bytes of cached data to each material instance once the house has been drawn in the viewport, and they show up after the user's Save All. Never commit `ZSurvivalGame.uproject`: its `EngineAssociation` was changed on this PC.
 1. **Read** this ledger: the scope note, the rules, the lessons (section 1a), the house's row and details, its plot group (section 8), the conventions and the kit index. Set the house's status to `in progress`.
 2. **Study the template.** Look at `ref_*.png`, then load `model.glb` in Blender and take section drawings with `SourceArt/Cathedral/v3/tools/template_slices.py`, adapted to the GLB. Decide the scale (section 3), then measure storey heights, bay widths, opening sizes, cornices and the roofline.
 3. **Fit the plot.** Find the slot's exact area. Check the 5 m rule and which side is the street, and list the old actors that overlap. Decide the real depth (section 8, depth rule).
