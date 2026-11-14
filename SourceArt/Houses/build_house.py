@@ -710,7 +710,259 @@ def build_townhouse_terrace(spec):
     return E, I, hulls
 
 
-BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable, "townhouse_terrace": build_townhouse_terrace}
+# ---------------------------------------------------------------------------------------------
+# townhouse_mansard (house #4 on): rubble walls with quoins and bands under a gambrel (mansard) roof between two
+# stone gables, gable windows, gabled dormers on the front slope, a timber shopfront (pilasters, shop windows with
+# stallrisers, a glazed shop door, fascia, consoles, cornice) and casement windows with sills and lintels. One
+# empty shell inside.
+# ---------------------------------------------------------------------------------------------
+def mansard_profile(spec):
+    """The roof's top line [(y, z), ...] from the front eave over the ridge to the back eave: the spec's front points,
+    the ridge at D/2 and the front points mirrored to the back."""
+    D, rf = spec["depth"], spec["roof"]
+    front = [tuple(p) for p in rf["profile"]]
+    return front + [(D / 2, rf["ridge"])] + [(D - y, z) for y, z in reversed(front)]
+
+
+def roof_z(prof, y):
+    ys, zs = zip(*prof)
+    return float(np.interp(y, ys, zs))
+
+
+def mansard_windows(E, I, fac, spec, t):
+    """Casement windows on the upper storeys of one side: frame and glass, reveals, flat architrave, sill, lintel."""
+    ws = spec["window_style"]
+    holes = []
+    for z0, z1, panes in spec["storeys"]:
+        for x0, x1 in fac.get("windows", []):
+            holes.append((x0, x1, z0, z1))
+            rec = ws["rec"]
+            hk.sash_window(E, x0, x1, z0, z1, ws["frame"], ws["glass"], panes[0], panes[1], y=rec, depth=ws["depth"], fw=ws["fw"], meeting=False)
+            hk.reveal(E, (x0, x1, z0, z1), 0.0, rec, ws["reveal_mat"], sides="lrt")
+            hk.reveal(I, (x0, x1, z0, z1), rec, t, "Plaster")
+            ar = ws["architrave"]
+            hk.frame_run(E, x0, x1, z0, z1, ar["profile"], ar["mat"])
+            s = ws["sill"]
+            hk.sill(E, x0 - s["ext"], x1 + s["ext"], z0 - s["drop"], s["mat"], h=s["h"], proud=s["proud"], back=rec)
+            hk.block(E, x0, x1, 0.0, rec, z0 - s["drop"], z0, s["mat"], faces="Z")                  # the sill's top under the frame
+            ln = ws["lintel"]
+            hk.lintel(E, x0 - ln["ext"], x1 + ln["ext"], z1 + ln["gap"], z1 + ln["gap"] + ln["h"], ln["mat"], proud=ln["proud"])
+    return holes
+
+
+def mansard_shop(E, I, spec, t, F0):
+    """The timber shopfront across the front ground floor (wall coordinates = house coordinates). Returns the holes it
+    leaves in the wall core and inner face, and the door cut (x0, x1, z) for collision."""
+    sp = spec["shop"]
+    mat = sp["mat"]
+    pf, fy, fd = sp["pilasters"]["front"], sp["frame_y"], sp["frame_depth"]
+    holes = []
+    for px0, px1 in sp["pilasters"]["x"]:
+        hk.block(E, px0, px1, pf, fy, 0.0, sp["pilasters"]["z1"], mat, faces="xXy")
+    for win in sp["windows"]:
+        x0, x1 = win["x"]
+        holes.append((x0, x1, sp["z_glass"], sp["z1"]))
+        hk.sash_window(E, x0, x1, sp["z_glass"], sp["z1"], "Metal", "Glass", win["panes"][0], win["panes"][1], y=fy, depth=fd, fw=sp["fw"],
+                       meeting=False)
+        hk.reveal(I, (x0, x1, sp["z_glass"], sp["z1"]), fy + fd, t, "Plaster")
+        hk.block(E, x0, x1, sp["sill_front"], fy, sp["z_sill"], sp["z_glass"], mat, faces="yzZ")            # sill
+        rs = sp["riser"]
+        m = rs["margin"]
+        panel = (x0 + m, x1 - m, m, sp["z_sill"] - m)
+        hk.flat_face(E, x0, x1, 0.0, sp["z_sill"], mat, holes=[panel], y=rs["y"])
+        hk.flat_face(E, *panel, mat, y=rs["y"] + rs["sunk"])
+        hk.reveal(E, panel, rs["y"], rs["y"] + rs["sunk"], mat)
+    # the door: the whole bay between two pilasters, a flush head panel, thin jambs, threshold and a glazed leaf
+    dr = sp["door"]
+    x0, x1, zh, hy = dr["x0"], dr["x1"], dr["head"], dr["head_y"]
+    jw, ly, lt = dr["jamb"], dr["leaf_y"], dr["leaf_t"]
+    hk.flat_face(E, x0, x1, zh, sp["z1"], mat, y=hy)
+    hk.reveal(E, (x0, x1, 0.0, zh), fy, ly, mat, sides="lr")
+    hk.reveal(E, (x0, x1, 0.0, zh), hy, ly, mat, sides="t")
+    hk.reveal(I, (x0, x1, F0, zh), ly + lt, t, "Plaster", sides="lrt")
+    for a, b in ((x0, x0 + jw), (x1 - jw, x1)):
+        hk.block(E, a, b, ly - 0.06, ly + lt, F0, zh, mat, faces="xXy")
+    hk.block(E, x0, x1, pf, t, 0.0, F0, dr["threshold"], faces="xXyZ")
+    w, h = x1 - x0 - 2 * jw - 0.01, zh - F0 - 0.005
+    left = dr.get("hinge", "left") == "left"
+
+    def make(B, w=w, h=h):
+        hk.glazed_leaf(B, w, h, "Door", "Glass", "Door", t=lt, light=tuple(dr["light"]), grid=tuple(dr["grid"]), panel_z=tuple(dr["panels"]))
+    separate_leaf(E, (x0 + jw + 0.005) if left else (x1 - jw - 0.005), left, w, h, ly, F0, lt, make, seed=31 + len(DOORS))
+    holes.append((x0, x1, 0.0, zh))
+    # fascia, consoles, cornice
+    fa = sp["fascia"]
+    hk.block(E, fa["x0"], fa["x1"], fa["front"], fy, fa["z0"], fa["z1"], mat, faces="xXyz")
+    co = sp["consoles"]
+    for cx in co["x"]:
+        hk.console(E, cx, fa["front"], fa["z1"], mat, out=co["out"], height=co["height"], width=co["width"])
+    cn = sp["cornice"]
+    hk.moulding_run(E, cn["x0"], cn["x1"], cn["z"], cn["profile"], mat, hub_v=0.16)
+    pc = sp["pier_caps"]
+    W = spec["width"]
+    for a, b in ((-pc["out"], cn["x0"]), (cn["x1"], W + pc["out"])):
+        hk.block(E, a, b, pc["front"], 0.0, pc["z0"], pc["z1"], pc["mat"], faces="xXyzZ")
+    return holes, (x0, x1, zh)
+
+
+def mansard_roof(E, spec, prof, hulls):
+    """Gambrel roof over the whole house, `overhang` past both gables: slate courses on top, the slab's underside
+    where it can be seen (eaves, verges), its verge and eave edges; gutters on the front and back."""
+    W, D = spec["width"], spec["depth"]
+    rf = spec["roof"]
+    X0, X1, th = -rf["overhang"], W + rf["overhang"], rf["thick"]
+    mat = rf["mat"]
+    pts = list(prof)
+    for yc in (0.0, D):                                         # split the line at the walls
+        for k in range(len(pts) - 1):
+            if pts[k][0] < yc < pts[k + 1][0]:
+                pts.insert(k + 1, (yc, roof_z(prof, yc)))
+                break
+    ridge_k = max(range(len(pts)), key=lambda k: pts[k][1])
+    for k, ((ya, za), (yb, zb)) in enumerate(zip(pts, pts[1:])):
+        lo, hi = ((ya, za), (yb, zb)) if k < ridge_k else ((yb, zb), (ya, za))
+        gk.tile_facet(E, mat, (X0, lo[0], lo[1]), (X1, lo[0], lo[1]), (X1, hi[0], hi[1]), (X0, hi[0], hi[1]), pitch=rf["pitch"],
+                      step=rf["step"], seed=60 + k)
+        dn = (0.0, -(zb - za), yb - ya)
+        dn = dn if dn[2] < 0 else tuple(-c for c in dn)          # the underside faces down
+        spans = [(X0, 0.0), (W, X1)] if 0.0 <= ya and yb <= D else [(X0, X1)]
+        for xa, xb in spans:
+            hk.rect(E, (xa, ya, za - th), (xb, ya, za - th), (xb, yb, zb - th), (xa, yb, zb - th), mat, dn)
+        for X, nx in ((X0, -1.0), (X1, 1.0)):                    # verge edges, up past the courses' steps
+            s = rf["step"] + 0.005
+            hk.rect(E, (X, ya, za - th), (X, yb, zb - th), (X, yb, zb + s), (X, ya, za + s), mat, (nx, 0, 0))
+    for (y, z), ny in ((pts[0], -1.0), (pts[-1], 1.0)):          # eave edges
+        hk.rect(E, (X0, y, z - th), (X1, y, z - th), (X1, y, z + rf["step"]), (X0, y, z + rf["step"]), mat, (0, ny, 0))
+    gu = spec["gutter"]
+    hk.block(E, X0 + 0.03, X1 - 0.03, gu["y0"], 0.0, gu["z0"], gu["z1"], gu["mat"], faces="xXyzZ")
+    hk.block(E, X0 + 0.03, X1 - 0.03, D, D - gu["y0"], gu["z0"], gu["z1"], gu["mat"], faces="xXYzZ")
+    hulls.append([(x, y, z) for x in (X0, X1) for y, z in prof] + [(x, y, spec["ceiling"]) for x in (X0, X1) for y in (0.0, D)])
+
+
+def mansard_dormer(E, spec, prof, xc, hulls):
+    """One gabled dormer on the front slope: front face with a casement window, cheeks down to the roof, a head band, a
+    slate gable roof running back into the main roof, its soffits and edges."""
+    dm = spec["dormers"]
+    mat, trim = dm["mat"], dm["trim"]
+    hw, ww, yf, z0 = dm["half"], dm["win_half"], dm["front"], dm["z0"]
+    wz0, wz1 = dm["win"]
+    eh, ez, rz, th = dm["eave_half"], dm["eave_z"], dm["ridge_z"], dm["roof_thick"]
+    s = (rz - ez) / eh                                            # roof slope (rise per run)
+    yfr, ybk = dm["roof_front"], dm["roof_back"]
+
+    def under(x):                                                 # the dormer roof's underside at x
+        return rz - th - abs(x - xc) * s
+    # front face (wall coordinates: the plane y = yf) up to the roof's underside, with the window
+    top = [(xc - hw, under(xc - hw)), (xc, under(xc)), (xc + hw, under(xc + hw))]
+    hole = (xc - ww, xc + ww, wz0, wz1)
+    E.push(gk.translate(0.0, yf, 0.0))
+    hk.outline_face(E, top, z0, mat, holes=[hole])
+    E.pop()
+    hk.sash_window(E, xc - ww, xc + ww, wz0, wz1, "Metal", "Glass", dm["panes"][0], dm["panes"][1], y=yf + dm["rec"], depth=dm["depth"], fw=0.06,
+                   meeting=False)
+    hk.reveal(E, hole, yf, yf + dm["rec"], trim, sides="lrt")
+    hk.sill(E, xc - ww - 0.06, xc + ww + 0.06, wz0, trim, h=0.10, proud=0.05 - yf, back=yf + dm["rec"])
+    hd = dm["head"]
+    hx = abs(rz - th - hd["z1"]) / s                              # where the head band meets the roof underside
+    hk.block(E, xc - min(hw, hx), xc + min(hw, hx), yf - hd["proud"], yf, hd["z0"], hd["z1"], trim, faces="xXyzZ")
+    # cheeks: from the front back to where the main roof reaches their top, the foot 5 cm under the roof
+    ztop = under(xc + hw)
+    yb = float(np.interp(ztop, [p[1] for p in prof[:8]], [p[0] for p in prof[:8]]))
+    foot = [(y, z - 0.05) for y, z in prof[:8] if yf < y < yb]
+    poly_yz = [(yf, z0), *foot, (yb, ztop)]                      # a convex polygon, fanned from its top front corner
+    for X, nx in ((xc - hw, -1.0), (xc + hw, 1.0)):
+        E.fan([(X, y, z) for y, z in poly_yz], mat, (nx, 0, 0), hub=(X, yf, ztop))
+    # the gable roof: slate on both slopes, the front edge, soffits in front of the face and outside the cheeks
+    for sx in (-1.0, 1.0):
+        xe = xc + sx * eh
+        a, b = (xe, yfr, ez), (xe, ybk, ez)
+        c, d = (xc, ybk, rz), (xc, yfr, rz)
+        gk.tile_facet(E, "Roof", a, b, c, d, pitch=0.22, step=0.015, seed=90 + int(xc * 10) + int(sx))
+        hk.rect(E, (xe, yfr, ez - th), (xe, ybk, ez - th), (xe, ybk, ez + 0.02), (xe, yfr, ez + 0.02), "Roof", (sx, 0, 0))   # eave edge
+        hk.rect(E, (xe, yfr, ez - th), (xc, yfr, rz - th), (xc, yfr, rz + 0.02), (xe, yfr, ez + 0.02), "Roof", (0, -1, 0))   # front edge
+        dn = (-sx * s, 0.0, -1.0)
+        hk.rect(E, (xe, yfr, ez - th), (xc, yfr, rz - th), (xc, yf, rz - th), (xe, yf, ez - th), "Roof", dn)                # front soffit
+        xw = xc + sx * hw
+        hk.rect(E, (xe, yf, ez - th), (xw, yf, under(xw)), (xw, ybk, under(xw)), (xe, ybk, ez - th), "Roof", dn)          # side soffit
+    hulls.append(hk.box_pts(xc - eh, xc + eh, yfr, ybk, z0, rz))
+
+
+def build_townhouse_mansard(spec):
+    W, D, t = spec["width"], spec["depth"], spec["wall"]
+    F0, CEIL, TOP = spec["floor"], spec["ceiling"], spec["top"]
+    prof = mansard_profile(spec)
+    q = spec["quoins"]
+    E, I = hk.Builder(hk.MATERIALS, seed=11), hk.Builder(hk.MATERIALS, seed=12)
+    hulls = []
+    gw = spec["gable_window"]
+    ws = spec["window_style"]
+    for k, side in enumerate(("front", "right", "back", "left")):
+        fac = spec["facades"].get(side, {})
+        m, L = hk.facade_frame(side, W, D)
+        E.push(m)
+        I.push(m)
+        holes, cut = mansard_windows(E, I, fac, spec, t), None
+        if side == "front":
+            shop_holes, cut = mansard_shop(E, I, spec, t, F0)
+            sp = spec["shop"]
+            z_up = sp["cornice"]["z"] + max(v for _u, v in sp["cornice"]["profile"])
+            pl = sp["pilasters"]["x"]
+            hk.flat_face(E, 0.0, pl[0][0], 0.0, sp["pier_caps"]["z0"], "Stone", cell=0.6)            # the stone piers
+            hk.flat_face(E, pl[-1][1], L, 0.0, sp["pier_caps"]["z0"], "Stone", cell=0.6)
+            hk.flat_face(E, 0.0, L, z_up, TOP, "Stone", holes=holes, cell=0.6)
+            holes = holes + shop_holes
+        else:
+            hk.flat_face(E, 0.0, L, 0.0, TOP, "Stone", holes=holes, cell=0.6)
+        hk.quoin_corner(E, 0.0, TOP, q["course"], q["long"], q["short"], q["proud"], q["mat"], start_long=(k % 2 == 0))
+        hk.wall_core(E, L, 0.0, TOP, t, holes=holes)
+        hk.flat_face(I, t, L - t, F0, CEIL, "Plaster", holes=holes, y=t, inward=True)
+        if side in ("front", "back"):
+            # the wall carried up behind the gutter to the roof's underside (closes the slot over the wall head)
+            hk.flat_face(E, 0.0, L, TOP, roof_z(prof, 0.0) - spec["roof"]["thick"] + 0.02, "Stone", cell=0.6)
+        else:
+            # the gable: stone up to the roof's underside, its window, a verge band under the roof, a core inside
+            th = spec["roof"]["thick"]
+            yy = [p[0] for p in prof if 0.0 < p[0] < D]
+            outline = [(0.0, roof_z(prof, 0.0) - th)] + [(y, roof_z(prof, y) - th) for y in yy] + [(D, roof_z(prof, D) - th)]
+            ghole = (gw["x0"], gw["x1"], gw["z0"], gw["z1"])
+            hk.outline_face(E, outline, TOP, "Stone", holes=[ghole])
+            for yc, inward in ((t / 2 - 0.001, False), (t / 2 + 0.001, True)):
+                hk.outline_face(E, outline, TOP, "Plaster", holes=[ghole], y=yc, inward=inward, var=0.2)
+            vg = spec["verge"]
+            hk.verge_band(E, outline, vg["h"], vg["proud"], vg["mat"])
+            rec = ws["rec"]
+            hk.sash_window(E, *ghole, ws["frame"], ws["glass"], gw["panes"][0], gw["panes"][1], y=rec, depth=ws["depth"], fw=ws["fw"], meeting=False)
+            hk.reveal(E, ghole, 0.0, rec, ws["reveal_mat"], sides="lrt")
+            hk.reveal(E, ghole, rec + ws["depth"], t / 2, "Plaster")
+            ar = ws["architrave"]
+            hk.frame_run(E, *ghole, ar["profile"], ar["mat"])
+            s, ln = ws["sill"], ws["lintel"]
+            hk.sill(E, gw["x0"] - s["ext"], gw["x1"] + s["ext"], gw["z0"] - s["drop"], s["mat"], h=s["h"], proud=s["proud"], back=rec)
+            hk.block(E, gw["x0"], gw["x1"], 0.0, rec, gw["z0"] - s["drop"], gw["z0"], s["mat"], faces="Z")
+            hk.lintel(E, gw["x0"] - ln["ext"], gw["x1"] + ln["ext"], gw["z1"] + ln["gap"], gw["z1"] + ln["gap"] + ln["h"], ln["mat"], proud=ln["proud"])
+            hulls.append(xf(E, [(x, y, z) for x, z in outline for y in (0.0, t)] + [(0.0, 0.0, TOP), (L, 0.0, TOP), (0.0, t, TOP), (L, t, TOP)]))
+        if cut:
+            dx0, dx1, dz = cut
+            hulls += [xf(E, hk.box_pts(0.0, dx0, 0.0, t, 0.0, TOP)), xf(E, hk.box_pts(dx1, L, 0.0, t, 0.0, TOP)),
+                      xf(E, hk.box_pts(dx0, dx1, 0.0, t, dz, TOP))]
+        else:
+            hulls.append(xf(E, hk.box_pts(0.0, L, 0.0, t, 0.0, TOP)))
+        E.pop()
+        I.pop()
+    for b in spec["bands"]:
+        hk.band_loop(E, W, D, b["z0"], b["z1"], b["proud"], b["mat"], sides=b.get("sides"))
+    mansard_roof(E, spec, prof, hulls)
+    for xc in spec["dormers"]["x"]:
+        mansard_dormer(E, spec, prof, xc, hulls)
+    # inside: one empty room
+    hk.rect(I, (t, t, F0), (W - t, t, F0), (W - t, D - t, F0), (t, D - t, F0), "Timber", (0, 0, 1))
+    hk.rect(I, (t, t, CEIL), (W - t, t, CEIL), (W - t, D - t, CEIL), (t, D - t, CEIL), "Plaster", (0, 0, -1))
+    hulls.append(hk.box_pts(t, W - t, t, D - t, -0.3, F0))
+    return E, I, hulls
+
+
+BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable, "townhouse_terrace": build_townhouse_terrace,
+            "townhouse_mansard": build_townhouse_mansard}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -775,11 +1027,53 @@ def shots_terrace(spec):
             ("back", (W / 2 - 4.0, D + 18.0, 7.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
 
 
+def audit_setup_mansard(spec):
+    """Outside eyes only: street, both sides, the lower town; the gables and the attic under the roof from above."""
+    W, D, t = spec["width"], spec["depth"], spec["wall"]
+    top = spec["top"] - 0.05
+    prof = mansard_profile(spec)
+    th = spec["roof"]["thick"]
+    street = [("lane left", (1.0, -4.5, 1.7)), ("lane door", (5.3, -4.5, 1.7)), ("lane right", (9.6, -4.5, 1.7)),
+              ("lane high", (5.0, -6.0, 9.0)), ("lane low left", (-1.5, -2.5, 1.0))]
+    above = [("above front", (W / 2, -4.0, 22.0)), ("above", (W / 2, D / 2, 26.0)), ("above back", (W / 2, D + 5.0, 22.0)),
+             ("left high", (-5.0, -2.0, 18.0)), ("lane high", (5.0, -6.0, 9.0)), ("plaza high", (W + 6.0, -3.0, 14.0))]
+    y_in = 1.6
+    gz1 = roof_z(prof, y_in) - th - 0.1
+    sides = [("plaza", (W + 6.0, D / 2, 1.7)), ("plaza front", (W + 4.0, -3.0, 6.0)), ("plaza high", (W + 6.0, -3.0, 14.0))]
+    lefts = [("left side", (-6.0, D / 2, 4.0)), ("left high", (-5.0, -2.0, 18.0))]
+    return [("front", (0.0, t / 2, 0.0), (1, 0, 0), (0.03, W - 0.03, 0.02, top), 0.03, street),
+            ("right", (W - t / 2, 0.0, 0.0), (0, 1, 0), (0.03, D - 0.03, 0.02, top), 0.04, sides),
+            ("left", (t / 2, 0.0, 0.0), (0, 1, 0), (0.03, D - 0.03, 0.02, top), 0.04, lefts),
+            ("back", (0.0, D - t / 2, 0.0), (1, 0, 0), (0.03, W - 0.03, 0.02, top), 0.04,
+             [("lower town", (5.0, D + 9.0, 6.0)), ("lower town left", (-2.0, D + 7.0, 12.0))]),
+            ("gable right", (W - t / 2, 0.0, 0.0), (0, 1, 0), (y_in, D - y_in, top + 0.1, gz1), 0.05, sides),
+            ("gable left", (t / 2, 0.0, 0.0), (0, 1, 0), (y_in, D - y_in, top + 0.1, gz1), 0.05, lefts),
+            ("roof front", (0.0, 1.0, 0.0), (1, 0, 0), (0.05, W - 0.05, top + 0.1, roof_z(prof, 1.0) - th - 0.1), 0.06, above),
+            ("roof mid", (0.0, D / 2, 0.0), (1, 0, 0), (0.05, W - 0.05, top + 0.1, spec["roof"]["ridge"] - th - 0.1), 0.06, above),
+            ("roof back", (0.0, D - 1.0, 0.0), (1, 0, 0), (0.05, W - 0.05, top + 0.1, roof_z(prof, 1.0) - th - 0.1), 0.06,
+             above + [("lower town", (5.0, D + 9.0, 6.0))])]
+
+
+def shots_mansard(spec):
+    W, D = spec["width"], spec["depth"]
+    H = spec["roof"]["ridge"]
+    dr = spec["shop"]["door"]
+    dx = (dr["x0"] + dr["x1"]) / 2
+    return [("iso", (W + 11.0, -17.0, 13.0), (W / 2, D / 2, H / 2), 35, 1200, 1600),
+            ("front_eye", (W / 2 - 1.0, -6.0, 1.7), (W / 2, 0.0, 7.0), 16, 1200, 1500),
+            ("door_close", (dx, -3.6, 1.8), (dx, 0.0, 1.6), 24, 1200, 1200),
+            ("roof", (W + 4.0, -5.0, H + 3.0), (W / 2, D / 2, H - 2.5), 28, 1400, 1100),
+            ("side", (W + 16.0, D / 2, 8.0), (W, D / 2, 8.5), 30, 1000, 1500),
+            ("back", (W / 2 - 4.0, D + 18.0, 7.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
+
+
 def audit_setup(spec):
     if spec["type"] == "townhouse_gable":
         return audit_setup_gable(spec)
     if spec["type"] == "townhouse_terrace":
         return audit_setup_terrace(spec)
+    if spec["type"] == "townhouse_mansard":
+        return audit_setup_mansard(spec)
     W, D, t = spec["width"], spec["depth"], spec["wall"]
     floors, top = spec["floors"], spec["cornice"]["z"] + gk.ENTABLATURE_H - 0.05
     st = spec["stair"]
@@ -817,6 +1111,8 @@ def shots(spec):
         return shots_gable(spec)
     if spec["type"] == "townhouse_terrace":
         return shots_terrace(spec)
+    if spec["type"] == "townhouse_mansard":
+        return shots_mansard(spec)
     W, D = spec["width"], spec["depth"]
     H = spec["cornice"]["z"] + gk.ENTABLATURE_H
     F = spec["floors"]

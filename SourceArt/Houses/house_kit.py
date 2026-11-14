@@ -756,3 +756,86 @@ def iron_finial(B, cx, cy, z0, top, mat, var=0.5):
             pts = [base + d * 0.04, base + d * 0.20 * k + (0, 0, 0.15 * k), base + d * 0.30 * k + (0, 0, 0.38 * k),
                    base + d * 0.24 * k + (0, 0, 0.58 * k), base + d * 0.13 * k + (0, 0, 0.55 * k), base + d * 0.12 * k + (0, 0, 0.45 * k)]
             B.tube(pts, [0.03 * k, 0.03 * k, 0.028 * k, 0.024 * k, 0.02 * k, 0.015 * k], mat, sides=6, var=var)
+
+
+# ---------------------------------------------------------------------------------------------
+# House #4 (mansard tenement): faces under a sloping outline, verge bands, a glazed door leaf, quoins
+# ---------------------------------------------------------------------------------------------
+def outline_at(outline, x):
+    """z of a top outline [(x, z), ...] (x ascending) at x, linear between its points."""
+    xs, zs = zip(*outline)
+    return float(np.interp(x, xs, zs))
+
+
+def outline_face(B, outline, z0, mat, holes=(), y=0.0, inward=False, var=0.5, uv_off=UV0):
+    """Upright face on the plane y (wall coordinates) from z0 up to a top outline [(x, z), ...] (x ascending), e.g. a
+    gable under a roof, with rectangular holes. Cut into upright strips at every outline point and hole edge, so
+    every piece is a quad with a flat foot and a straight top."""
+    xs = sorted({p[0] for p in outline} | {h[0] for h in holes} | {h[1] for h in holes})
+    xs = [x for x in xs if outline[0][0] - 1e-9 <= x <= outline[-1][0] + 1e-9]
+    want = (0, 1, 0) if inward else (0, -1, 0)
+    for xa, xb in zip(xs, xs[1:]):
+        if xb - xa < 1e-6:
+            continue
+        ta, tb = outline_at(outline, xa), outline_at(outline, xb)
+        spans = [(z0, None)]
+        for hx0, hx1, hz0, hz1 in (h[:4] for h in holes):
+            if hx0 <= xa + 1e-9 and xb <= hx1 + 1e-9:
+                spans = [(z0, hz0), (hz1, None)]
+        for za, zb in spans:
+            if zb is None:
+                if min(ta, tb) - za > 1e-6:
+                    rect(B, (xa, y, za), (xb, y, za), (xb, y, tb), (xa, y, ta), mat, want, var=var, uv_off=uv_off)
+            elif zb - za > 1e-6:
+                rect(B, (xa, y, za), (xb, y, za), (xb, y, zb), (xa, y, zb), mat, want, var=var, uv_off=uv_off)
+
+
+def verge_band(B, outline, h, proud, mat, var=0.5):
+    """Flat band `h` deep and `proud` out of the wall plane y = 0 (wall coordinates), hanging under a top outline
+    [(x, z), ...]: its face, its sloping underside and its two ends (a gable's verge moulding under the roof)."""
+    for (xa, za), (xb, zb) in zip(outline, outline[1:]):
+        rect(B, (xa, -proud, za - h), (xb, -proud, zb - h), (xb, -proud, zb), (xa, -proud, za), mat, (0, -1, 0), var)
+        rect(B, (xa, 0.0, za - h), (xb, 0.0, zb - h), (xb, -proud, zb - h), (xa, -proud, za - h), mat, (-(zb - za), -0.2, xb - xa), var)
+    for (x, z), nx in ((outline[0], -1.0), (outline[-1], 1.0)):
+        rect(B, (x, 0.0, z - h), (x, -proud, z - h), (x, -proud, z), (x, 0.0, z), mat, (nx, 0, 0), var)
+
+
+def glazed_leaf(B, w, h, mat, glass, bar_mat, t=0.06, frame=0.12, light=(1.2, 2.1), grid=(6, 7), panel_z=(0.16, 0.98), sunk=0.014,
+                var=0.5):
+    """Shop door leaf: x 0..w (hinge at x = 0), y 0..t (outside face at y = 0), z 0..h. A glazed light (z light[0]..light[1],
+    two-sided glass in the middle of the leaf with a grid of thin bars on both faces) over two sunk panels side by side
+    (z panel_z) on both faces."""
+    pw = (w - 3 * frame) / 2
+    panels = [(frame, frame + pw, *panel_z), (2 * frame + pw, w - frame, *panel_z)]
+    lt = (frame, w - frame, *light)
+    for y, inward in ((0.0, False), (t, True)):
+        flat_face(B, 0.0, w, 0.0, h, mat, holes=panels + [lt], y=y, inward=inward, var=var)
+        yp = y + sunk if not inward else y - sunk
+        for hx0, hx1, hz0, hz1 in panels:
+            flat_face(B, hx0, hx1, hz0, hz1, mat, y=yp, inward=inward, var=var)
+            reveal(B, (hx0, hx1, hz0, hz1), min(y, yp), max(y, yp), mat, var=var)
+    reveal(B, lt, 0.0, t, mat, var=var)
+    block(B, 0.0, w, 0.0, t, 0.0, h, mat, faces="xXzZ", var=var)
+    yc = t / 2
+    gx0, gx1, gz0, gz1 = lt
+    for yy, want in ((yc - 0.001, (0, -1, 0)), (yc + 0.001, (0, 1, 0))):
+        rect(B, (gx0, yy, gz0), (gx1, yy, gz0), (gx1, yy, gz1), (gx0, yy, gz1), glass, want, var=0.5)
+    cols, rows = grid
+    for i in range(1, cols):
+        x = gx0 + (gx1 - gx0) * i / cols
+        block(B, x - 0.008, x + 0.008, yc - 0.012, yc + 0.012, gz0, gz1, bar_mat, faces="xXyY", var=var)
+    for j in range(1, rows):
+        z = gz0 + (gz1 - gz0) * j / rows
+        block(B, gx0, gx1, yc - 0.012, yc + 0.012, z - 0.008, z + 0.008, bar_mat, faces="yYzZ", var=var)
+
+
+def quoin_corner(B, z0, z1, course, long, short, proud, mat, start_long=True, var=0.5):
+    """Quoins up the corner at the origin of a facade frame (wall x = 0, wall plane y = 0, the neighbouring side's face
+    on x = 0 going into +y): courses alternating long and short on this face, the other way round on the corner face."""
+    n = max(1, round((z1 - z0) / course))
+    hc = (z1 - z0) / n
+    for i in range(n):
+        za, zb = z0 + i * hc + 0.006, z0 + (i + 1) * hc - 0.006
+        a, b = (long, short) if (i % 2 == 0) == start_long else (short, long)
+        block(B, -proud, a, -proud, 0.0, za, zb, mat, faces="xXyzZ", var=var)
+        block(B, -proud, 0.0, 0.0, b, za, zb, mat, faces="xYzZ", var=var)

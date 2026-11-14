@@ -1,0 +1,13 @@
+[
+ {
+  "mesh": "SM_House_AlchemistsMansardTenement_Door",
+  "component": "Door",
+  "location_cm": [
+   475.5,
+   -41.0,
+   4.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ }
+]
