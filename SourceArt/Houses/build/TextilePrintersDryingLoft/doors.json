@@ -1,0 +1,35 @@
+[
+ {
+  "mesh": "SM_House_TextilePrintersDryingLoft_Door",
+  "component": "Door",
+  "location_cm": [
+   250.5,
+   -36.0,
+   2.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ },
+ {
+  "mesh": "SM_House_TextilePrintersDryingLoft_Door_1",
+  "component": "Door_1",
+  "location_cm": [
+   262.25,
+   -35.0,
+   1196.5000000000002
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ },
+ {
+  "mesh": "SM_House_TextilePrintersDryingLoft_Door_2",
+  "component": "Door_2",
+  "location_cm": [
+   365.75,
+   -35.0,
+   1196.5000000000002
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": 90.0
+ }
+]

@@ -1257,16 +1257,24 @@ def jetty_wall(E, I, wl, L, z0, top, t, ws, hulls):
     flat = not isinstance(top, list)
     outline = [(0.0, top), (L, top)] if flat else top
     wins = [tuple(w[:4]) for w in wl.get("windows", [])]
+    # house #7 (all optional): "holes" are openings through the whole wall that the caller fills (loft doors),
+    # "louvres" are louvre boards in the outer face (closed at their back, so core and inner face stay whole),
+    # "infill" is the outer face's material (a timber-clad wall)
+    wins += [tuple(h[:4]) for h in wl.get("holes", [])]
+    louv = [tuple(h[:4]) for h in wl.get("louvres", [])]
+    infill = wl.get("infill", "Plaster")
     if flat:
-        hk.flat_face(E, 0.0, L, z0, top, "Plaster", holes=wins, cell=0.6)
+        hk.flat_face(E, 0.0, L, z0, top, infill, holes=wins + louv, cell=0.6)
         hk.wall_core(E, L, z0, top, t, holes=wins)
         hk.flat_face(I, 0.0, L, z0, top, "Plaster", holes=wins, y=t, inward=True)
     else:
-        hk.outline_face(E, outline, z0, "Plaster", holes=wins)
+        hk.outline_face(E, outline, z0, infill, holes=wins + louv)
         for yc, inward in ((t / 2 - 0.001, False), (t / 2 + 0.001, True)):
             hk.outline_face(E, outline, z0, "Plaster", holes=wins, y=yc, inward=inward, var=0.2)
         hk.outline_face(I, [(x, z - 0.03) for x, z in outline], z0, "Plaster", holes=wins, y=t, inward=True)
         hk.rect(E, (0.0, 0.0, z0 - 0.01), (L, 0.0, z0 - 0.01), (L, t, z0 - 0.01), (0.0, t, z0 - 0.01), "Plaster", (0, 0, 1), 0.2)
+    for lv in louv:
+        hk.louvres(E, *lv, "Timber")
     hk.timber_members(E, wl, z0, top if flat else outline)
     sh = ws["shutter"]
     for x0, x1, wz0, wz1, c, r in wl.get("windows", []):
@@ -1486,8 +1494,176 @@ def build_townhouse_jetty(spec):
     return E, I, hulls
 
 
+# ---------------------------------------------------------------------------------------------
+# townhouse_loft (house #7 on): a drying loft. A rubble-stone ground floor (house space x 0..W, y 0..D) with a ledged
+# plank door in a dressed-stone surround (jambs, lintel); timber storeys set back from the stone by spec "frame"
+# "inset", each wall a jetty_wall (posts, rails, fixed louvres or plaster panels, "infill" Timber for a clad face);
+# timber bands round the house at the storey joints with ledges back to the timber; a gable roof whose ridge runs
+# front to back (mansard_roof turned a quarter, so the gables are the front and the back), the gables framed with
+# plaster infill under principal rafters; a loft opening in the front gable closed by two plank leaves under an iron
+# hoist; a window in the back gable. One empty shell inside.
+# ---------------------------------------------------------------------------------------------
+def loft_roof_frame(spec):
+    """The frame mansard_roof runs in (its ridge along local x): local x along house +y from the front timber wall,
+    local y across from the right-hand timber wall (house x = W - inset) to the left one."""
+    W, i = spec["width"], spec["frame"]["inset"]
+    return gk.translate(W - i, i, 0.0) @ gk.rot_z(90.0)
+
+
+def loft_ground(E, I, spec, hulls):
+    """The rubble ground floor: four rubble faces, the door (jambs, lintel, reveals, threshold, a separate plank
+    leaf), cores and inner faces up to the timber, collision."""
+    W, D, F0 = spec["width"], spec["depth"], spec["floor"]
+    g = spec["ground"]
+    t, Z1, ZT, stone, rb, dr = g["t"], g["z1"], g["top"], g["stone"], g["rubble"], g["door"]
+    for k, side in enumerate(("front", "right", "back", "left")):
+        m, L = hk.facade_frame(side, W, D)
+        E.push(m)
+        I.push(m)
+        face_holes, core_holes, inner_holes, cut = [], [], [], None
+        if side == dr["side"]:
+            x0, x1 = dr["x"]
+            zh = dr["z1"]
+            jw, jp, jm = dr["jamb"]["w"], dr["jamb"]["proud"], dr["jamb"]["mat"]
+            ln = dr["lintel"]
+            lx0, lx1 = ln["x"]
+            ly, lt = dr["leaf_y"], dr["leaf_t"]
+            for a, b in ((x0 - jw, x0), (x1, x1 + jw)):
+                hk.block(E, a, b, -jp, 0.0, 0.0, zh, jm, faces="xXy")
+            hk.block(E, lx0, lx1, -ln["proud"], 0.0, zh, ln["z1"], jm, faces="xXyzZ")
+            hk.reveal(E, (x0, x1, 0.0, zh), 0.0, ly, jm, sides="lrt")
+            hk.reveal(I, (x0, x1, F0, zh), ly + lt, t, "Plaster", sides="lrt")
+            hk.block(E, x0, x1, -jp, t, 0.0, F0, jm, faces="yZ")                     # threshold
+            w, h = x1 - x0 - 0.01, zh - F0 - 0.005
+            left = dr.get("hinge", "left") == "left"
+
+            def make(B, w=w, h=h, left=left):
+                hk.plank_leaf(B, w, h, dr["mat"], dr["iron"], t=lt, planks=dr["planks"], straps=tuple(dr["straps"]),
+                              hinge="l" if left else "r", ring=dr.get("ring", 0.45))
+            separate_leaf(E, (x0 + 0.005) if left else (x1 - 0.005), left, w, h, ly, F0, lt, make, seed=31 + len(DOORS))
+            face_holes = [(x0 - jw, x1 + jw, 0.0, zh), (lx0, lx1, zh, ln["z1"])]
+            core_holes = [(x0, x1, 0.0, zh)]
+            inner_holes = [(x0, x1, F0, zh)]
+            cut = (x0, x1, zh)
+        hk.rubble_face(E, 0.0, L, 0.0, Z1, stone, holes=face_holes, course=rb["course"], length=tuple(rb["length"]),
+                       chamfer=rb["chamfer"], jitter=rb["jitter"], seed=7 + 101 * k)
+        hk.wall_core(E, L, 0.0, ZT, t, holes=core_holes)
+        hk.flat_face(I, t, L - t, F0, ZT, "Plaster", holes=inner_holes, y=t, inward=True)
+        if cut:
+            dx0, dx1, dz = cut
+            hulls += [xf(E, hk.box_pts(0.0, dx0, 0.0, t, 0.0, ZT)), xf(E, hk.box_pts(dx1, L, 0.0, t, 0.0, ZT)),
+                      xf(E, hk.box_pts(dx0, dx1, 0.0, t, dz, ZT))]
+        else:
+            hulls.append(xf(E, hk.box_pts(0.0, L, 0.0, t, 0.0, ZT)))
+        E.pop()
+        I.pop()
+
+
+def build_townhouse_loft(spec):
+    W, D, F0, CEIL = spec["width"], spec["depth"], spec["floor"], spec["ceiling"]
+    i, tt = spec["frame"]["inset"], spec["frame"]["t"]
+    rf = spec["roof"]
+    th = rf["thick"]
+    prof = sorted(tuple(p) for p in rf["profile"])                # [(house x, top of the slates)], eave to eave
+
+    def under(x):
+        return roof_z(prof, x) - th
+    E, I = hk.Builder(hk.MATERIALS, seed=11), hk.Builder(hk.MATERIALS, seed=12)
+    hulls = []
+    loft_ground(E, I, spec, hulls)
+    # the timber storeys round the box inset from the stone
+    xl, xr, yf, yb = i, W - i, i, D - i
+    frames = {"front": ((xl, yf), (xr, yf)), "right": ((xr, yf), (xr, yb)), "back": ((xr, yb), (xl, yb)), "left": ((xl, yb), (xl, yf))}
+    ws = spec["window_style"]
+    for st in spec["storeys"]:
+        z0, z1 = st["z"]
+        for side in ("front", "right", "back", "left"):
+            m, L = gk.wall_frame(*frames[side])
+            wl = st["walls"].get(side, {})
+            if "mirror" in wl:
+                wl = jetty_mirror(st["walls"][wl["mirror"]], L)
+            top = z1 if side in ("front", "back") else st.get("side_top", z1)
+            E.push(m)
+            I.push(m)
+            jetty_wall(E, I, wl, L, z0, top, tt, ws, hulls)
+            E.pop()
+            I.pop()
+    # the gables, framed up to the roof's underside, with principal rafters under it; loft doors or a window
+    gb = spec["gables"]
+    for side in ("front", "back"):
+        m, L = gk.wall_frame(*frames[side])
+        wl = gb[side]
+
+        def hx(u, side=side):
+            return i + u if side == "front" else W - i - u
+        us = sorted({0.0, L} | {(p[0] - i) if side == "front" else (W - i - p[0]) for p in prof if i < p[0] < W - i})
+        outline = [(u, under(hx(u))) for u in us]
+        E.push(m)
+        I.push(m)
+        jetty_wall(E, I, wl, L, gb["z0"], outline, tt, ws, hulls)
+        hk.verge_band(E, outline, gb["rafter"][0], gb["rafter"][1], "Timber")
+        lf = wl.get("leaves")
+        for x0, x1, hz0, hz1 in (wl.get("holes", []) if lf else []):
+            ly, lt = lf["y"], lf["t"]
+            hk.reveal(E, (x0, x1, hz0, hz1), 0.0, ly, "Timber")
+            hk.reveal(I, (x0, x1, hz0, hz1), ly + lt, tt, "Plaster")
+            w, h = (x1 - x0) / 2 - 0.0025, hz1 - hz0 - 0.01
+            for left in (True, False):
+                def make(B, w=w, h=h, left=left):
+                    hk.plank_leaf(B, w, h, lf["mat"], lf["iron"], t=lt, planks=lf["planks"], straps=tuple(lf["straps"]),
+                                  hinge="l" if left else "r", ring=0.0)
+                separate_leaf(E, (x0 + 0.0025) if left else (x1 - 0.0025), left, w, h, ly, hz0 + 0.005, lt, make, seed=31 + len(DOORS))
+        E.pop()
+        I.pop()
+    # bands round the house at the storey joints, and their ledges back to the timber walls
+    outer, inner = hk.plan_loop(W, D), hk.plan_loop(W, D, inset=i)
+    for b in spec["bands"]:
+        hk.band_loop(E, W, D, b["z0"], b["z1"], b["proud"], b["mat"])
+        for which in b.get("ledges", []):
+            z, nz = (b["z1"], 1.0) if which == "top" else (b["z0"], -1.0)
+            for k in range(4):
+                o0, o1, n0, n1 = outer[k], outer[(k + 1) % 4], inner[k], inner[(k + 1) % 4]
+                hk.rect(E, (*o0, z), (*o1, z), (*n1, z), (*n0, z), b["mat"], (0, 0, nz))
+    # the roof: mansard_roof in its quarter-turned frame; its hull comes back in that frame's coordinates
+    sub = {"width": D - 2 * i, "depth": W - 2 * i, "ceiling": CEIL, "roof": dict(rf, overhang=rf["overhang"] + i)}
+    E.push(loft_roof_frame(spec))
+    n = len(hulls)
+    mansard_roof(E, sub, [(W - i - x, z) for x, z in reversed(prof)], hulls)
+    hulls[n:] = [xf(E, h) for h in hulls[n:]]
+    E.pop()
+    rc = rf.get("ridge_cap")                                      # [half width, height over the ridge]: closes the seam
+    if rc:
+        xr, zr = max(prof, key=lambda p: p[1])
+        ov = rf["overhang"]
+        hk.block(E, xr - rc[0], xr + rc[0], -ov - 0.01, D + ov + 0.01, zr - rc[0] * 1.2, zr + rc[1], rf["mat"], faces="xXyYZ")
+    bb = rf.get("barge")             # bargeboards on both verges: [proud, top over the slates, foot under the underside]
+    if bb:
+        ov = rf["overhang"]
+        top = [(x, z + bb[1]) for x, z in prof]
+        for yv, front in ((-ov, True), (D + ov, False)):
+            m, _ = gk.wall_frame((0.0, yv), (W, yv)) if front else gk.wall_frame((W, yv), (0.0, yv))
+            outl = top if front else [(W - x, z) for x, z in reversed(top)]
+            E.push(m)
+            hk.verge_band(E, outl, bb[1] + th + bb[2], bb[0], rf["mat"])
+            for (xa, za), (xb, zb) in zip(outl, outl[1:]):
+                hk.rect(E, (xa, -bb[0], za), (xb, -bb[0], zb), (xb, 0.0, zb), (xa, 0.0, za), rf["mat"], (-(zb - za), 0.0, xb - xa))
+            E.pop()
+    ho = spec.get("hoist")
+    if ho:
+        hk.hoist_crane(E, ho["x"], ho["y_wall"], ho["y_tip"], ho["z_beam"], ho["beam_h"], tuple(ho["foot"]), ho["wheel_r"],
+                       tuple(ho["block"]), ho["block_r"], ho["hook_z"], ho["iron"], ho["rope"])
+    # inside: one empty room from the floor up to a ceiling under the roof
+    t = spec["ground"]["t"]
+    hk.rect(I, (t, t, F0), (W - t, t, F0), (W - t, D - t, F0), (t, D - t, F0), "Timber", (0, 0, 1))
+    c0, c1, c2, c3 = i + tt, W - i - tt, i + tt, D - i - tt
+    hk.rect(I, (c0, c2, CEIL), (c1, c2, CEIL), (c1, c3, CEIL), (c0, c3, CEIL), "Plaster", (0, 0, -1))
+    hulls.append(hk.box_pts(t, W - t, t, D - t, -0.3, F0))
+    return E, I, hulls
+
+
 BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable, "townhouse_terrace": build_townhouse_terrace,
-            "townhouse_mansard": build_townhouse_mansard, "townhouse_zinc": build_townhouse_zinc, "townhouse_jetty": build_townhouse_jetty}
+            "townhouse_mansard": build_townhouse_mansard, "townhouse_zinc": build_townhouse_zinc, "townhouse_jetty": build_townhouse_jetty,
+            "townhouse_loft": build_townhouse_loft}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1641,7 +1817,48 @@ def shots_jetty(spec):
             ("back", (W / 2 - 4.0, D + 18.0, 7.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
 
 
+def audit_setup_loft(spec):
+    """Outside eyes only: street (the door, the louvres, the loft doors), both sides, the lower town, above the roof.
+    Planes run 0.5 m inside the outer faces, below the ceiling; the attic planes run front to back under the roof."""
+    W, D, CEIL = spec["width"], spec["depth"], spec["ceiling"]
+    th = spec["roof"]["thick"]
+    prof = sorted(tuple(p) for p in spec["roof"]["profile"])
+    xr = max(prof, key=lambda p: p[1])[0]
+    street = [("lane left", (1.0, -4.5, 1.7)), ("lane door", (3.1, -4.5, 1.7)), ("lane right", (5.3, -4.5, 1.7)),
+              ("lane high", (3.1, -6.0, 9.0)), ("lane low left", (-1.5, -2.5, 1.0)), ("lane low right", (W + 1.5, -2.5, 1.0)),
+              ("lane very high", (3.1, -8.0, 16.0))]
+    rights = [("plaza", (W + 6.0, D / 2, 1.7)), ("plaza front", (W + 4.0, -3.0, 6.0)), ("plaza high", (W + 6.0, -3.0, 14.0))]
+    lefts = [("left side", (-6.0, D / 2, 4.0)), ("left high", (-5.0, -2.0, 16.0))]
+    lower = [("lower town", (3.0, D + 9.0, 6.0)), ("lower town left", (-2.0, D + 7.0, 12.0)), ("lower town high", (3.0, D + 8.0, 16.0))]
+    above = [("above front", (W / 2, -5.0, 22.0)), ("above", (W / 2, D / 2, 24.0)), ("above back", (W / 2, D + 5.0, 22.0)),
+             ("above left", (-5.0, D / 2, 20.0)), ("above right", (W + 5.0, D / 2, 20.0))]
+    zt = CEIL - 0.05
+    return [("front", (0.0, 0.5, 0.0), (1, 0, 0), (0.5, W - 0.5, 0.05, zt), 0.04, street),
+            ("right", (W - 0.5, 0.0, 0.0), (0, 1, 0), (0.5, D - 0.5, 0.05, zt), 0.04, rights),
+            ("left", (0.5, 0.0, 0.0), (0, 1, 0), (0.5, D - 0.5, 0.05, zt), 0.04, lefts),
+            ("back", (0.0, D - 0.5, 0.0), (1, 0, 0), (0.5, W - 0.5, 0.05, zt), 0.04, lower),
+            ("attic ridge", (xr, 0.0, 0.0), (0, 1, 0), (0.5, D - 0.5, CEIL + 0.1, roof_z(prof, xr) - th - 0.1), 0.05, above + street[3:] + lower),
+            ("attic left", (1.2, 0.0, 0.0), (0, 1, 0), (0.5, D - 0.5, CEIL + 0.1, roof_z(prof, 1.2) - th - 0.1), 0.05, above + lefts + street[3:]),
+            ("attic right", (W - 1.2, 0.0, 0.0), (0, 1, 0), (0.5, D - 0.5, CEIL + 0.1, roof_z(prof, W - 1.2) - th - 0.1), 0.05,
+             above + rights + lower)]
+
+
+def shots_loft(spec):
+    W, D = spec["width"], spec["depth"]
+    H = max(p[1] for p in spec["roof"]["profile"])
+    dx = sum(spec["ground"]["door"]["x"]) / 2
+    return [("iso", (W + 11.0, -16.0, 12.0), (W / 2, D / 2, H / 2), 35, 1200, 1600),
+            ("front_eye", (W / 2 - 1.0, -6.0, 1.7), (W / 2, 0.0, 7.0), 16, 1200, 1500),
+            ("door_close", (dx, -3.6, 1.6), (dx, 0.0, 1.4), 24, 1200, 1200),
+            ("gable", (W / 2 + 2.5, -6.0, 12.0), (W / 2, -0.5, 13.2), 22, 1200, 1200),
+            ("roof", (W + 4.0, -6.0, H + 3.0), (W / 2, D / 2, H - 3.0), 28, 1400, 1100),
+            ("side", (W + 16.0, D / 2, 8.0), (W, D / 2, 8.0), 30, 1000, 1500),
+            ("back", (W / 2 - 4.0, D + 18.0, 7.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
+
+
 def audit_setup(spec):
+    if spec["type"] == "townhouse_loft":
+        return audit_setup_loft(spec)
     if spec["type"] == "townhouse_jetty":
         return audit_setup_jetty(spec)
     if spec["type"] == "townhouse_gable":
@@ -1693,6 +1910,8 @@ def shots(spec):
         return shots_zinc(spec)
     if spec["type"] == "townhouse_jetty":
         return shots_jetty(spec)
+    if spec["type"] == "townhouse_loft":
+        return shots_loft(spec)
     W, D = spec["width"], spec["depth"]
     H = spec["cornice"]["z"] + gk.ENTABLATURE_H
     F = spec["floors"]

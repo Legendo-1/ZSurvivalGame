@@ -1027,3 +1027,90 @@ def hanging_sign(B, x, y_wall, z_arm, reach, board, mat, var=0.5):
     for yy in (yn, yfar):
         cz = zs - 0.05
         B.tube([(x, yy + 0.07 * math.cos(a), cz + 0.07 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 11)], 0.012, mat, sides=5, closed=True, var=var)
+
+
+# ---------------------------------------------------------------------------------------------
+# House #7 (TextilePrintersDryingLoft): fixed louvres, a ledged plank door leaf, a gable hoist
+# ---------------------------------------------------------------------------------------------
+AXIS_X = np.array([[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1.0]])   # local z -> x, x -> y, y -> z: a lathe turned about x
+
+
+def louvres(B, x0, x1, z0, z1, mat, back_mat=None, depth=0.09, pitch=0.25, slat=0.025, var=0.5):
+    """Fixed louvre boards filling a hole x0..x1, z0..z1 in a wall face on the plane y = 0 (wall coordinates): reveals
+    back to `depth`, a board there that closes the wall, and one sloping slat per `pitch`, from its front edge (1 cm
+    in front of the face, at the bottom of the pitch) up to the back board at the top of the pitch."""
+    back_mat = back_mat or mat
+    reveal(B, (x0, x1, z0, z1), 0.0, depth, mat, var=var)
+    rect(B, (x0, depth, z0), (x1, depth, z0), (x1, depth, z1), (x0, depth, z1), back_mat, (0, -1, 0), var)
+    n = max(1, int(round((z1 - z0) / pitch)))
+    p = (z1 - z0) / n
+    yf, yb = -0.01, depth - 0.002
+    for k in range(n):
+        zf = z0 + k * p + slat                       # top of the front edge
+        zb = min(z0 + (k + 1) * p, z1)               # where the slat's top meets the back board
+        dz, dy = zb - zf, yb - yf
+        rect(B, (x0, yf, zf), (x1, yf, zf), (x1, yb, zb), (x0, yb, zb), mat, (0.0, -dz, dy), var)
+        rect(B, (x0, yf, zf - slat), (x1, yf, zf - slat), (x1, yb, zb - slat), (x0, yb, zb - slat), mat, (0.0, dz, -dy), var)
+        rect(B, (x0, yf, zf - slat), (x1, yf, zf - slat), (x1, yf, zf), (x0, yf, zf), mat, (0, -1, 0), var)
+
+
+def plank_leaf(B, w, h, mat, iron, t=0.06, planks=5, straps=(0.2, 0.8), strap_h=0.07, hinge="l", ring=0.45, var=0.5):
+    """Ledged plank door leaf in leaf space (x 0..w, y 0..t, z 0..h, its face on y = 0 towards -y): the board,
+    shallow joints between `planks` boards, an iron strap hinge right across it at each height in `straps` (fractions
+    of h) with rivets, running from the hinge side ("l" = x 0, "r" = x w), and (ring > 0) a ring pull on a plate at
+    that fraction of h near the latch side."""
+    block(B, 0.0, w, 0.0, t, 0.0, h, mat, var=var)
+    for k in range(1, planks):
+        x = w * k / planks
+        block(B, x - 0.006, x + 0.006, -0.003, 0.0, 0.01, h - 0.01, mat, faces="xXy", var=var)
+    a, b = (0.005, w - 0.03) if hinge == "l" else (0.03, w - 0.005)
+    for f in straps:
+        zc = h * f
+        block(B, a, b, -0.014, 0.0, zc - strap_h / 2, zc + strap_h / 2, iron, faces="xXyzZ", var=var)
+        n = max(2, int((b - a) / 0.16))
+        for k in range(n + 1):
+            x = a + 0.03 + (b - a - 0.06) * k / n
+            block(B, x - 0.011, x + 0.011, -0.022, -0.014, zc - 0.011, zc + 0.011, iron, faces="xXyzZ", var=var)
+    if ring > 0:
+        xr = w - 0.12 if hinge == "l" else 0.12
+        zr = h * ring
+        block(B, xr - 0.045, xr + 0.045, -0.012, 0.0, zr - 0.02, zr + 0.11, iron, faces="xXyzZ", var=var)
+        B.tube([(xr + 0.065 * math.sin(q), -0.03, zr - 0.065 * math.cos(q)) for q in np.linspace(0, 2 * math.pi, 13)], 0.011, iron,
+               sides=6, closed=True, var=var)
+
+
+def hoist_crane(B, xc, y_wall, y_tip, z_beam, beam_h, foot, wheel_r, block_c, block_r, hook_z, iron, rope, var=0.5):
+    """A gable hoist (house coordinates; the gable faces -y on the plane y = y_wall): a square iron beam (top at z_beam,
+    beam_h deep, 12 cm wide) out of the gable towards -y, two cheek plates carrying a pulley wheel of radius wheel_r on
+    an axle (along x) at y = y_tip; a diagonal strut from foot = (y, z) on the gable up under the beam's end; two ropes
+    down from the wheel to a lower block (block_c = (y, z), radius block_r) with a strap and a hook ring under it
+    (hook_z = the ring's centre); and a rope from the wheel's top back along the beam into the gable."""
+    hw = 0.06
+    zb = z_beam - beam_h
+    zc = z_beam - beam_h / 2                                      # the axle
+    ye = y_tip + wheel_r + 0.04                                   # the beam's end, just short of the wheel
+    block(B, xc - hw, xc + hw, ye, y_wall, zb, z_beam, iron, faces="xXyzZ", var=var)
+    for sx in (-1.0, 1.0):
+        x = xc + sx * (hw + 0.013)
+        block(B, x - 0.012, x + 0.012, y_tip - 0.07, ye + 0.20, zc - 0.07, zc + 0.07, iron, var=var)
+    B.tube([(xc - 0.10, y_tip, zc), (xc + 0.10, y_tip, zc)], 0.03, iron, sides=8, var=var)
+
+    def wheel(yc, zw, r, w):
+        B.push(translate(xc, yc, zw) @ AXIS_X)
+        B.lathe([[(0.02, -w), (r, -w)], [(r, -w), (r, w)], [(r, w), (0.02, w)]], iron, segs=28, smooth=False, var=var)
+        B.lathe([[(r * 0.55, -w - 0.012), (r * 0.82, -w - 0.012)], [(r * 0.82, w + 0.012), (r * 0.55, w + 0.012)]], iron, segs=28,
+                smooth=False, var=var)                            # a raised ring on each face
+        B.pop()
+    wheel(y_tip, zc, wheel_r, 0.045)
+    by, bz = block_c
+    wheel(by, bz, block_r, 0.04)
+    B.tube([(xc - 0.07, by, bz), (xc + 0.07, by, bz)], 0.025, iron, sides=8, var=var)
+    block(B, xc - 0.015, xc + 0.015, by - 0.03, by + 0.03, hook_z + 0.09, bz, iron, var=var)
+    B.tube([(xc, by + 0.10 * math.sin(q), hook_z - 0.10 * math.cos(q)) for q in np.linspace(0, 2 * math.pi, 15)], 0.024, iron,
+           sides=6, closed=True, var=var)
+    for s in (-1.0, 1.0):
+        B.tube([(xc, y_tip + s * wheel_r, zc), (xc, by + s * block_r, bz)], 0.016, rope, sides=6, var=var)
+    B.tube([(xc, y_tip, zc + wheel_r), (xc, y_wall + 0.05, z_beam + 0.06)], 0.016, rope, sides=6, var=var)
+    fy, fz = foot
+    B.tube([(xc, fy, fz), (xc, ye + 0.30, zb + 0.03)], 0.055, iron, sides=6, var=var)
+    block(B, xc - 0.09, xc + 0.09, fy - 0.025, fy, fz, fz + 0.16, iron, faces="xXyzZ", var=var)

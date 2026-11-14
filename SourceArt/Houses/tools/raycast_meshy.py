@@ -68,9 +68,18 @@ if "--depthmap" in o:
     nx, nz = int(round(x1 / res)) + 1, int(round((z1 - z0) / res)) + 1
     dm = np.full((nz, nx), np.nan, dtype=np.float32)
     d = Vector((0, -1, 0)) if back else Vector((0, 1, 0))
+    # --along x (house #7): a side map instead: col = y (0..xmax), value = the hit x of a ray along +x from the left
+    # (or along -x from the right with --from back)
+    if along_x:
+        d = Vector((-1, 0, 0)) if back else Vector((1, 0, 0))
     for r in range(nz):
         z = z1 - r * res
         for c in range(nx):
+            if along_x:
+                hit = tree.ray_cast(Vector((50.0 if back else -5.0, c * res, z)), d, 100.0)
+                if hit[0] is not None:
+                    dm[r, c] = hit[0][0]
+                continue
             hit = tree.ray_cast(Vector((c * res, 50.0 if back else -5.0, z)), d, 100.0)
             if hit[0] is not None:
                 dm[r, c] = hit[0][1]
