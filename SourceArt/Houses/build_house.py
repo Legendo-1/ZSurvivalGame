@@ -2165,9 +2165,216 @@ def build_townhouse_tavern(spec):
     return E, I, hulls
 
 
+# ---------------------------------------------------------------------------------------------
+# townhouse_gate (house #10, WaterWardensGatehouse): a stone gate block on battered corner and central buttresses,
+# two flattened (elliptical) round arches running through it from the front to the back under barrel vaults,
+# arch rings, impost bands round the piers, blind round-arched niches on the sides (the Meshy cross passages), a
+# string course, a crenellated parapet (merlons with caps) round a slate-covered walk, an iron railing across the back
+# arches (the plot ends at a drop); on the walk a timber watch room: plank walls (jetty_wall with a plank infill,
+# dark posts, rails and top plates), round-headed glazed windows, scroll brackets under the eaves, a hipped slate
+# roof (spire_rings), a ridge cap and two spike finials. The watch room is the one empty space inside.
+# ---------------------------------------------------------------------------------------------
+def arched_glass(B, xc, z0, zs, r, y, mat="Glass"):
+    """Two-sided glass (2 mm apart) filling a round-headed opening in the plane y (wall coordinates)."""
+    arc = hk.arc_pts(xc, zs, r, n=24)
+    for yy, want in ((y - 0.001, (0, -1, 0)), (y + 0.001, (0, 1, 0))):
+        hk.rect(B, (xc - r, yy, z0), (xc + r, yy, z0), (xc + r, yy, zs), (xc - r, yy, zs), mat, want)
+        B.fan([(x, yy, z) for x, z in arc], mat, want)
+
+
+def gate_block(E, spec, hulls):
+    """The stone gate block (house coordinates): buttresses, faces with the arch and niche holes, the through
+    passages (pier walls, elliptical vaults), arch rings, impost bands, string course, parapet, merlons, walk."""
+    g = spec["gate"]
+    W, D = spec["width"], spec["depth"]
+    bx0, bx1, by0, by1 = g["body"]
+    dep = by1 - by0
+    st, tr = g["stone"], g["trim"]
+    im = g["impost"]
+    iz0, iz1, ip = im["z"][0], im["z"][1], im["proud"]
+    rg = g["ring"]
+    pp = g["parapet"]
+    t, sill, walk = pp["t"], pp["sill"], pp["walk"]
+    frames = {"front": ((bx0, by0), (bx1, by0)), "right": ((bx1, by0), (bx1, by1)),
+              "back": ((bx1, by1), (bx0, by1)), "left": ((bx0, by1), (bx0, by0))}
+    # --- buttresses: corner ones battered on both outer faces, central ones on the front / back face only
+    bt = g["buttress"]
+    cw, cd, zb = bt["corner"][0], bt["corner"][1], iz0
+    for sx in (1, -1):
+        for sy in (1, -1):
+            def P(x, y, z, sx=sx, sy=sy):                  # corner-local (x, y from the corner outwards = negative)
+                return (x if sx > 0 else W - x, y if sy > 0 else D - y, z)
+            xo0, yo0 = 0.0, 0.0                            # the foot's outer corner
+            xo1, yo1 = bx0 - ip, by0 - ip                  # the top's outer line (flush with the impost band)
+            xi, yi = cw, cd
+            pts = [P(xo0, yo0, 0.0), P(xi, yo0, 0.0), P(xi, yi, 0.0), P(xo0, yi, 0.0),
+                   P(xo1, yo1, zb), P(xi, yo1, zb), P(xi, yi, zb), P(xo1, yi, zb)]
+            a0, b0, c0, d0, a1, b1, c1, d1 = pts
+            hk.rect(E, a0, b0, b1, a1, mat=st, want=(0, -sy, 0.4))                         # front slope
+            hk.rect(E, a0, d0, d1, a1, mat=st, want=(-sx, 0, 0.4))                         # side slope
+            hk.rect(E, b0, P(xi, by0, 0.0), P(xi, by0, zb), b1, mat=st, want=(sx, 0, 0))   # inner face across x
+            hk.rect(E, d0, P(bx0, yi, 0.0), P(bx0, yi, zb), d1, mat=st, want=(0, sy, 0))   # inner face across y
+            hulls.append([p for p in pts])
+    for xc in bt["central"]:
+        x0, x1 = xc - bt["central_half"], xc + bt["central_half"]
+        for sy in (1, -1):
+            yf = 0.0 if sy > 0 else D
+            yt = (by0 - ip) if sy > 0 else (by1 + ip)
+            yw = by0 if sy > 0 else by1
+            hk.rect(E, (x0, yf, 0.0), (x1, yf, 0.0), (x1, yt, zb), (x0, yt, zb), st, (0, -sy, 0.4))
+            for x, nx in ((x0, -1), (x1, 1)):
+                hk.rect(E, (x, yf, 0.0), (x, yw, 0.0), (x, yw, zb), (x, yt, zb), st, (nx, 0, 0))
+            hulls.append([(x, y, z) for x in (x0, x1) for y, z in ((yf, 0.0), (yw, 0.0), (yt, zb), (yw, zb))])
+    # --- the four faces up to the parapet's sill, with the arch (front, back) and niche (sides) holes
+    arches = g["arches"]                                   # [{"xc", "r", "rz"}] in house x; spring at the impost top
+    zs = iz1
+    nc = g["niche"]
+    for side, (p0, p1) in frames.items():
+        m, L = gk.wall_frame(p0, p1)
+        E.push(m)
+        if side in ("front", "back"):
+            loc = [(a["xc"] - bx0) if side == "front" else (bx1 - a["xc"]) for a in arches]
+            holes = [(xc - a["r"], xc + a["r"], 0.0, zs + a["rz"]) for xc, a in zip(loc, arches)]
+            hk.flat_face(E, 0.0, L, 0.0, sill, st, holes=holes, cell=0.6)
+            for xc, a in zip(loc, arches):
+                r, rz = a["r"], a["rz"]
+                hk.arch_spandrels(E, xc, zs, r, xc - r, xc + r, zs + rz, 0.0, st, rz=rz)
+                hk.arch_ring(E, xc, zs, r, r + rg["w"], -rg["proud"], tr, rz0=rz, rz1=rz + rg["crown"])
+                if side == "front":                        # the passage: pier walls and the vault, front to back
+                    hk.reveal(E, (xc - r, xc + r, 0.0, zs), 0.0, dep, st, sides="lr")
+                    hk.arch_intrados(E, xc, zs, r, -rg["proud"], dep + rg["proud"], st, rz=rz)
+            # impost bands over the piers, wrapping the corners
+            edges = sorted([0.0 - ip, L + ip] + [v for xc, a in zip(loc, arches) for v in (xc - a["r"], xc + a["r"])])
+            for k in range(0, len(edges), 2):
+                hk.block(E, edges[k], edges[k + 1], -ip, 0.0, iz0, iz1, tr, faces="xXyzZ")
+        else:
+            xc, r = L / 2, nc["r"]
+            hole = (xc - r, xc + r, 0.0, zs + r)
+            hk.flat_face(E, 0.0, L, 0.0, sill, st, holes=[hole], cell=0.6)
+            hk.arch_spandrels(E, xc, zs, r, xc - r, xc + r, zs + r, 0.0, st)
+            hk.arch_ring(E, xc, zs, r, r + nc["ring"], -rg["proud"], tr)
+            hk.reveal(E, hole, 0.0, nc["depth"], st, sides="lr")
+            hk.arch_intrados(E, xc, zs, r, -rg["proud"], nc["depth"], st)
+            hk.rect(E, (xc - r, nc["depth"], 0.0), (xc + r, nc["depth"], 0.0), (xc + r, nc["depth"], zs), (xc - r, nc["depth"], zs), st, (0, -1, 0))
+            E.fan([(x, nc["depth"], z) for x, z in hk.arc_pts(xc, zs, r, n=24)], st, (0, -1, 0))
+            hk.block(E, 0.0, xc - r, -ip, 0.0, iz0, iz1, tr, faces="XyzZ")
+            hk.block(E, xc + r, L, -ip, 0.0, iz0, iz1, tr, faces="xyzZ")
+        E.pop()
+    # --- string course right round the body
+    sc = g["string"]
+    E.push(gk.translate(bx0, by0, 0.0))
+    hk.band_loop(E, bx1 - bx0, dep, sc["z"][0], sc["z"][1], sc["proud"], tr)
+    E.pop()
+    # --- parapet: inner faces, the sill's top, the walk, merlons with caps
+    ix0, ix1, iy0, iy1 = bx0 + t, bx1 - t, by0 + t, by1 - t
+    outer = [(bx0, by0), (bx1, by0), (bx1, by1), (bx0, by1)]
+    inner = [(ix0, iy0), (ix1, iy0), (ix1, iy1), (ix0, iy1)]
+    ins = [(0, 1, 0), (-1, 0, 0), (0, -1, 0), (1, 0, 0)]
+    for k in range(4):
+        a, b = inner[k], inner[(k + 1) % 4]
+        hk.rect(E, (*a, walk), (*b, walk), (*b, sill), (*a, sill), st, ins[k])
+        o0, o1 = outer[k], outer[(k + 1) % 4]
+        hk.rect(E, (*o0, sill), (*o1, sill), (*b, sill), (*a, sill), st, (0, 0, 1))
+    wr = spec["watch"]
+    rx0, rx1, ry0, ry1 = wr["planks"]                       # the plank planes: the walk runs up to them
+    for x0, x1, y0, y1 in ((ix0, ix1, iy0, ry0), (ix0, ix1, ry1, iy1), (ix0, rx0, ry0, ry1), (rx1, ix1, ry0, ry1)):
+        hk.rect(E, (x0, y0, walk), (x1, y0, walk), (x1, y1, walk), (x0, y1, walk), g["walk_mat"], (0, 0, 1))
+    mz1, (cz, cp) = pp["merlon_top"], pp["cap"]
+    blocks = []
+    fc, sc_ = pp["corner"]                                  # corner merlons: length along the front / along the side
+    for x0, x1 in ((bx0, bx0 + fc), (bx1 - fc, bx1)):
+        for y0, y1 in ((by0, by0 + sc_), (by1 - sc_, by1)):
+            blocks.append((x0, x1, y0, y1))
+    for x0, x1 in pp["front"]:                              # the others, in house x (front and back alike)
+        blocks += [(x0, x1, by0, iy0), (x0, x1, iy1, by1)]
+    for y0, y1 in pp["side"]:
+        blocks += [(bx0, ix0, y0, y1), (ix1, bx1, y0, y1)]
+    for x0, x1, y0, y1 in blocks:
+        hk.block(E, x0, x1, y0, y1, sill, mz1, st, faces="xXyY")
+        hk.block(E, x0 - cp, x1 + cp, y0 - cp, y1 + cp, mz1, mz1 + cz, tr, faces="xXyYzZ")
+    # --- an iron railing across each back arch, over the drop behind the plot
+    rl = g.get("railing")
+    if rl:
+        for a in arches:
+            x0, x1 = a["xc"] - a["r"], a["xc"] + a["r"]
+            hk.iron_railing(E, x0, x1, by1 - rl["in"], 0.0, rl["h"], rl["mat"], pitch=rl["pitch"], ends=False)
+            hulls.append(hk.box_pts(x0, x1, by1 - rl["in"] - 0.05, by1 - rl["in"] + 0.05, 0.0, rl["h"]))
+    # --- collision: piers, the masonry over the vaults, the parapet
+    xs = sorted([bx0, bx1] + [v for a in arches for v in (a["xc"] - a["r"], a["xc"] + a["r"])])
+    for k in range(0, len(xs), 2):
+        hulls.append(hk.box_pts(xs[k], xs[k + 1], by0, by1, 0.0, walk))
+    for a in arches:
+        hulls.append(hk.box_pts(a["xc"] - a["r"], a["xc"] + a["r"], by0, by1, zs + 0.5 * a["rz"], walk))
+    top = mz1 + cz
+    hulls += [hk.box_pts(bx0, bx1, by0, iy0, walk, top), hk.box_pts(bx0, bx1, iy1, by1, walk, top),
+              hk.box_pts(bx0, ix0, iy0, iy1, walk, top), hk.box_pts(ix1, bx1, iy0, iy1, walk, top)]
+
+
+def gate_watch(E, I, spec, hulls):
+    """The timber watch room on the walk: four plank walls (jetty_wall, plank infill in the Door slot, posts, rails
+    and top plates as plates in the Timber slot), corner posts, round-headed glazed windows, scroll brackets under
+    the eaves, the hipped roof (spire_rings) with a ridge cap and two spike finials; the empty room inside."""
+    wr = spec["watch"]
+    walk = spec["gate"]["parapet"]["walk"]
+    rx0, rx1, ry0, ry1 = wr["planks"]
+    px0, px1, py0, py1 = wr["posts"]                        # the posts' outer faces: the walls' rectangle for the roof
+    zt, t = wr["top"], wr["t"]
+    frames = {"front": ((rx0, ry0), (rx1, ry0)), "right": ((rx1, ry0), (rx1, ry1)),
+              "back": ((rx1, ry1), (rx0, ry1)), "left": ((rx0, ry1), (rx0, ry0))}
+    ws = {"frame": "Timber", "rec": wr["rec"], "depth": 0.04, "fw": 0.04}
+    for side, (p0, p1) in frames.items():
+        m, L = gk.wall_frame(p0, p1)
+        wl = dict(wr["walls"]["front" if side in ("front", "back") else "side"])
+        wins = wl.pop("windows", [])
+        wl["holes"] = [[w["xc"] - w["r"], w["xc"] + w["r"], w["z0"], w["zs"] + w["r"]] for w in wins]
+        wl["infill"] = wr["infill"]
+        E.push(m)
+        I.push(m)
+        jetty_wall(E, I, wl, L, walk, zt, t, ws, hulls)
+        hulls.pop()                                         # one box for the whole room instead
+        for w in wins:
+            hk.arched_opening(E, I, w["xc"], w["z0"], w["zs"], w["r"], t, wr["rec"], wr["infill"], trim=None)
+            arched_glass(E, w["xc"], w["z0"], w["zs"], w["r"], wr["rec"])
+        bk = wr["brackets"]
+        for x in wl.get("bracket_x", []):
+            hk.console(E, x, -bk["wall"], bk["z_top"], "Timber", out=bk["out"], height=bk["height"], width=bk["width"])
+        E.pop()
+        I.pop()
+    for x0, x1 in ((px0, rx0 + (rx0 - px0) * 1.25), (rx1 - (px1 - rx1) * 1.25, px1)):
+        for y0, y1 in ((py0, ry0 + (ry0 - py0) * 1.25), (ry1 - (py1 - ry1) * 1.25, py1)):
+            hk.block(E, x0, x1, y0, y1, walk, zt, "Timber", faces="xXyY")
+    hulls.append(hk.box_pts(px0, px1, py0, py1, walk, zt))
+    # the room inside: floor on the walk, a ceiling under the roof
+    fx0, fx1, fy0, fy1 = rx0 + t, rx1 - t, ry0 + t, ry1 - t
+    hk.rect(I, (fx0, fy0, walk + 0.005), (fx1, fy0, walk + 0.005), (fx1, fy1, walk + 0.005), (fx0, fy1, walk + 0.005), "Timber", (0, 0, 1))
+    c = wr["ceiling"]
+    hk.rect(I, (fx0, fy0, c), (fx1, fy0, c), (fx1, fy1, c), (fx0, fy1, c), "Plaster", (0, 0, -1))
+    # the hipped roof, its ridge cap and the finials
+    rf = wr["roof"]
+    rings = [tuple(r) for r in rf["rings"]]
+    cs = hk.spire_rings(E, px0, px1, py0, py1, rings, "Roof", zt, pitch=rf["pitch"], step=rf["step"])
+    hulls.append([p for cc in (cs[0], cs[-1]) for p in cc] + [(p[0], p[1], zt) for p in cs[0]])
+    z, iy, ix = rings[-1]
+    rc = rf["ridge_cap"]
+    yc = (py0 + py1) / 2
+    hk.block(E, px0 + ix - 0.02, px1 - ix + 0.02, yc - rc[0], yc + rc[0], z - 0.02, z + rc[1], "Roof", faces="xXyYZ")
+    fn = rf["finials"]
+    for x in (px0 + ix, px1 - ix):
+        hk.spike_finial(E, x, yc, z + rc[1] - 0.02, fn["top"], fn["mat"], r=fn["r"])
+
+
+def build_townhouse_gate(spec):
+    E, I = hk.Builder(hk.MATERIALS, seed=11), hk.Builder(hk.MATERIALS, seed=12)
+    hulls = []
+    gate_block(E, spec, hulls)
+    gate_watch(E, I, spec, hulls)
+    return E, I, hulls
+
+
 BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable, "townhouse_terrace": build_townhouse_terrace,
             "townhouse_mansard": build_townhouse_mansard, "townhouse_zinc": build_townhouse_zinc, "townhouse_jetty": build_townhouse_jetty,
-            "townhouse_loft": build_townhouse_loft, "townhouse_stack": build_townhouse_stack, "townhouse_tavern": build_townhouse_tavern}
+            "townhouse_loft": build_townhouse_loft, "townhouse_stack": build_townhouse_stack, "townhouse_tavern": build_townhouse_tavern,
+            "townhouse_gate": build_townhouse_gate}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -2409,7 +2616,69 @@ def shots_tavern(spec):
             ("back", (W / 2 - 4.0, D + 20.0, 8.0), (W / 2 - 1.0, D / 2, H / 2), 35, 1000, 1500)]
 
 
+def audit_setup_gate(spec):
+    """Outside eyes only: the lane (and through the arches), inside both passages, both sides (into the niches), the
+    lower town, the walk, above. Planes inside the piers, in the masonry over the vaults, in the watch room and under
+    its roof."""
+    W, D = spec["width"], spec["depth"]
+    g, wr = spec["gate"], spec["watch"]
+    bx0, bx1, by0, by1 = g["body"]
+    walk = g["parapet"]["walk"]
+    zs = g["impost"]["z"][1]
+    arches = g["arches"]
+    nd = g["niche"]["depth"]
+    px0, px1, py0, py1 = wr["posts"]
+    rx0, rx1, ry0, ry1 = wr["planks"]
+    ym = (by0 + by1) / 2
+    zr = wr["roof"]["rings"][-1][0]
+    street = [("lane left", (1.0, -4.5, 1.7)), ("lane mid", (W / 2, -4.5, 1.7)), ("lane right", (W - 1.0, -4.5, 1.7)),
+              ("lane arch L", (arches[0]["xc"] + 0.8, -3.0, 1.2)), ("lane arch R", (arches[1]["xc"] - 0.8, -3.0, 1.2)),
+              ("lane high", (W / 2, -8.0, 9.5)), ("lane very high", (W / 2, -10.0, 16.0)),
+              ("lane low left", (-1.5, -2.5, 1.0)), ("lane low right", (W + 1.5, -2.5, 1.0))]
+    passages = [(f"passage {k}", (a["xc"] + dx, ym + dy, 1.7)) for k, a in enumerate(arches) for dx, dy in ((-0.9, -1.5), (0.9, 1.5))]
+    sides = [("side left", (-6.0, ym, 3.0)), ("side left high", (-6.0, ym, 9.5)), ("side left low", (-3.0, ym - 1.0, 1.0)),
+             ("side right", (W + 6.0, ym, 3.0)), ("side right high", (W + 6.0, ym, 9.5)), ("side right low", (W + 3.0, ym + 1.0, 1.0))]
+    lower = [("lower town", (W / 2, D + 9.0, 1.0)), ("lower town left", (2.0, D + 7.0, 2.0)), ("lower town high", (W - 2.0, D + 9.0, 8.0))]
+    above = [("above", (W / 2, ym, 22.0)), ("above front", (W / 2, -5.0, 18.0)), ("above back", (W / 2, D + 5.0, 18.0)),
+             ("above left", (-5.0, ym, 16.0)), ("above right", (W + 5.0, ym, 16.0))]
+    walkers = [("walk front", (W / 2 - 1.2, (by0 + py0) / 2 + 0.2, walk + 1.7)), ("walk left", ((bx0 + px0) / 2 + 0.2, ym, walk + 1.7)),
+               ("walk back", (W / 2 + 1.2, (by1 + py1) / 2 - 0.2, walk + 1.7))]
+    outside = street + passages + sides + lower + above + walkers
+    out = []
+    piers = [(bx0, arches[0]["xc"] - arches[0]["r"]), (arches[0]["xc"] + arches[0]["r"], arches[1]["xc"] - arches[1]["r"]),
+             (arches[1]["xc"] + arches[1]["r"], bx1)]
+    for y in (by0 + 0.3, ym, by1 - 0.3):
+        for k, (a, b) in enumerate(piers):
+            a2 = a + (nd + 0.08 if k == 0 else 0.05)
+            b2 = b - (nd + 0.08 if k == 2 else 0.05)
+            out.append((f"pier {k} y{y:.2f}", (0.0, y, 0.0), (1, 0, 0), (a2, b2, 0.05, walk - 0.05), 0.05, outside))
+        for k, a in enumerate(arches):
+            out.append((f"over vault {k} y{y:.2f}", (0.0, y, 0.0), (1, 0, 0), (a["xc"] - a["r"] + 0.02, a["xc"] + a["r"] - 0.02,
+                        zs + a["rz"] + 0.05, walk - 0.05), 0.05, outside))
+    for x in (bx0 + nd + 0.1, bx1 - nd - 0.1):
+        out.append((f"pier side x{x:.2f}", (x, 0.0, 0.0), (0, 1, 0), (by0 + 0.05, by1 - 0.05, 0.05, walk - 0.05), 0.05, outside))
+    out.append(("watch room", (0.0, (py0 + py1) / 2, 0.0), (1, 0, 0), (rx0 + 0.25, rx1 - 0.25, walk + 0.05, wr["ceiling"] - 0.05), 0.04, outside))
+    out.append(("watch room x", ((px0 + px1) / 2, 0.0, 0.0), (0, 1, 0), (ry0 + 0.25, ry1 - 0.25, walk + 0.05, wr["ceiling"] - 0.05), 0.04, outside))
+    out.append(("roof", (0.0, (py0 + py1) / 2, 0.0), (1, 0, 0), (px0 + 1.0, px1 - 1.0, wr["top"] + 0.05, zr - 0.15), 0.05, outside))
+    return out
+
+
+def shots_gate(spec):
+    W, D = spec["width"], spec["depth"]
+    H = spec["watch"]["roof"]["finials"]["top"]
+    a0 = spec["gate"]["arches"][0]
+    return [("iso", (W + 13.0, -18.0, 14.0), (W / 2, D / 2, H / 2), 32, 1400, 1400),
+            ("iso_left", (-12.0, -16.0, 12.0), (W / 2, D / 2, H / 2), 32, 1400, 1400),
+            ("front_eye", (W / 2 - 1.5, -9.0, 1.7), (W / 2, 0.0, 6.0), 18, 1500, 1200),
+            ("passage", (a0["xc"] - 0.5, -4.0, 1.6), (a0["xc"], D, 2.0), 22, 1200, 1200),
+            ("walk", (W / 2 + 4.0, -5.0, 11.0), (W / 2, D / 2, 8.0), 24, 1400, 1100),
+            ("side", (W + 16.0, D / 2, 6.0), (W, D / 2, 6.5), 30, 1000, 1500),
+            ("back", (W / 2 - 4.0, D + 22.0, 2.0), (W / 2, D / 2, H / 2 - 1.0), 32, 1400, 1400)]
+
+
 def audit_setup(spec):
+    if spec["type"] == "townhouse_gate":
+        return audit_setup_gate(spec)
     if spec["type"] == "townhouse_tavern":
         return audit_setup_tavern(spec)
     if spec["type"] in ("townhouse_loft", "townhouse_stack"):     # house #8 uses the loft's eyes and planes
@@ -2468,6 +2737,8 @@ def shots_stack(spec):
 
 
 def shots(spec):
+    if spec["type"] == "townhouse_gate":
+        return shots_gate(spec)
     if spec["type"] == "townhouse_tavern":
         return shots_tavern(spec)
     if spec["type"] == "townhouse_stack":

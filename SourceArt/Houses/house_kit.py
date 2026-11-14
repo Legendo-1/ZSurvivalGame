@@ -853,34 +853,38 @@ def quoin_corner(B, z0, z1, course, long, short, proud, mat, start_long=True, va
 # ---------------------------------------------------------------------------------------------
 # House #5 (BookbindersMansardAtelier): round arches, a sunburst fanlight, basement vent grilles, standing-seam metal
 # ---------------------------------------------------------------------------------------------
-def arc_pts(xc, zc, r, a0=0.0, a1=180.0, n=24):
-    """Points [(x, z), ...] on a circle arc about (xc, zc) from angle a0 to a1 (degrees, 0 = +x, 90 = up)."""
-    return [(xc + r * math.cos(q), zc + r * math.sin(q)) for q in np.radians(np.linspace(a0, a1, n + 1))]
+def arc_pts(xc, zc, r, a0=0.0, a1=180.0, n=24, rz=None):
+    """Points [(x, z), ...] on a circle arc about (xc, zc) from angle a0 to a1 (degrees, 0 = +x, 90 = up).
+    rz (house #10): the vertical radius, for an elliptical (flattened) arch; default r."""
+    rz = r if rz is None else rz
+    return [(xc + r * math.cos(q), zc + rz * math.sin(q)) for q in np.radians(np.linspace(a0, a1, n + 1))]
 
 
-def arch_intrados(B, xc, zs, r, y0, y1, mat, n=24, var=0.5):
+def arch_intrados(B, xc, zs, r, y0, y1, mat, n=24, var=0.5, rz=None):
     """Soffit of a round arch (wall coordinates): the half cylinder of radius r about (xc, zs) from the plane y0 back to
-    y1, facing the arch's axis."""
-    pts = arc_pts(xc, zs, r, n=n)
+    y1, facing the arch's axis. rz (house #10): vertical radius of an elliptical arch."""
+    pts = arc_pts(xc, zs, r, n=n, rz=rz)
     for (xa, za), (xb, zb) in zip(pts, pts[1:]):
         mx, mz = (xa + xb) / 2 - xc, (za + zb) / 2 - zs
         rect(B, (xa, y0, za), (xb, y0, zb), (xb, y1, zb), (xa, y1, za), mat, (-mx, 0.0, -mz), var)
 
 
-def arch_ring(B, xc, zs, r0, r1, y, mat, n=24, var=0.5):
+def arch_ring(B, xc, zs, r0, r1, y, mat, n=24, var=0.5, rz0=None, rz1=None):
     """Half-round arch ring (an archivolt) standing on the wall plane y = 0 (wall coordinates): its front face on the
-    plane y (y < 0, facing -y) between radii r0 and r1, and its outer face (extrados) from y back to the wall."""
-    a, b = arc_pts(xc, zs, r0, n=n), arc_pts(xc, zs, r1, n=n)
+    plane y (y < 0, facing -y) between radii r0 and r1, and its outer face (extrados) from y back to the wall.
+    rz0, rz1 (house #10): the vertical radii of an elliptical ring."""
+    a, b = arc_pts(xc, zs, r0, n=n, rz=rz0), arc_pts(xc, zs, r1, n=n, rz=rz1)
     for k in range(n):
         rect(B, (a[k][0], y, a[k][1]), (b[k][0], y, b[k][1]), (b[k + 1][0], y, b[k + 1][1]), (a[k + 1][0], y, a[k + 1][1]), mat, (0, -1, 0), var)
         mx, mz = (b[k][0] + b[k + 1][0]) / 2 - xc, (b[k][1] + b[k + 1][1]) / 2 - zs
         rect(B, (b[k][0], y, b[k][1]), (b[k + 1][0], y, b[k + 1][1]), (b[k + 1][0], 0.0, b[k + 1][1]), (b[k][0], 0.0, b[k][1]), mat, (mx, 0.0, mz), var)
 
 
-def arch_spandrels(B, xc, zs, r, x0, x1, z_top, y, mat, n=24, var=0.5):
+def arch_spandrels(B, xc, zs, r, x0, x1, z_top, y, mat, n=24, var=0.5, rz=None):
     """Flat faces on the plane y (facing -y) filling the rectangle x0..x1, zs..z_top outside the half circle of radius
-    r about (xc, zs) (x0 <= xc - r, x1 >= xc + r): one fan per side from its top outer corner. n must be even."""
-    q = arc_pts(xc, zs, r, n=n)
+    r about (xc, zs) (x0 <= xc - r, x1 >= xc + r): one fan per side from its top outer corner. n must be even.
+    rz (house #10): vertical radius of an elliptical arch."""
+    q = arc_pts(xc, zs, r, n=n, rz=rz)
     h = n // 2
     for hub, poly in (((x1, z_top), [(x1, zs)] + q[:h + 1] + [(xc, z_top)]),
                       ((x0, z_top), [(xc, z_top)] + q[h:] + [(x0, zs)])):
