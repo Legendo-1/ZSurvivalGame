@@ -821,8 +821,12 @@ def mansard_roof(E, spec, prof, hulls):
     ridge_k = max(range(len(pts)), key=lambda k: pts[k][1])
     for k, ((ya, za), (yb, zb)) in enumerate(zip(pts, pts[1:])):
         lo, hi = ((ya, za), (yb, zb)) if k < ridge_k else ((yb, zb), (ya, za))
-        gk.tile_facet(E, mat, (X0, lo[0], lo[1]), (X1, lo[0], lo[1]), (X1, hi[0], hi[1]), (X0, hi[0], hi[1]), pitch=rf["pitch"],
-                      step=rf["step"], seed=60 + k)
+        if rf.get("cover") == "seam":         # standing-seam metal (house #5): ribs on the steep slopes only
+            hk.seam_facet(E, mat, (X0, lo[0], lo[1]), (X1, lo[0], lo[1]), (X1, hi[0], hi[1]), (X0, hi[0], hi[1]), pitch=rf["seam_pitch"],
+                          w=rf.get("seam_w", 0.04), h=rf.get("seam_h", 0.035), ribs=abs(zb - za) > abs(yb - ya))
+        else:
+            gk.tile_facet(E, mat, (X0, lo[0], lo[1]), (X1, lo[0], lo[1]), (X1, hi[0], hi[1]), (X0, hi[0], hi[1]), pitch=rf["pitch"],
+                          step=rf["step"], seed=60 + k)
         dn = (0.0, -(zb - za), yb - ya)
         dn = dn if dn[2] < 0 else tuple(-c for c in dn)          # the underside faces down
         spans = [(X0, 0.0), (W, X1)] if 0.0 <= ya and yb <= D else [(X0, X1)]
@@ -961,8 +965,268 @@ def build_townhouse_mansard(spec):
     return E, I, hulls
 
 
+# ---------------------------------------------------------------------------------------------
+# townhouse_zinc (house #5 on): a Paris-style ashlar house: a plinth with basement vent grilles, rusticated corner
+# pilasters, a band and a crowning cornice right round; windows with architraves, sills on brackets and hoods; an
+# arched front door (archivolt on pedestals, keystone, sunburst fanlight, two leaves, steps) and square doors; a
+# mansard of standing-seam metal with a flat top between two stone gables (mansard_roof with "cover": "seam"), an
+# iron railing with corner finials round the flat top, pedimented dormers on the front and back slopes. One empty
+# shell inside.
+# ---------------------------------------------------------------------------------------------
+def zinc_windows(E, I, wins, ws, t):
+    """Windows of one side (wall coordinates): [(x0, x1, z0, z1, (cols, rows)), ...] in the style ws: frame and glass,
+    reveals, and when given an architrave, a sill (on brackets) and a hood. Returns their holes."""
+    holes = []
+    for x0, x1, z0, z1, panes in wins:
+        holes.append((x0, x1, z0, z1))
+        rec = ws["rec"]
+        hk.sash_window(E, x0, x1, z0, z1, ws["frame"], ws["glass"], panes[0], panes[1], y=rec, depth=ws["depth"], fw=ws["fw"], meeting=False)
+        hk.reveal(E, (x0, x1, z0, z1), 0.0, rec, ws["reveal_mat"], sides="lrt")
+        hk.reveal(I, (x0, x1, z0, z1), rec, t, "Plaster")
+        aw = 0.0
+        if ws.get("architrave"):
+            ar = ws["architrave"]
+            hk.frame_run(E, x0, x1, z0, z1, ar["profile"], ar["mat"])
+            aw = max(p[0] for p in ar["profile"])
+        s = ws["sill"]
+        zs = z0 - s["drop"]
+        hk.sill(E, x0 - s["ext"], x1 + s["ext"], zs, s["mat"], h=s["h"], proud=s["proud"], back=rec)
+        if s["drop"] > 0:
+            hk.block(E, x0, x1, 0.0, rec, zs, z0, s["mat"], faces="Z")              # the sill's top under the frame
+        if ws.get("brackets"):
+            b = ws["brackets"]
+            zb1 = zs - s["h"]
+            for bx in (x0 - aw + b["inset"], x1 + aw - b["inset"] - b["w"]):
+                hk.block(E, bx, bx + b["w"], -b["proud"], 0.0, zb1 - b["h"], zb1, b["mat"], faces="xXyzZ")
+        if ws.get("hood"):
+            hd = ws["hood"]
+            hk.moulding_run(E, x0 - hd["ext"], x1 + hd["ext"], z1 + aw + hd["gap"], hd["profile"], hd["mat"])
+    return holes
+
+
+def zinc_plinth(E, L, pl, holes, grilles):
+    """The plinth along one side (wall coordinates): its face `proud` in front of the wall from the street to z1, with
+    holes, the top strip back to the wall (it covers the side's right-hand corner), and the vent grilles."""
+    p, z1, mat = pl["proud"], pl["z1"], pl["mat"]
+    gh = [(g[0], g[1], *pl["grille_z"]) for g in grilles]
+    hk.flat_face(E, -p, L + p, 0.0, z1, mat, holes=holes + gh, y=-p, cell=0.6)
+    spans = [(0.0, L + p)]
+    for hx0, hx1, _hz0, hz1 in holes:                             # no top strip over a doorway through the plinth
+        if hz1 >= z1 - 1e-6:
+            spans = [s for a, b in spans for s in ((a, min(b, hx0)), (max(a, hx1), b)) if s[1] - s[0] > 1e-6]
+    for a, b in spans:
+        hk.rect(E, (a, -p, z1), (b, -p, z1), (b, 0.0, z1), (a, 0.0, z1), mat, (0, 0, 1))
+    for x0, x1, z0, zt in gh:
+        hk.vent_grille(E, x0, x1, z0, zt, -p, p + pl["grille_depth"], mat, pl["iron"], pl["iron"])
+    return gh
+
+
+def zinc_arch_door(E, I, spec, dr, t, F0):
+    """The arched front door (wall coordinates): steps, pedestals, archivolt with keystone, spandrels, reveals and
+    soffit back to the leaves, a transom rail, the sunburst fanlight and two closed leaves (separate meshes).
+    Returns (the hole in the wall face, the hole in the core and inner face)."""
+    x0, x1, zs = dr["x0"], dr["x1"], dr["spring"]
+    xc, r = (x0 + x1) / 2, (x1 - x0) / 2
+    crown = zs + r
+    sr = dr["surround"]
+    sw, sp, sz0, smat = sr["w"], sr["proud"], sr["z0"], sr["mat"]
+    ly, lt = dr["leaf_y"], dr["leaf_t"]
+    ped = dr["pedestals"]
+    # steps (the lowest wider, in front of the pedestals), threshold at the floor
+    for k, st in enumerate(dr["steps"]):
+        sx0, sx1 = (st["x"] if "x" in st else (x0, x1))
+        hk.block(E, sx0, sx1, st["y"], ly + lt, 0.0, st["z"], st["mat"], faces=("xXyZ" if "x" in st else "yZ"))
+    # pedestals under the archivolt, then its jambs, ring and keystone
+    pp = ped["proud"]
+    hk.block(E, x0 - ped["w"], x0, -pp, 0.0, 0.0, sz0, ped["mat"], faces="xyZ")
+    hk.block(E, x1, x1 + ped["w"], -pp, 0.0, 0.0, sz0, ped["mat"], faces="XyZ")
+    hk.block(E, x0 - sw, x0, -sp, 0.0, sz0, zs, smat, faces="xy")
+    hk.block(E, x1, x1 + sw, -sp, 0.0, sz0, zs, smat, faces="Xy")
+    hk.arch_ring(E, xc, zs, r, r + sw, -sp, smat)
+    ks = dr["keystone"]
+    hk.block(E, xc - ks["w"] / 2, xc + ks["w"] / 2, -ks["proud"], 0.0, crown, ks["z1"], smat, faces="xXyzZ")
+    # the wall face round the archivolt: its hole is the archivolt's bounding box; spandrels fill the corners
+    z_top = ks["z1"]
+    hk.arch_spandrels(E, xc, zs, r + sw, x0 - sw, x1 + sw, z_top, 0.0, spec["stone"])
+    # jambs and soffit from the front of the stone back to the leaves: stone to the lining depth, then timber lining
+    yl = dr["lining_y"]
+    for (za, zb, ya) in ((0.0, sz0, -pp), (sz0, zs, -sp)):
+        hk.reveal(E, (x0, x1, za, zb), ya, yl, smat, sides="lr")
+    hk.reveal(E, (x0, x1, 0.0, zs), yl, ly, "Door", sides="lr")
+    hk.arch_intrados(E, xc, zs, r, -sp, yl, smat)
+    hk.arch_intrados(E, xc, zs, r, yl, ly + lt, "Door")
+    # transom rail and fanlight
+    tz0 = dr["transom"]
+    hk.block(E, x0, x1, ly - 0.02, ly + lt + 0.02, tz0, zs, "Door", faces="yzZ")
+    hk.fanlight(E, xc, zs, r, ly + lt / 2, "Glass", dr["iron"], spokes=dr.get("spokes", 10))
+    # two leaves, each its own mesh hinged at its jamb
+    w, h = (x1 - x0 - 0.01) / 2, tz0 - F0 - 0.005
+    for left in (True, False):
+        def make(B, w=w, h=h):
+            hk.panel_leaf(B, w, h, "Door", t=lt, cols=1, weights=dr["panel_weights"], frame=dr.get("frame", 0.13))
+        separate_leaf(E, (x0 + 0.005) if left else (x1 - 0.005), left, w, h, ly, F0, lt, make, seed=31 + len(DOORS))
+    return (x0 - sw, x1 + sw, sz0, z_top), (x0, x1, 0.0, crown)
+
+
+def zinc_square_door(E, I, dr, t):
+    """A square-headed door (wall coordinates): a sill, reveals back to the leaves, a transom rail and light, and two
+    closed leaves (separate meshes). Returns its hole."""
+    x0, x1, z0, z1 = dr["x0"], dr["x1"], dr["z0"], dr["z1"]
+    ly, lt = dr["leaf_y"], dr["leaf_t"]
+    tz0, tz1 = dr["transom"]
+    hk.block(E, x0, x1, -dr["sill_proud"], ly + lt, z0 - 0.12, z0, dr["sill_mat"], faces="xXyzZ")
+    hk.reveal(E, (x0, x1, z0, z1), 0.0, ly, dr["reveal_mat"], sides="lrt")
+    hk.reveal(I, (x0, x1, z0, z1), ly + lt, t, "Plaster", sides="lrt")
+    hk.block(E, x0, x1, ly - 0.02, ly + lt + 0.02, tz0, tz1, "Door", faces="yzZ")
+    hk.sash_window(E, x0, x1, tz1, z1, "Metal", "Glass", dr["lights"], 1, y=ly, depth=lt, fw=0.05, meeting=False)
+    w, h = (x1 - x0 - 0.01) / 2, tz0 - z0 - 0.005
+    for left in (True, False):
+        def make(B, w=w, h=h):
+            hk.panel_leaf(B, w, h, "Door", t=lt, cols=1, weights=dr["panel_weights"], frame=dr.get("frame", 0.11))
+        separate_leaf(E, (x0 + 0.005) if left else (x1 - 0.005), left, w, h, ly, z0, lt, make, seed=31 + len(DOORS))
+    return (x0, x1, z0 - 0.12, z1)
+
+
+def zinc_dormer(E, spec, front, xc, hulls):
+    """One pedimented dormer on a roof slope (wall coordinates of that side; front = the roof's front points
+    [(y, z), ...] from the eave up to the break): a stone front with a window in an architrave, a sill, an entablature
+    under a pediment, stone cheeks down to the roof, and a metal gable roof whose front edge is the raking cornice."""
+    dm = spec["dormers"]
+    mat, rmat = dm["mat"], dm["roof"]
+    hw, ww, yf, z0 = dm["half"], dm["win_half"], dm["front"], dm["z0"]
+    wz0, wz1 = dm["win"]
+    pd = dm["pediment"]
+    eh, ez, rz, th = pd["half"], pd["z0"], pd["apex"], pd["thick"]
+    s = (rz - ez) / eh                                            # roof slope (rise per run)
+    yfr, ybk = yf - pd["proud"], dm["roof_back"]
+
+    def under(x):                                                 # the dormer roof's underside at x
+        return rz - th - abs(x - xc) * s
+    top = [(xc - hw, under(xc - hw)), (xc, under(xc)), (xc + hw, under(xc + hw))]
+    hole = (xc - ww, xc + ww, wz0, wz1)
+    E.push(gk.translate(0.0, yf, 0.0))
+    hk.outline_face(E, top, z0, mat, holes=[hole])
+    ar = dm["architrave"]
+    hk.frame_run(E, *hole, ar["profile"], mat)
+    E.pop()
+    hk.sash_window(E, xc - ww, xc + ww, wz0, wz1, "Metal", "Glass", dm["panes"][0], dm["panes"][1], y=yf + dm["rec"], depth=dm["depth"], fw=0.05,
+                   meeting=False)
+    hk.reveal(E, hole, yf, yf + dm["rec"], mat, sides="lrt")
+    sl = dm["sill"]
+    hk.block(E, xc - sl["half"], xc + sl["half"], yf - sl["proud"], yf + dm["rec"], sl["z0"], wz0, mat, faces="xXyzZ")
+    en = dm["entablature"]
+    hk.block(E, xc - en["half"], xc + en["half"], yf - en["proud"], yf, en["z0"], ez, mat, faces="xXyzZ")
+    # cheeks: from the front back to where the main roof reaches their top, the foot 5 cm under the roof
+    ztop = under(xc + hw)
+    ys, zs = [p[0] for p in front], [p[1] for p in front]
+    yb = float(np.interp(ztop, zs, ys))
+    foot = [(y, z - 0.05) for y, z in front if yf < y < yb]
+    poly_yz = [(yf, z0), *foot, (yb, ztop)]
+    for X, nx in ((xc - hw, -1.0), (xc + hw, 1.0)):
+        E.fan([(X, y, z) for y, z in poly_yz], mat, (nx, 0, 0), hub=(X, yf, ztop))
+    # the gable roof: metal on both slopes, its eave edges, the raking cornice at the front, soffits
+    for sx in (-1.0, 1.0):
+        xe = xc + sx * eh
+        hk.rect(E, (xe, yfr, ez), (xe, ybk, ez), (xc, ybk, rz), (xc, yfr, rz), rmat, (sx * s, 0.0, 1.0))
+        hk.rect(E, (xe, yfr, ez - th), (xe, ybk, ez - th), (xe, ybk, ez), (xe, yfr, ez), rmat, (sx, 0, 0))                # eave edge
+        hk.rect(E, (xe, yfr, ez - th), (xc, yfr, rz - th), (xc, yfr, rz), (xe, yfr, ez), mat, (0, -1, 0))                  # raking cornice
+        dn = (-sx * s, 0.0, -1.0)
+        hk.rect(E, (xe, yfr, ez - th), (xc, yfr, rz - th), (xc, yf, rz - th), (xe, yf, ez - th), mat, dn)                  # front soffit
+        xw = xc + sx * hw
+        hk.rect(E, (xe, yf, ez - th), (xw, yf, under(xw)), (xw, ybk, under(xw)), (xe, ybk, ez - th), rmat, dn)            # side soffit
+    hulls.append(xf(E, hk.box_pts(xc - eh, xc + eh, yfr, ybk, z0, rz)))
+
+
+def build_townhouse_zinc(spec):
+    W, D, t = spec["width"], spec["depth"], spec["wall"]
+    F0, CEIL, TOP = spec["floor"], spec["ceiling"], spec["top"]
+    prof = mansard_profile(spec)
+    front_pts = [tuple(p) for p in spec["roof"]["profile"]]
+    th = spec["roof"]["thick"]
+    stone = spec["stone"]
+    pl, pi = spec["plinth"], spec["pilasters"]
+    E, I = hk.Builder(hk.MATERIALS, seed=11), hk.Builder(hk.MATERIALS, seed=12)
+    hulls = []
+    for k, side in enumerate(("front", "right", "back", "left")):
+        fac = spec["facades"].get(side, {})
+        m, L = hk.facade_frame(side, W, D)
+        E.push(m)
+        I.push(m)
+        wins = [(*w["x"], *w["z"], tuple(w["panes"])) for w in fac.get("ground", [])]
+        holes = zinc_windows(E, I, wins, spec["ground_style"], t)
+        wins = [(*w["x"], *w["z"], tuple(w["panes"])) for w in fac.get("upper", [])]
+        holes += zinc_windows(E, I, wins, spec["window_style"], t)
+        face_holes, core_holes, plinth_holes, cut = list(holes), list(holes), [], None
+        if fac.get("arch_door"):
+            dr = fac["arch_door"]
+            fh, ch = zinc_arch_door(E, I, spec, dr, t, F0)
+            face_holes.append(fh)
+            core_holes.append(ch)
+            plinth_holes.append((dr["x0"] - dr["pedestals"]["w"], dr["x1"] + dr["pedestals"]["w"], 0.0, pl["z1"]))
+            cut = (ch[0], ch[1], ch[3])
+        if fac.get("square_door"):
+            dr = fac["square_door"]
+            h = zinc_square_door(E, I, dr, t)
+            face_holes.append(h)
+            core_holes.append(h)
+            cut = (h[0], h[1], h[3], h[2])
+        gh = zinc_plinth(E, L, pl, plinth_holes, fac.get("grilles", []))
+        hk.flat_face(E, 0.0, L, pl["z1"], TOP, stone, holes=face_holes, cell=0.6)
+        for z0, z1 in pi["z"]:
+            hk.quoin_corner(E, z0, z1, pi["course"], pi["long"], pi["short"], pi["proud"], pi["mat"], start_long=True)
+        hk.wall_core(E, L, 0.0, TOP, t, holes=core_holes)
+        inner = [(a, b, max(c, F0), d) for a, b, c, d in core_holes if d > F0]
+        hk.flat_face(I, t, L - t, F0, CEIL, "Plaster", holes=inner, y=t, inward=True)
+        if side in ("front", "back"):
+            # the wall carried up behind the gutter to the roof's underside
+            hk.flat_face(E, 0.0, L, TOP, roof_z(prof, 0.0) - th + 0.02, stone, cell=0.6)
+            for xc in spec["dormers"]["x"]:
+                zinc_dormer(E, spec, front_pts, xc, hulls)
+        else:
+            # the gable: stone up to the roof's underside, a core inside
+            yy = [p[0] for p in prof if 0.0 < p[0] < D]
+            outline = [(0.0, roof_z(prof, 0.0) - th)] + [(y, roof_z(prof, y) - th) for y in yy] + [(D, roof_z(prof, D) - th)]
+            hk.outline_face(E, outline, TOP, stone)
+            for yc, inward in ((t / 2 - 0.001, False), (t / 2 + 0.001, True)):
+                hk.outline_face(E, outline, TOP, "Plaster", y=yc, inward=inward, var=0.2)
+            hulls.append(xf(E, [(x, y, z) for x, z in outline for y in (0.0, t)] + [(0.0, 0.0, TOP), (L, 0.0, TOP), (0.0, t, TOP), (L, t, TOP)]))
+        if cut and len(cut) == 3:                                 # a door from the street: walls either side and over it
+            dx0, dx1, dz = cut
+            hulls += [xf(E, hk.box_pts(0.0, dx0, 0.0, t, 0.0, TOP)), xf(E, hk.box_pts(dx1, L, 0.0, t, 0.0, TOP)),
+                      xf(E, hk.box_pts(dx0, dx1, 0.0, t, dz, TOP))]
+        elif cut:                                                 # a raised door: also the wall under it
+            dx0, dx1, dz, dz0 = cut
+            hulls += [xf(E, hk.box_pts(0.0, dx0, 0.0, t, 0.0, TOP)), xf(E, hk.box_pts(dx1, L, 0.0, t, 0.0, TOP)),
+                      xf(E, hk.box_pts(dx0, dx1, 0.0, t, dz, TOP)), xf(E, hk.box_pts(dx0, dx1, 0.0, t, 0.0, dz0))]
+        else:
+            hulls.append(xf(E, hk.box_pts(0.0, L, 0.0, t, 0.0, TOP)))
+        E.pop()
+        I.pop()
+    for b in spec["bands"]:
+        hk.band_loop(E, W, D, b["z0"], b["z1"], b["proud"], b["mat"], sides=b.get("sides"))
+    cn = spec["cornice"]
+    E.sweep([(x, y, cn["z"]) for x, y in hk.plan_loop(W, D)], [[tuple(p) for p in cn["profile"]]], cn["mat"], closed=True)
+    mansard_roof(E, spec, prof, hulls)
+    # the iron railing round the flat top, with a finial post at each corner
+    rl = spec["railing"]
+    ri = rl["inset"]
+    loop = [(rl["x0"], ri), (rl["x1"], ri), (rl["x1"], D - ri), (rl["x0"], D - ri)]
+    for k in range(4):
+        m, L = gk.wall_frame(loop[k], loop[(k + 1) % 4])
+        E.push(m)
+        hk.iron_railing(E, 0.0, L, 0.0, rl["z0"], rl["h"], rl["mat"], pitch=rl["pitch"], spear=rl["spear"])
+        E.pop()
+    for x, y in loop:
+        hk.iron_finial(E, x, y, rl["z0"], rl["post_top"], rl["mat"])
+    # inside: one empty room
+    hk.rect(I, (t, t, F0), (W - t, t, F0), (W - t, D - t, F0), (t, D - t, F0), "Timber", (0, 0, 1))
+    hk.rect(I, (t, t, CEIL), (W - t, t, CEIL), (W - t, D - t, CEIL), (t, D - t, CEIL), "Plaster", (0, 0, -1))
+    hulls.append(hk.box_pts(t, W - t, t, D - t, -0.3, F0))
+    return E, I, hulls
+
+
 BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable, "townhouse_terrace": build_townhouse_terrace,
-            "townhouse_mansard": build_townhouse_mansard}
+            "townhouse_mansard": build_townhouse_mansard, "townhouse_zinc": build_townhouse_zinc}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1067,12 +1331,25 @@ def shots_mansard(spec):
             ("back", (W / 2 - 4.0, D + 18.0, 7.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
 
 
+def shots_zinc(spec):
+    W, D = spec["width"], spec["depth"]
+    H = spec["railing"]["post_top"]
+    dr = spec["facades"]["front"]["arch_door"]
+    dx = (dr["x0"] + dr["x1"]) / 2
+    return [("iso", (W + 10.0, -15.0, 11.0), (W / 2, D / 2, H / 2), 35, 1200, 1600),
+            ("front_eye", (W / 2 - 1.0, -6.0, 1.7), (W / 2, 0.0, 6.5), 16, 1200, 1500),
+            ("door_close", (dx, -3.6, 1.8), (dx, 0.0, 2.2), 24, 1200, 1200),
+            ("roof", (W + 4.0, -5.0, H + 3.0), (W / 2, D / 2, H - 2.5), 28, 1400, 1100),
+            ("side", (W + 16.0, D / 2, 7.0), (W, D / 2, 7.5), 30, 1000, 1500),
+            ("back", (W / 2 - 4.0, D + 18.0, 6.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
+
+
 def audit_setup(spec):
     if spec["type"] == "townhouse_gable":
         return audit_setup_gable(spec)
     if spec["type"] == "townhouse_terrace":
         return audit_setup_terrace(spec)
-    if spec["type"] == "townhouse_mansard":
+    if spec["type"] in ("townhouse_mansard", "townhouse_zinc"):      # house #5 uses the mansard's eyes and planes
         return audit_setup_mansard(spec)
     W, D, t = spec["width"], spec["depth"], spec["wall"]
     floors, top = spec["floors"], spec["cornice"]["z"] + gk.ENTABLATURE_H - 0.05
@@ -1113,6 +1390,8 @@ def shots(spec):
         return shots_terrace(spec)
     if spec["type"] == "townhouse_mansard":
         return shots_mansard(spec)
+    if spec["type"] == "townhouse_zinc":
+        return shots_zinc(spec)
     W, D = spec["width"], spec["depth"]
     H = spec["cornice"]["z"] + gk.ENTABLATURE_H
     F = spec["floors"]

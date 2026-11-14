@@ -1,0 +1,46 @@
+[
+ {
+  "mesh": "SM_House_BookbindersMansardAtelier_Door",
+  "component": "Door",
+  "location_cm": [
+   113.49999999999997,
+   -89.99999999999999,
+   50.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ },
+ {
+  "mesh": "SM_House_BookbindersMansardAtelier_Door_1",
+  "component": "Door_1",
+  "location_cm": [
+   278.5,
+   -89.99999999999999,
+   50.0
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": 90.0
+ },
+ {
+  "mesh": "SM_House_BookbindersMansardAtelier_Door_2",
+  "component": "Door_2",
+  "location_cm": [
+   260.50000000000006,
+   -624.0,
+   136.0
+  ],
+  "yaw": -180.0,
+  "open_yaw_delta": -90.0
+ },
+ {
+  "mesh": "SM_House_BookbindersMansardAtelier_Door_3",
+  "component": "Door_3",
+  "location_cm": [
+   129.50000000000009,
+   -624.0,
+   136.0
+  ],
+  "yaw": -180.0,
+  "open_yaw_delta": 90.0
+ }
+]

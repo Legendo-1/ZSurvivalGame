@@ -160,12 +160,17 @@ def gauged_arch(B, x0, x1, z0, z1, mat, n=9, splay=0.10, proud=0.018, joint=0.00
             rect(B, p, q, back[(j + 1) % 4], back[j], mat, (e[0], 0.0, e[2]), var=tone)
 
 
-def panel_leaf(B, w, h, mat, t=0.06, cols=2, rows=3, frame=0.13, sunk=0.014, var=0.5):
+def panel_leaf(B, w, h, mat, t=0.06, cols=2, rows=3, frame=0.13, sunk=0.014, var=0.5, weights=None):
     """Panelled door leaf in its own frame: x 0..w (hinge at x = 0), y 0..t (face 1 at y = 0), z 0..h. Panels on both
-    faces are sunk by `sunk`; the top row is shorter, as on a six-panel door."""
-    weights = [1.0] * rows
-    weights[0] = 0.6 if rows > 2 else 1.0
-    weights = weights[::-1]                      # weights from the bottom up: the shortest row is at the top
+    faces are sunk by `sunk`; the top row is shorter, as on a six-panel door. weights: the rows' relative heights
+    from the bottom up, overriding that (added by house #5)."""
+    if weights is None:
+        weights = [1.0] * rows
+        weights[0] = 0.6 if rows > 2 else 1.0
+        weights = weights[::-1]                  # weights from the bottom up: the shortest row is at the top
+    else:
+        weights = list(weights)
+        rows = len(weights)
     inner_h = h - frame * (rows + 1)
     zs, z = [], frame
     for wt in weights:
@@ -839,3 +844,101 @@ def quoin_corner(B, z0, z1, course, long, short, proud, mat, start_long=True, va
         a, b = (long, short) if (i % 2 == 0) == start_long else (short, long)
         block(B, -proud, a, -proud, 0.0, za, zb, mat, faces="xXyzZ", var=var)
         block(B, -proud, 0.0, 0.0, b, za, zb, mat, faces="xYzZ", var=var)
+
+
+# ---------------------------------------------------------------------------------------------
+# House #5 (BookbindersMansardAtelier): round arches, a sunburst fanlight, basement vent grilles, standing-seam metal
+# ---------------------------------------------------------------------------------------------
+def arc_pts(xc, zc, r, a0=0.0, a1=180.0, n=24):
+    """Points [(x, z), ...] on a circle arc about (xc, zc) from angle a0 to a1 (degrees, 0 = +x, 90 = up)."""
+    return [(xc + r * math.cos(q), zc + r * math.sin(q)) for q in np.radians(np.linspace(a0, a1, n + 1))]
+
+
+def arch_intrados(B, xc, zs, r, y0, y1, mat, n=24, var=0.5):
+    """Soffit of a round arch (wall coordinates): the half cylinder of radius r about (xc, zs) from the plane y0 back to
+    y1, facing the arch's axis."""
+    pts = arc_pts(xc, zs, r, n=n)
+    for (xa, za), (xb, zb) in zip(pts, pts[1:]):
+        mx, mz = (xa + xb) / 2 - xc, (za + zb) / 2 - zs
+        rect(B, (xa, y0, za), (xb, y0, zb), (xb, y1, zb), (xa, y1, za), mat, (-mx, 0.0, -mz), var)
+
+
+def arch_ring(B, xc, zs, r0, r1, y, mat, n=24, var=0.5):
+    """Half-round arch ring (an archivolt) standing on the wall plane y = 0 (wall coordinates): its front face on the
+    plane y (y < 0, facing -y) between radii r0 and r1, and its outer face (extrados) from y back to the wall."""
+    a, b = arc_pts(xc, zs, r0, n=n), arc_pts(xc, zs, r1, n=n)
+    for k in range(n):
+        rect(B, (a[k][0], y, a[k][1]), (b[k][0], y, b[k][1]), (b[k + 1][0], y, b[k + 1][1]), (a[k + 1][0], y, a[k + 1][1]), mat, (0, -1, 0), var)
+        mx, mz = (b[k][0] + b[k + 1][0]) / 2 - xc, (b[k][1] + b[k + 1][1]) / 2 - zs
+        rect(B, (b[k][0], y, b[k][1]), (b[k + 1][0], y, b[k + 1][1]), (b[k + 1][0], 0.0, b[k + 1][1]), (b[k][0], 0.0, b[k][1]), mat, (mx, 0.0, mz), var)
+
+
+def arch_spandrels(B, xc, zs, r, x0, x1, z_top, y, mat, n=24, var=0.5):
+    """Flat faces on the plane y (facing -y) filling the rectangle x0..x1, zs..z_top outside the half circle of radius
+    r about (xc, zs) (x0 <= xc - r, x1 >= xc + r): one fan per side from its top outer corner. n must be even."""
+    q = arc_pts(xc, zs, r, n=n)
+    h = n // 2
+    for hub, poly in (((x1, z_top), [(x1, zs)] + q[:h + 1] + [(xc, z_top)]),
+                      ((x0, z_top), [(xc, z_top)] + q[h:] + [(x0, zs)])):
+        pts = [poly[0]]
+        for p in poly[1:]:
+            if math.dist(p, pts[-1]) > 1e-5:
+                pts.append(p)
+        B.fan([(x, y, z) for x, z in pts], mat, (0, -1, 0), var=var, hub=(hub[0], y, hub[1]))
+
+
+def fanlight(B, xc, zs, r, y, glass, iron, spokes=10, var=0.5):
+    """Half-round fanlight in the plane y (wall coordinates, seen from -y): two-sided glass, and in front of it an iron
+    sunburst: a half-round hub, radial bars, a half ring through them and a small ring between every two bars."""
+    pts = arc_pts(xc, zs, r, n=32)
+    for yy, want in ((y - 0.001, (0, -1, 0)), (y + 0.001, (0, 1, 0))):
+        B.fan([(x, yy, z) for x, z in pts], glass, want, var=var)
+    yb, yf = y - 0.003, y - 0.022
+    hub = arc_pts(xc, zs, r * 0.17, n=12)
+    B.fan([(x, yf, z) for x, z in hub], iron, (0, -1, 0), var=var)
+    for k in range(1, spokes):
+        a = math.radians(180.0 * k / spokes)
+        e = np.array([math.cos(a), math.sin(a)])
+        gk.bar(B, iron, np.array([xc, zs]) + e * r * 0.15, np.array([xc, zs]) + e * r, 0.022, yb, yf, var=var)
+    ring = arc_pts(xc, zs, r * 0.55, n=24)
+    B.tube([(x, (yb + yf) / 2, z) for x, z in ring], 0.011, iron, sides=6, var=var)
+    a = np.radians(np.linspace(0.0, 360.0, 13)[:-1])
+    rr = r * 0.11
+    for k in range(spokes):
+        q = math.radians(180.0 * (k + 0.5) / spokes)
+        cx, cz = xc + r * 0.78 * math.cos(q), zs + r * 0.78 * math.sin(q)
+        B.tube([(cx + rr * math.cos(t), (yb + yf) / 2, cz + rr * math.sin(t)) for t in a], 0.009, iron, sides=5, closed=True, var=var)
+    gk.bar(B, iron, (xc - r, zs + 0.011), (xc + r, zs + 0.011), 0.022, yb, yf, var=var)
+
+
+def vent_grille(B, x0, x1, z0, z1, y, depth, mat, iron, back, pitch=0.075, var=0.5):
+    """Basement vent in a face on the plane y (wall coordinates): reveals in `mat` back to y + depth, a dark plate
+    there in `back`, and an iron grille of upright bars in a flat frame 2 cm behind the face."""
+    reveal(B, (x0, x1, z0, z1), y, y + depth, mat, var=var)
+    rect(B, (x0, y + depth, z0), (x1, y + depth, z0), (x1, y + depth, z1), (x0, y + depth, z1), back, (0, -1, 0), var)
+    yg = y + 0.02
+    f = 0.035
+    for a, b, c, d in ((x0, x1, z0, z0 + f), (x0, x1, z1 - f, z1), (x0, x0 + f, z0 + f, z1 - f), (x1 - f, x1, z0 + f, z1 - f)):
+        block(B, a, b, yg, yg + 0.025, c, d, iron, faces="yzZxX", var=var)
+    n = max(1, int(round((x1 - x0 - 2 * f) / pitch)))
+    for k in range(1, n):
+        x = x0 + f + (x1 - x0 - 2 * f) * k / n
+        block(B, x - 0.011, x + 0.011, yg, yg + 0.02, z0 + f, z1 - f, iron, faces="xXy", var=var)
+    zm = (z0 + z1) / 2
+    block(B, x0 + f, x1 - f, yg + 0.005, yg + 0.02, zm - 0.012, zm + 0.012, iron, faces="yzZ", var=var)
+
+
+def seam_facet(B, mat, a, b, c, d, pitch=0.78, w=0.04, h=0.035, ribs=True, var=0.5):
+    """Standing-seam metal sheet on the quad a-b-c-d (house coordinates: a-b the lower edge along x, d-c the upper
+    edge, a and d at the low x), facing up, with seam ribs (slope_rib) running up the slope about every `pitch`."""
+    a, b, c, d = (np.asarray(p, dtype=np.float64) for p in (a, b, c, d))
+    n = np.cross(b - a, d - a)
+    if n[2] < 0:
+        n = -n
+    rect(B, tuple(a), tuple(b), tuple(c), tuple(d), mat, tuple(n), var)
+    if not ribs:
+        return
+    k = max(1, int(round((b[0] - a[0]) / pitch)))
+    for i in range(1, k):
+        xc = a[0] + (b[0] - a[0]) * i / k
+        slope_rib(B, xc, w, (a[1], a[2]), (d[1], d[2]), h, mat, var)
