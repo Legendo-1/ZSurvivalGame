@@ -1,0 +1,24 @@
+[
+ {
+  "mesh": "SM_House_HighSpireTavern_Door",
+  "component": "Door",
+  "location_cm": [
+   193.49999999999997,
+   -26.0,
+   14.000000000000002
+  ],
+  "yaw": -0.0,
+  "open_yaw_delta": -90.0
+ },
+ {
+  "mesh": "SM_House_HighSpireTavern_Door_1",
+  "component": "Door_1",
+  "location_cm": [
+   -115.99999999999999,
+   -538.5,
+   365.0
+  ],
+  "yaw": 90.0,
+  "open_yaw_delta": -90.0
+ }
+]

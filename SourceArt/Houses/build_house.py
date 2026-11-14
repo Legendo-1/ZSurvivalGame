@@ -1797,9 +1797,377 @@ def build_townhouse_stack(spec):
     return E, I, hulls
 
 
+# ---------------------------------------------------------------------------------------------
+# townhouse_tavern (house #9, HighSpireTavern): a half-timbered shop house with its gable to the street and a stone
+# tower at its back-left corner. A dark timber shopfront round the front and both sides of the front block
+# (pilasters, shop windows on stallrisers, a glazed door under a transom, fascia, frieze, consoles, a bressummer);
+# a jettied timber first floor (jetty_wall) with a canted oriel bay on corbels; the front gable jettied again over a
+# bressummer, framed, with a verge rafter and bargeboards; a gable roof whose ridge runs front to back, its left slope
+# cut back to the tower; a stone back block (jetty_wall, Stone) up to the eaves and the back gable; the square stone
+# tower with quoins, round-headed windows high up, a round-headed door on its left face reached by a stone stair
+# (front steps and a sloping side wall), a hipped bell-cast spire with a gabled dormer on every face, a short ridge
+# and two spike finials. One empty shell inside.
+# ---------------------------------------------------------------------------------------------
+def shop_wall(E, I, wl, L, t, F0, sp, hulls):
+    """One side of the shopfront in wall coordinates (pilaster faces on y = 0): pilasters, plaster spans, the recessed
+    face (y = sp["face"]) with shop windows on sunk-panel stallrisers and (front) the door with its transom and a
+    separate glazed leaf, the core, inner face, inner reveals and collision. Fascia, frieze and beam are separate."""
+    fy, mat, head = sp["face"], sp["mat"], sp["head"]
+    g0, g1 = sp["glass"]
+    pz, pp = sp["plinth"]
+    u0, u1 = wl.get("span", [0.0, L])
+    solid = [tuple(p) for p in wl.get("pilasters", [])] + [tuple(p) for p in wl.get("plaster", [])]
+    holes, inner = [], []
+    for x0, x1 in wl.get("pilasters", []):
+        hk.block(E, x0, x1, 0.0, fy, pz, head, mat, faces="xXy")
+        hk.block(E, x0 - 0.02, x1 + 0.02, -pp, fy, 0.0, pz, mat, faces="xXyZ")
+    for x0, x1 in wl.get("plaster", []):
+        hk.flat_face(E, x0, x1, pz, head, "Plaster", cell=0.6)
+        hk.block(E, x0, x1, -pp, 0.0, 0.0, pz, mat, faces="yZ")
+    rs = sp["riser"]
+    s0, s1, sproud = sp["sill"]
+    for x0, x1, cols, rows in wl.get("windows", []):
+        hk.sash_window(E, x0, x1, g0, g1, mat, "Glass", cols, rows, y=fy, depth=0.10, fw=0.07, meeting=False)
+        hk.block(E, x0, x1, fy - sproud, fy + 0.10, s0, s1, mat, faces="xXyzZ")
+        panel = (x0 + rs["margin"], x1 - rs["margin"], pz + rs["margin"], s0 - rs["margin"])
+        holes.append(panel)
+        hk.flat_face(E, *panel, mat, y=fy + rs["sunk"])
+        hk.reveal(E, panel, fy, fy + rs["sunk"], mat)
+        hk.block(E, x0, x1, fy - pp, fy, 0.0, pz, mat, faces="yZ")
+        hk.reveal(I, (x0, x1, g0, g1), fy + 0.10, t, "Plaster")
+        holes.append((x0, x1, g0, g1))
+        inner.append((x0, x1, g0, g1))
+    dr = wl.get("door")
+    if dr:
+        d = sp["door"]
+        x0, x1 = dr
+        r0, r1 = d["rail"]
+        ly, lt = d["leaf_y"], d["leaf_t"]
+        hk.block(E, x0, x1, fy - 0.03, fy + 0.10, r0, r1, mat, faces="yzZ")
+        hk.sash_window(E, x0, x1, r1, g1, mat, "Glass", d["transom"], 1, y=fy, depth=0.08, fw=0.05, meeting=False)
+        hk.reveal(E, (x0, x1, 0.0, r0), fy, ly, mat, sides="lr")
+        hk.reveal(I, (x0, x1, F0, g1), ly + lt, t, "Plaster", sides="lrt")
+        sw, smat = d["step"]
+        hk.block(E, x0 - 0.05, x1 + 0.05, -sw, t, 0.0, F0, smat, faces="xXyZ")
+        w, h = x1 - x0 - 0.01, r0 - F0 - 0.005
+        left = d.get("hinge", "left") == "left"
+
+        def make(B, w=w, h=h):
+            hk.glazed_leaf(B, w, h, mat, "Glass", mat, t=lt, light=tuple(d["light"]), grid=tuple(d["grid"]), panel_z=tuple(d["panels"]))
+        separate_leaf(E, (x0 + 0.005) if left else (x1 - 0.005), left, w, h, ly, F0, lt, make, seed=31 + len(DOORS))
+        holes.append((x0, x1, 0.0, g1))
+        inner.append((x0, x1, F0, g1))
+    # the recessed face between the pilasters and plaster spans, up to the fascia
+    spans = [(u0, u1)]
+    for a, b in solid:
+        spans = [s for sa, sb in spans for s in ((sa, min(sb, a)), (max(sa, b), sb)) if s[1] - s[0] > 1e-6]
+    for a, b in spans:
+        hk.flat_face(E, a, b, 0.0, head, mat, holes=[h for h in holes if a - 1e-6 <= h[0] and h[1] <= b + 1e-6], y=fy)
+    top = sp["beam"][1]
+    hk.wall_core(E, L, 0.0, top, t, holes=inner)
+    hk.flat_face(I, u0, u1, F0, top, "Plaster", holes=inner, y=t, inward=True)
+    if dr:
+        x0, x1 = dr
+        hulls += [xf(E, hk.box_pts(u0, x0, 0.0, t, 0.0, top)), xf(E, hk.box_pts(x1, u1, 0.0, t, 0.0, top)),
+                  xf(E, hk.box_pts(x0, x1, 0.0, t, g1, top))]
+    else:
+        hulls.append(xf(E, hk.box_pts(u0, u1, 0.0, t, 0.0, top)))
+
+
+def tavern_shop(E, I, spec, hulls):
+    """The shopfront on the front and both sides of the front block, the corner pilasters, and (house coordinates) the
+    fascia, frieze and beam round it, and the consoles over the pilasters."""
+    W, F0 = spec["width"], spec["floor"]
+    sp = spec["shop"]
+    t, fy, mat = sp["t"], sp["face"], sp["mat"]
+    Y = sp["y1"]                                                  # the front block's sides end at the tower / back block
+    frames = {"front": ((0.0, 0.0), (W, 0.0)), "right": ((W, 0.0), (W, Y)), "left": ((0.0, Y), (0.0, 0.0))}
+    for side, (p0, p1) in frames.items():
+        m, L = gk.wall_frame(p0, p1)
+        E.push(m)
+        I.push(m)
+        shop_wall(E, I, sp["walls"][side], L, t, F0, sp, hulls)
+        cn = sp["console"]
+        for x0, x1 in sp["walls"][side].get("pilasters", []) + sp["walls"][side].get("consoles", []):
+            hk.console(E, (x0 + x1) / 2, 0.0, sp["frieze"][1], mat, out=cn["out"], height=cn["height"], width=cn["width"])
+        E.pop()
+        I.pop()
+    pz, pp = sp["plinth"]
+    head = sp["head"]
+    for x0, x1, y0, y1 in sp["corners"]:                          # the corner pilasters, one block each
+        hk.block(E, x0, x1, y0, y1, pz, head, mat, faces="xXyY")
+        hk.block(E, x0 - (pp if x0 < 0.1 else 0.0), x1 + (pp if x1 > W - 0.1 else 0.0), y0 - pp, y1, 0.0, pz, mat, faces="xXyYZ")
+    # fascia, frieze and beam round the front block: [z0, z1, proud], each back to the recessed face
+    for (z0, z1, p), m_ in ((sp["fascia"], mat), (sp["frieze"], mat), (sp["beam"][:3], sp["beam"][3])):
+        pr = sp.get("beam_right", W + p) if m_ == sp["beam"][3] else W + p
+        hk.block(E, -p, pr, -p, fy, z0, z1, m_, faces="xXyzZ")
+        hk.block(E, -p, fy, fy, Y, z0, z1, m_, faces="xzZY")
+        hk.block(E, W - fy, pr, fy, Y, z0, z1, m_, faces="XzZY")
+
+
+def tavern_oriel(E, I, spec, hulls):
+    """The canted oriel bay on the first floor (house coordinates): its three glazed faces (timber frames, mullions,
+    casements), the sill shelf and top block, the floor and roof plates, corbels under it, the inside faces."""
+    o = spec["oriel"]
+    P = [tuple(p) for p in o["plan"]]                            # back-left, front-left, front-right, back-right
+    z0, z1 = o["glass"]
+    b0, b1 = o["shelf"]
+    c0, c1 = o["top"]
+    ov = o["outset"]
+    for k in range(3):
+        m, L = gk.wall_frame(P[k], P[k + 1])
+        n, mw, ew = o["lights"][k], o["mullion"], o["end"]
+        lw = (L - 2 * ew - (n - 1) * mw) / n
+        holes = [(ew + j * (lw + mw), ew + j * (lw + mw) + lw, z0 + 0.06, z1 - 0.06) for j in range(n)]
+        E.push(m)
+        I.push(m)
+        hk.flat_face(E, 0.0, L, z0, z1, "Timber", holes=holes)
+        for h in holes:
+            hk.sash_window(E, *h, "Metal", "Glass", o["panes"][k][0], o["panes"][k][1], y=0.03, depth=0.05, fw=0.05, meeting=False)
+            hk.reveal(E, h, 0.0, 0.03, "Timber")
+            hk.reveal(E, h, 0.08, 0.10, "Timber")
+        hk.flat_face(I, 0.0, L, z0, z1, "Timber", holes=holes, y=0.10, inward=True)
+        ext = 0.0 if k == 1 else ov
+        hk.block(E, -ext, L + ext, -ov, 0.10, b0, b1, "Timber", faces="xXyzZ")
+        hk.block(E, -ext, L + ext, -ov, 0.10, c0, c1, "Timber", faces="xXyzZ")
+        E.pop()
+        I.pop()
+    E.fan([(x, y, b0) for x, y in P], "Timber", (0, 0, -1))
+    E.fan([(x, y, c1) for x, y in P], "Timber", (0, 0, 1))
+    I.fan([(x, y, b1) for x, y in P], "Timber", (0, 0, 1))
+    I.fan([(x, y, c0) for x, y in P], "Plaster", (0, 0, -1))
+    for x0, x1 in o["corbels"]["x"]:
+        y0, y1 = o["corbels"]["y"]
+        hk.block(E, x0, x1, y0, y1, o["corbels"]["z"][0], b0, "Timber", faces="xXyz")
+    hulls.append([(x, y, z) for x, y in P for z in (b0, c1)])
+
+
+def tavern_roof(E, spec, prof, hulls):
+    """The main gable roof, its ridge front to back: slates on the left slope in front of the tower, on the left slope
+    behind it from the tower's right face up, and on the right slope; undersides, verge and eave edges, a ridge cap,
+    bargeboards on the front verge and the back one, a spike finial at the front of the ridge."""
+    rf = spec["roof"]
+    th, mat, st = rf["thick"], rf["mat"], rf["step"]
+    (xl, zl), (xm, zm), (xe, ze) = prof
+    y0, y1 = rf["front"], rf["back"]
+    cx, cy = rf["cut"]
+    zc = roof_z(prof, cx)
+    s = (zm - zl) / (xm - xl)
+    parts = [((xl, zl), y0, cy, 70), ((cx, zc), cy, y1, 74), ((xe, ze), y0, y1, 78)]
+    for (xa, za), ya, yb, seed in parts:
+        gk.tile_facet(E, mat, (xa, ya, za), (xa, yb, za), (xm, yb, zm), (xm, ya, zm), pitch=rf["pitch"], step=st, seed=seed)
+        dn = (s, 0.0, -1.0) if xa < xm else (-s, 0.0, -1.0)
+        hk.rect(E, (xa, ya, za - th), (xa, yb, za - th), (xm, yb, zm - th), (xm, ya, zm - th), mat, dn)
+        for yv, ny in ((ya, -1.0), (yb, 1.0)):                    # verge edges (the cut one sits against the tower)
+            if (ny < 0 and abs(yv - y0) < 1e-6) or (ny > 0 and abs(yv - y1) < 1e-6):
+                hk.rect(E, (xa, yv, za - th), (xm, yv, zm - th), (xm, yv, zm + st), (xa, yv, za + st), mat, (0, ny, 0))
+        hulls.append([(x, y, z) for x, z0 in ((xa, za), (xm, zm)) for y in (ya, yb) for z in (z0 - th, z0)])
+    for (x, z), ya, yb, nx in (((xl, zl), y0, cy, -1.0), ((xe, ze), y0, y1, 1.0)):     # eave edges
+        hk.rect(E, (x, ya, z - th), (x, yb, z - th), (x, yb, z + st), (x, ya, z + st), mat, (nx, 0, 0))
+    rc = rf["ridge_cap"]
+    hk.block(E, xm - rc[0], xm + rc[0], y0 - 0.01, y1 + 0.01, zm - rc[0] * 1.2, zm + rc[1], mat, faces="xXyYZ")
+    bb = rf["barge"]                                              # [proud, top over the slates, foot under the underside]
+    for yv, front, pts in ((y0, True, prof), (y1, False, [(cx, zc), (xm, zm), (xe, ze)])):
+        top = [(x, z + bb[1]) for x, z in pts]
+        m, _ = gk.wall_frame((0.0, yv), (10.0, yv)) if front else gk.wall_frame((10.0, yv), (0.0, yv))
+        outl = top if front else [(10.0 - x, z) for x, z in reversed(top)]
+        E.push(m)
+        hk.verge_band(E, outl, bb[1] + th + bb[2], bb[0], mat)
+        for (xa, za), (xb, zb) in zip(outl, outl[1:]):
+            hk.rect(E, (xa, -bb[0], za), (xb, -bb[0], zb), (xb, 0.0, zb), (xa, 0.0, za), mat, (-(zb - za), 0.0, xb - xa))
+        E.pop()
+    fn = rf["finial"]
+    hk.spike_finial(E, xm, y0 - bb[0] / 2, zm + rc[1] - 0.02, fn["top"], fn["mat"], r=fn["r"])
+
+
+def tavern_tower(E, I, spec, hulls):
+    """The stone tower: four walls (jetty_wall, Stone) with quoins, round-headed windows, slits and the round-headed
+    door on one face (a separate plank leaf under a fixed timber tympanum), the inside floor and ceiling."""
+    tw = spec["tower"]
+    X0, X1, Y0, Y1 = tw["box"]
+    t, Z1, F0 = tw["t"], tw["z1"], spec["floor"]
+    ws = spec["stone_window_style"]
+    frames = {"front": ((X0, Y0), (X1, Y0)), "right": ((X1, Y0), (X1, Y1)), "back": ((X1, Y1), (X0, Y1)), "left": ((X0, Y1), (X0, Y0))}
+    qn = tw["quoins"]
+    for k, side in enumerate(("front", "right", "back", "left")):
+        m, L = gk.wall_frame(*frames[side])
+        fc = tw["faces"].get(side, {})
+        wl = {"infill": "Stone", "louvres": fc.get("slits", []), "louvre_mat": "Metal"}
+        arches = fc.get("windows", []) + ([fc["door"]] if "door" in fc else [])
+        wl["holes"] = [[a["xc"] - a["r"], a["xc"] + a["r"], a["z0"], a["zs"] + a["r"]] for a in arches]
+        E.push(m)
+        I.push(m)
+        jetty_wall(E, I, wl, L, 0.0, Z1, t, ws, hulls)
+        hk.quoin_corner(E, 0.0, Z1, qn["course"], qn["long"], qn["short"], qn["proud"], qn["mat"], start_long=(k % 2 == 0))
+        for a in fc.get("windows", []):
+            xc, z0, zs, r = a["xc"], a["z0"], a["zs"], a["r"]
+            hk.arched_opening(E, I, xc, z0, zs, r, t, a["rec"], "Stone", trim=a["trim"], ring_w=a["ring"], proud=a["proud"])
+            hk.sash_window(E, xc - r, xc + r, z0, zs, a["frame"], "Glass", a["cols"], a["rows"], y=a["rec"], depth=0.06, fw=0.05, meeting=False)
+            hk.fanlight(E, xc, zs, r, a["rec"] + 0.03, "Glass", a["frame"], spokes=a["spokes"])
+        dr = fc.get("door")
+        if dr:
+            xc, z0, zs, r = dr["xc"], dr["z0"], dr["zs"], dr["r"]
+            ly, lt = dr["leaf_y"], dr["leaf_t"]
+            hk.arched_opening(E, I, xc, z0, zs, r, t, ly, "Stone", trim=dr["trim"], ring_w=dr["ring"], proud=dr["proud"], sill_h=0.0,
+                              inner_from=ly + lt)
+            arc = hk.arc_pts(xc, zs, r - 0.005, n=24)
+            E.fan([(x, ly, z) for x, z in arc], dr["mat"], (0, -1, 0))               # the fixed tympanum over the leaf
+            E.fan([(x, ly + lt, z) for x, z in arc], dr["mat"], (0, 1, 0))
+            hk.reveal(E, (xc - r, xc + r, z0, zs), -dr["proud"], ly, "Stone", sides="b")
+            hk.block(E, xc - r, xc + r, ly, ly + lt, zs - 0.06, zs, dr["mat"], faces="yYz")
+            w, h = 2 * r - 0.01, zs - 0.06 - z0 - 0.005
+
+            def make(B, w=w, h=h):
+                hk.plank_leaf(B, w, h, dr["mat"], dr["iron"], t=lt, planks=dr["planks"], straps=tuple(dr["straps"]), hinge="l", ring=0.45)
+            separate_leaf(E, xc - r + 0.005, True, w, h, ly, z0, lt, make, seed=31 + len(DOORS))
+            hulls.pop()                                           # the wall's hull, replaced by three round the doorway
+            hulls += [xf(E, hk.box_pts(0.0, xc - r, 0.0, t, 0.0, Z1)), xf(E, hk.box_pts(xc + r, L, 0.0, t, 0.0, Z1)),
+                      xf(E, hk.box_pts(xc - r, xc + r, 0.0, t, zs + r, Z1)), xf(E, hk.box_pts(xc - r, xc + r, 0.0, t, 0.0, z0))]
+        E.pop()
+        I.pop()
+    hk.rect(I, (X0 + t, Y0 + t, F0), (X1 - t, Y0 + t, F0), (X1 - t, Y1 - t, F0), (X0 + t, Y1 - t, F0), "Timber", (0, 0, 1))
+    zc = tw["ceiling"]
+    hk.rect(I, (X0 + t, Y0 + t, zc), (X1 - t, Y0 + t, zc), (X1 - t, Y1 - t, zc), (X0 + t, Y1 - t, zc), "Plaster", (0, 0, -1))
+    hulls.append(hk.box_pts(X0 + t, X1 - t, Y0 + t, Y1 - t, -0.3, F0))
+
+
+def tavern_spire(E, spec, hulls):
+    """The hipped bell-cast spire on the tower (house_kit.spire_rings), a gabled dormer on every face
+    (mansard_dormer in that face's frame), a ridge cap and a spike finial at each end of the ridge."""
+    tw, sp = spec["tower"], spec["spire"]
+    X0, X1, Y0, Y1 = tw["box"]
+    rings = [tuple(r) for r in sp["rings"]]
+    cs = hk.spire_rings(E, X0, X1, Y0, Y1, rings, "Roof", tw["z1"], pitch=sp["pitch"], step=sp["step"])
+    hulls.append([p for c in (cs[0], cs[-1]) for p in c] + [(p[0], p[1], tw["z1"]) for p in cs[0]])
+    frames = {"front": ((X0, Y0), (X1, Y0)), "right": ((X1, Y0), (X1, Y1)), "back": ((X1, Y1), (X0, Y1)), "left": ((X0, Y1), (X0, Y0))}
+    dm = sp["dormer"]
+    for side in ("front", "right", "back", "left"):
+        m, L = gk.wall_frame(*frames[side])
+        k = 1 if side in ("front", "back") else 2
+        prof = [(rg[k], rg[0]) for rg in rings]
+        sub = {"dormers": dict(dm, roof_back=dm["roof_back"][side in ("right", "left")])}
+        E.push(m)
+        n = len(hulls)
+        mansard_dormer(E, sub, prof, L / 2, hulls)
+        del hulls[n:]                                             # inside the spire's hull
+        E.pop()
+    z, iy, ix = rings[-1]
+    rc = sp["ridge_cap"]
+    yc = (Y0 + Y1) / 2
+    hk.block(E, X0 + ix - 0.02, X1 - ix + 0.02, yc - rc[0], yc + rc[0], z - 0.02, z + rc[1], "Roof", faces="xXyYZ")
+    fn = sp["finials"]
+    for x in fn["x"]:
+        hk.spike_finial(E, x, yc, z + rc[1] - 0.02, fn["top"], fn["mat"], r=fn["r"])
+
+
+def tavern_stair(E, spec, hulls):
+    """The stone stair to the tower door: a flight of steps in front of the tower between its side wall and the shop,
+    with a landing at the tower, and the sloping side wall along the tower's face up to the door."""
+    st = spec["stair"]
+    x0, x1 = st["x"]
+    ys, ye, yl = st["y"]                                          # first riser, top of the flight, the tower's face
+    n, zt = st["risers"], st["top"]
+    for k in range(n):
+        ya = ys + (ye - ys) * k / n
+        hk.block(E, x0, x1, ya, yl, 0.0, zt * (k + 1) / n, st["mat"], faces="yZ")
+    hulls.append([(x, y, z) for x in (x0, x1) for y, z in ((ys, 0.0), (ye, zt), (yl, zt), (yl, 0.0))])
+    sw = st["wall"]
+    a, b = sw["x"]
+    poly = [tuple(p) for p in sw["profile"]]                      # (y, z), the foot first, round to the back
+    for x, nx in ((a, -1.0), (b, 1.0)):
+        E.fan([(x, y, z) for y, z in poly], st["mat"], (nx, 0, 0))
+    for (ya, za), (yb, zb) in zip(poly, poly[1:] + poly[:1]):
+        if za < 1e-6 and zb < 1e-6:
+            continue                                              # the foot on the ground
+        hk.rect(E, (a, ya, za), (b, ya, za), (b, yb, zb), (a, yb, zb), st["mat"], (0.0, -(zb - za), yb - ya))
+    hulls.append([(x, y, z) for x in (a, b) for y, z in poly])
+
+
+def build_townhouse_tavern(spec):
+    W, D, F0, CEIL = spec["width"], spec["depth"], spec["floor"], spec["ceiling"]
+    rf = spec["roof"]
+    th = rf["thick"]
+    prof = sorted(tuple(p) for p in rf["profile"])                # [(house x, top of the slates)], eave, ridge, eave
+
+    def under(x):
+        return roof_z(prof, x) - th
+    E, I = hk.Builder(hk.MATERIALS, seed=11), hk.Builder(hk.MATERIALS, seed=12)
+    hulls = []
+    ws = spec["window_style"]
+    tavern_shop(E, I, spec, hulls)
+    # the jettied first floor: front and both sides (they end against the tower and the back block)
+    ff = spec["first"]
+    (xa, xb), yf, Y = ff["x"], ff["front"], spec["shop"]["y1"]
+    z0, z1 = ff["z"]
+    frames = {"front": ((xa, yf), (xb, yf)), "right": ((xb, yf), (xb, Y)), "left": ((xa, Y), (xa, yf))}
+    for side, (p0, p1) in frames.items():
+        m, L = gk.wall_frame(p0, p1)
+        wl = ff["walls"][side]
+        if "mirror" in wl:
+            wl = jetty_mirror(ff["walls"][wl["mirror"]], L)
+        top = z1 if side == "front" else under(p0[0])
+        E.push(m)
+        I.push(m)
+        jetty_wall(E, I, wl, L, z0, top, ff["t"], ws, hulls)
+        E.pop()
+        I.pop()
+    tavern_oriel(E, I, spec, hulls)
+    for c in ff.get("consoles", []):                              # brackets under the gable's jetty at the corners
+        hk.console(E, c["x"], c["y"], c["z_top"], "Timber", out=c["out"], height=c["height"], width=c["width"])
+    # the front gable over its bressummer, framed up to the roof's underside under a verge rafter
+    gb = spec["gable"]
+    ga, gbx = gb["x"]
+    bx0, bx1, by0, by1, bz0, bz1 = gb["bressummer"]
+    hk.block(E, bx0, bx1, by0, by1, bz0, bz1, "Timber", faces="xXyzZ")
+    m, L = gk.wall_frame((ga, gb["y"]), (gbx, gb["y"]))
+    us = sorted({0.0, L} | {p[0] - ga for p in prof if ga < p[0] < gbx})
+    outline = [(u, under(u + ga)) for u in us]
+    E.push(m)
+    I.push(m)
+    jetty_wall(E, I, gb["wall"], L, bz1, outline, gb["t"], ws, hulls)
+    hk.verge_band(E, outline, gb["rafter"][0], gb["rafter"][1], "Timber")
+    E.pop()
+    I.pop()
+    # the stone back block: its right side under the eave, the back gable, the return at the shop's side
+    bk = spec["back_block"]
+    x0b, y0b = bk["x0"], bk["y0"]
+    xr = bk["x1"]
+    sws = spec["stone_window_style"]
+    for side in ("right", "back"):
+        if side == "right":
+            m, L = gk.wall_frame((xr, y0b), (xr, D))
+            top = under(xr)
+        else:
+            m, L = gk.wall_frame((xr, D), (x0b, D))
+            us = sorted({0.0, L} | {xr - p[0] for p in prof if x0b < p[0] < xr})
+            top = [(u, under(xr - u)) for u in us]
+        wl = dict(bk["walls"].get(side, {}), infill="Stone")
+        E.push(m)
+        I.push(m)
+        jetty_wall(E, I, wl, L, 0.0, top, bk["t"], sws, hulls)
+        E.pop()
+        I.pop()
+    rx0 = bk["return_x0"]
+    hk.flat_face(E, rx0, xr, 0.0, under(xr), "Stone", y=y0b)
+    dp = bk.get("downpipe")
+    if dp:
+        hk.block(E, *dp, "Metal", faces="xXyYZ")
+    tavern_roof(E, spec, prof, hulls)
+    tavern_tower(E, I, spec, hulls)
+    tavern_spire(E, spec, hulls)
+    tavern_stair(E, spec, hulls)
+    # inside: the floor of the shop and back block, and one ceiling under the attic
+    for x0, x1, y0, y1 in spec["inside"]["floor"]:
+        hk.rect(I, (x0, y0, F0), (x1, y0, F0), (x1, y1, F0), (x0, y1, F0), "Timber", (0, 0, 1))
+        hulls.append(hk.box_pts(x0, x1, y0, y1, -0.3, F0))
+    for x0, x1, y0, y1 in spec["inside"]["ceiling"]:
+        hk.rect(I, (x0, y0, CEIL), (x1, y0, CEIL), (x1, y1, CEIL), (x0, y1, CEIL), "Plaster", (0, 0, -1))
+    return E, I, hulls
+
+
 BUILDERS = {"townhouse_flat": build_townhouse_flat, "townhouse_gable": build_townhouse_gable, "townhouse_terrace": build_townhouse_terrace,
             "townhouse_mansard": build_townhouse_mansard, "townhouse_zinc": build_townhouse_zinc, "townhouse_jetty": build_townhouse_jetty,
-            "townhouse_loft": build_townhouse_loft, "townhouse_stack": build_townhouse_stack}
+            "townhouse_loft": build_townhouse_loft, "townhouse_stack": build_townhouse_stack, "townhouse_tavern": build_townhouse_tavern}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1992,7 +2360,58 @@ def shots_loft(spec):
             ("back", (W / 2 - 4.0, D + 18.0, 7.0), (W / 2, D / 2, H / 2), 35, 1000, 1500)]
 
 
+def audit_setup_tavern(spec):
+    """Outside eyes only: street (shopfront, oriel, gable), both sides, the lower town, above; planes just inside the
+    front block, the back block, the attic, the tower and the spire."""
+    W, D, CEIL = spec["width"], spec["depth"], spec["ceiling"]
+    X0, X1, Y0, Y1 = spec["tower"]["box"]
+    th = spec["roof"]["thick"]
+    prof = sorted(tuple(p) for p in spec["roof"]["profile"])
+    xm, zm = max(prof, key=lambda p: p[1])
+    tc = spec["tower"]["ceiling"]
+    xc, yc = (X0 + X1) / 2, (Y0 + Y1) / 2
+    street = [("lane left", (0.8, -4.5, 1.7)), ("lane door", (2.5, -4.5, 1.7)), ("lane right", (5.0, -4.5, 1.7)),
+              ("lane high", (3.1, -6.0, 9.0)), ("lane low left", (-2.5, -2.5, 1.0)), ("lane low right", (W + 1.5, -2.5, 1.0)),
+              ("lane very high", (3.1, -8.0, 16.0)), ("lane tower", (-1.0, -6.0, 12.0))]
+    rights = [("side right", (W + 6.0, D / 2, 1.7)), ("side right front", (W + 4.0, -3.0, 6.0)), ("side right high", (W + 6.0, -3.0, 14.0))]
+    lefts = [("side left", (-7.0, 1.5, 4.0)), ("side left high", (-6.0, -2.0, 16.0)), ("side left low", (-4.0, 0.5, 1.5))]
+    lower = [("lower town", (3.0, D + 9.0, 6.0)), ("lower town left", (-3.0, D + 7.0, 12.0)), ("lower town high", (3.0, D + 8.0, 18.0))]
+    above = [("above front", (3.0, -5.0, 22.0)), ("above", (3.0, 3.0, 25.0)), ("above back", (3.0, D + 5.0, 22.0)),
+             ("above left", (-5.0, 1.5, 20.0)), ("above right", (W + 5.0, D / 2, 20.0))]
+    tower_eyes = [("tower left", (-8.0, yc, 6.0)), ("tower left high", (-8.0, yc, 12.5)), ("tower front", (xc, -8.0, 12.5)),
+                  ("tower back", (xc, D + 9.0, 12.5)), ("tower right", (W + 6.0, yc, 13.0)), ("tower door", (-4.0, yc, 4.6))]
+    spire_eyes = [("spire front", (xc, -8.0, 16.0)), ("spire left", (-8.0, yc, 16.0)), ("spire right", (W + 6.0, yc, 16.5)),
+                  ("spire back", (xc, D + 9.0, 16.0)), ("spire above", (xc + 0.5, yc - 0.5, 26.0))]
+    return [("front", (0.0, 0.6, 0.0), (1, 0, 0), (0.5, W - 0.5, 0.2, CEIL - 0.1), 0.04, street),
+            ("oriel", (0.0, -0.45, 0.0), (1, 0, 0), (2.0, 4.2, 4.75, 6.6), 0.04, street),
+            ("right", (W - 0.5, 0.0, 0.0), (0, 1, 0), (0.5, D - 0.5, 0.2, CEIL - 0.1), 0.04, rights + lower[:1]),
+            ("left", (0.5, 0.0, 0.0), (0, 1, 0), (0.5, Y0 - 0.2, 0.2, CEIL - 0.1), 0.04, lefts + street[4:5]),
+            ("back", (0.0, D - 0.6, 0.0), (1, 0, 0), (X1 + 0.6, W - 0.5, 0.2, CEIL - 0.1), 0.04, lower),
+            ("attic ridge", (xm, 0.0, 0.0), (0, 1, 0), (-0.2, D - 0.6, CEIL + 0.1, zm - th - 0.15), 0.05, above + street[3:] + lower),
+            ("attic right", (W - 1.0, 0.0, 0.0), (0, 1, 0), (0.0, D - 0.6, CEIL + 0.1, roof_z(prof, W - 1.0) - th - 0.1), 0.05, above + rights + lower),
+            ("attic left", (0.9, 0.0, 0.0), (0, 1, 0), (-0.1, Y0 - 0.2, CEIL + 0.1, roof_z(prof, 0.9) - th - 0.1), 0.05, above + lefts + street[3:]),
+            ("tower", (xc, 0.0, 0.0), (0, 1, 0), (Y0 + 0.6, Y1 - 0.6, 0.3, tc - 0.1), 0.05, tower_eyes + lower + lefts),
+            ("spire", (0.0, yc, 0.0), (1, 0, 0), (X0 + 0.9, X1 - 0.9, spec["tower"]["z1"] + 0.1, 17.4), 0.05, spire_eyes)]
+
+
+def shots_tavern(spec):
+    W, D = spec["width"], spec["depth"]
+    X0, X1, Y0, Y1 = spec["tower"]["box"]
+    H = spec["spire"]["finials"]["top"]
+    dx = sum(spec["shop"]["walls"]["front"]["door"]) / 2
+    return [("iso", (W + 12.0, -17.0, 13.0), (W / 2 - 1.0, D / 2, H / 2), 32, 1200, 1600),
+            ("iso_left", (-15.0, -13.0, 12.0), (0.5, D / 2, H / 2), 32, 1200, 1600),
+            ("front_eye", (W / 2 - 1.5, -7.0, 1.7), (W / 2 - 1.0, 0.0, 8.0), 14, 1200, 1500),
+            ("door_close", (dx, -3.6, 1.6), (dx, 0.0, 1.8), 24, 1200, 1200),
+            ("oriel", (3.1, -5.0, 6.0), (3.1, -0.5, 6.4), 22, 1200, 1200),
+            ("spire", (-6.0, -7.0, H - 1.0), ((X0 + X1) / 2, (Y0 + Y1) / 2, 16.0), 24, 1200, 1200),
+            ("stair", (-6.0, -2.0, 3.0), (-1.0, 3.5, 2.5), 26, 1200, 1200),
+            ("back", (W / 2 - 4.0, D + 20.0, 8.0), (W / 2 - 1.0, D / 2, H / 2), 35, 1000, 1500)]
+
+
 def audit_setup(spec):
+    if spec["type"] == "townhouse_tavern":
+        return audit_setup_tavern(spec)
     if spec["type"] in ("townhouse_loft", "townhouse_stack"):     # house #8 uses the loft's eyes and planes
         return audit_setup_loft(spec)
     if spec["type"] == "townhouse_jetty":
@@ -2049,6 +2468,8 @@ def shots_stack(spec):
 
 
 def shots(spec):
+    if spec["type"] == "townhouse_tavern":
+        return shots_tavern(spec)
     if spec["type"] == "townhouse_stack":
         return shots_stack(spec)
     if spec["type"] == "townhouse_gable":

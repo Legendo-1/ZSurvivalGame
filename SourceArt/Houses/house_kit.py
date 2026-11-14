@@ -1208,3 +1208,61 @@ def tie_rod(B, pts, mat, r=0.04, knuckle=0.07, var=0.5):
         B.tube([a, b], r, mat, sides=8, var=var)
     for p in pts[1:-1]:
         block(B, p[0] - knuckle, p[0] + knuckle, p[1] - knuckle, p[1] + knuckle, p[2] - knuckle * 2.2, p[2] + knuckle * 2.2, mat, var=var)
+
+
+# ---------------------------------------------------------------------------------------------
+# House #9 (HighSpireTavern): round-headed openings in a wall, turned spike finials, a hipped bell-cast spire
+# ---------------------------------------------------------------------------------------------
+def arched_opening(B, I, xc, z0, zs, r, t, rec, stone, trim=None, ring_w=0.20, proud=0.05, sill_h=0.14, inner_from=None, var=0.5):
+    """A round-headed opening in a wall (wall coordinates) whose face, core and inner face were cut with the rectangle
+    (xc - r, xc + r, z0, zs + r): spandrels closing the corners over the arch, jamb reveals and the arch soffit from the
+    face back to `rec` (where the caller puts a window or a door), the inner reveals (I, Plaster) from inner_from
+    (default rec + 0.08) to t; with trim, a stone surround: jamb blocks and an arch ring `ring_w` wide standing `proud`
+    of the face, and a sill under the opening."""
+    x0, x1 = xc - r, xc + r
+    arch_spandrels(B, xc, zs, r, x0, x1, zs + r, 0.0, stone, var=var)
+    y0 = -proud if trim else 0.0
+    yi = rec + 0.08 if inner_from is None else inner_from
+    reveal(B, (x0, x1, z0, zs), y0, yi, stone, sides="lr" if trim else "lrb", var=var)
+    arch_intrados(B, xc, zs, r, y0, yi, stone, var=var)          # on to the inner reveal: no slit round the glass
+    reveal(I, (x0, x1, z0, zs + r), yi, t, "Plaster", var=var)
+    if trim:
+        block(B, x0 - ring_w, x0, -proud, 0.0, z0, zs, trim, faces="xy", var=var)
+        block(B, x1, x1 + ring_w, -proud, 0.0, z0, zs, trim, faces="Xy", var=var)
+        arch_ring(B, xc, zs, r, r + ring_w, -proud, trim, var=var)
+        if sill_h > 0:
+            block(B, x0 - ring_w - 0.04, x1 + ring_w + 0.04, -proud - 0.02, rec, z0 - sill_h, z0, trim, faces="xXyzZ", var=var)
+
+
+def spike_finial(B, cx, cy, z0, top, mat, r=0.08, var=0.5):
+    """Turned spike finial from z0 up to `top`: a collar, a neck, a ball, a second collar and a long tapering spike."""
+    s = top - z0
+    prof = [(r * 1.1, 0.0), (r * 1.1, 0.06 * s), (r * 0.5, 0.10 * s), (r * 0.5, 0.18 * s), (r, 0.26 * s), (r * 0.9, 0.33 * s),
+            (r * 0.4, 0.38 * s), (r * 0.7, 0.42 * s), (r * 0.4, 0.46 * s), (r * 0.3, 0.60 * s), (0.002, s)]
+    B.lathe([prof], mat, segs=10, center=(cx, cy, z0), smooth=True, var=var)
+
+
+def spire_rings(B, x0, x1, y0, y1, rings, mat, soffit_z, pitch=0.22, step=0.02, seed=40, var=0.5):
+    """Hipped spire over the walls' rectangle x0..x1, y0..y1 (house coordinates) from rings [(z, iy, ix), ...] (bottom
+    up): at height z the roof runs round the rectangle inset by iy on the front and back faces and by ix on the sides
+    (negative = out past the walls: the eave). Slate courses (gothic_kit.tile_facet) on every facet between two rings,
+    hips where the facets meet; a flat top on the last ring (a short ridge along x when iy nearly reaches the middle);
+    under the first ring a fascia down to soffit_z and a soffit back to the walls. Returns the corners of every ring."""
+    def corners(z, iy, ix):
+        return [(x0 + ix, y0 + iy, z), (x1 - ix, y0 + iy, z), (x1 - ix, y1 - iy, z), (x0 + ix, y1 - iy, z)]
+    cs = [corners(*rg) for rg in rings]
+    for k in range(len(rings) - 1):
+        lo, hi = cs[k], cs[k + 1]
+        for s in range(4):
+            gk.tile_facet(B, mat, lo[s], lo[(s + 1) % 4], hi[(s + 1) % 4], hi[s], pitch=pitch, step=step, seed=seed + 4 * k + s)
+    top = cs[-1]
+    B.fan(top, mat, (0, 0, 1), var=var)
+    eave = cs[0]
+    wall = corners(soffit_z, 0.0, 0.0)
+    outs = [(0, -1, 0), (1, 0, 0), (0, 1, 0), (-1, 0, 0)]
+    for s in range(4):
+        a, b = eave[s], eave[(s + 1) % 4]
+        lo_a, lo_b = (a[0], a[1], soffit_z), (b[0], b[1], soffit_z)
+        rect(B, lo_a, lo_b, (b[0], b[1], b[2] + step), (a[0], a[1], a[2] + step), mat, outs[s], var)        # fascia
+        rect(B, lo_a, lo_b, wall[(s + 1) % 4], wall[s], mat, (0, 0, -1), var)                                  # soffit
+    return cs
